@@ -1,0 +1,46 @@
+name: Workspace manual circuit diagnosis
+on:
+  push:
+    branches: ['operations/workspace-ui-circuit-fix-20261025']
+    paths:
+      - '.github/workflows/pilot-workspace-ui-circuit-diagnosis.yml'
+      - 'scripts/verify-workspace-ui.mjs'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: workspace-full
+            command: node scripts/verify-workspace-ui.mjs
+          - name: portfolio-access-race
+            command: WORKSPACE_UI_SCENARIO=portfolio-access-race node scripts/verify-workspace-ui.mjs
+          - name: visible-live-refresh
+            command: WORKSPACE_UI_SCENARIO=visible-live-refresh node scripts/verify-workspace-ui.mjs
+    name: ${{ matrix.name }}
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Execute the unchanged scenario set and assertions
+        run: ${{ matrix.command }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: workspace-ui-${{ github.run_id }}-${{ matrix.name }}
+          path: .vercel/workspace-evidence/
+          include-hidden-files: true
+          retention-days: 7

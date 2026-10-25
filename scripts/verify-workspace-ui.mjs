@@ -11,7 +11,7 @@ import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-co
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
-assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots','navigation'].includes(process.env.WORKSPACE_UI_SCENARIO));
+assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots','navigation','visible-live-refresh'].includes(process.env.WORKSPACE_UI_SCENARIO));
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
@@ -44,6 +44,14 @@ let browser;const checks=[],pageErrors=[];
 const scope='a'.repeat(64),revision='2026-09-30T12:00:00.123456';
 const baseTask=()=>({id:'task-a',title:'Mampostería · sector norte',status:'IN_PROGRESS',progress:37,startsOn:'2026-10-01',endsOn:'2026-10-05',revision});
 const text=page=>page.evaluate(()=>document.body.innerText);
+// This file exercises explicit manual reads, commands and navigation. Keep their
+// exact read/revision sequences independent from the visible-tab schedule checks.
+// Native timer/focus/visibility behavior has its separate live-refresh producer;
+// this precondition does not claim full AccountWorkspace live-refresh acceptance.
+async function manualWorkspaceReadPrecondition(page){
+ await page.evaluateOnNewDocument(()=>Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'}));
+}
+
 async function click(page,label){const handle=await page.evaluateHandle(name=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===name),label);const element=handle.asElement();assert.ok(element,'Missing button '+label);await element.click();await handle.dispose();}
 async function waitText(page,value){await page.waitForFunction(expected=>document.body.innerText.includes(expected),{timeout:15000},value);}
 async function fill(page,taskId='task-a'){
@@ -98,7 +106,7 @@ async function assertClosedPendingNavigation(page,width,id,requests,posts){
  assert.equal(await page.evaluate(()=>window.__pendingNavigationDraft.nodes.every(node=>node.isConnected)&&window.__pendingNavigationDraft.forms.every(node=>node.isConnected)),true);assert.deepEqual(await page.evaluate(()=>window.__pendingNavigationDraft.nodes.map(node=>({value:node.value,checked:node.checked,disabled:node.disabled}))),await page.evaluate(()=>window.__pendingNavigationDraft.values));assert.equal(requests.length,before);assert.equal(posts.length,postCount);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
 }
 async function mobileImportNavigationScenario(width,uncertain){
- const mode=uncertain?'mobile-import-uncertain':'mobile-import-ready',context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const mode=uncertain?'mobile-import-uncertain':'mobile-import-ready',context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[],draft={id:'mobile-plan-draft',revision:3,status:'READY',existingTaskCount:1,source:{contentType:'application/pdf',bytes:42,sha256:'c'.repeat(64)},sourceAvailable:true,rows:[{title:'Fundaciones sintéticas',startsOn:'2026-10-08',endsOn:'2026-10-10',evidence:'Fila 1 del archivo sintético',uncertainty:''}],warnings:[],failure:null,createdAt:'2026-10-06T00:00:00Z',updatedAt:'2026-10-06T00:00:00Z',decision:null};
  await page.setRequestInterception(true);page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(!url.pathname.startsWith('/api/'))return request.continue();requests.push({method:request.method(),path:url.pathname,query:url.search});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');let body,status=200;
@@ -116,7 +124,7 @@ async function mobileImportNavigationScenario(width,uncertain){
  }catch(error){await page.screenshot({path:path.join(evidence,mode+'-failure-'+width+'.png'),fullPage:true}).catch(()=>{});throw error;}finally{await context.close();}
 }
 async function scenario(mode,width=390){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[];let record=null,applications=0,statusChecks=0;
  await page.setRequestInterception(true);
@@ -213,7 +221,7 @@ async function scenario(mode,width=390){
  await context.close();
 }
 async function scheduleConflictScenario(mode,width=390){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'schedule-conflict-'+mode,width,message:error.message}));
  const project={id:'p-a',name:'Obra de conflicto sintética',status:'ACTIVE'},target={...baseTask(),id:'task-z',title:'Tarea de segunda página'};
  const firstRevision='2026-10-01T10:00:00.123456',secondRevision='2026-10-02T10:00:00.123456';
@@ -293,7 +301,7 @@ async function scheduleConflictScenario(mode,width=390){
  checks.push('schedule-conflict-'+mode+'-later-page-directed-get-preserves-draft-requires-new-review-and-keeps-history-'+width);await context.close();
 }
 async function navigationScenario(role,width){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'navigation-'+role,width,message:error.message}));
  const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0;
  await page.setRequestInterception(true);
@@ -378,7 +386,7 @@ const workbenchTaskIds=page=>page.$$eval('[data-schedule-workbench] [data-task-i
 async function waitWorkbenchTasks(page,expected){await page.waitForFunction(ids=>JSON.stringify([...document.querySelectorAll('[data-schedule-workbench] [data-task-id]')].map(element=>element.dataset.taskId))===JSON.stringify(ids),{timeout:15000},expected);}
 async function searchWorkbench(page,value){await page.$eval(workbenchControl.search,element=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,'');element.dispatchEvent(new Event('input',{bubbles:true}));});if(value)await page.type(workbenchControl.search,value);}
 async function workbenchScenario(width){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000,hasTouch:width<768});
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000,hasTouch:width<768});
  const mode='workbench';page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[];let phase='initial-load';
  await page.setRequestInterception(true);
@@ -528,7 +536,7 @@ async function workbenchScenario(width){
  }finally{await context.close();}
 }
 async function ganttVolumeScenario(width){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000,hasTouch:width<768});
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000,hasTouch:width<768});
  const mode='gantt-volume',requests=[],posts=[];page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const tasks=Array.from({length:240},(_,index)=>({...baseTask(),id:'volume-'+String(index).padStart(3,'0'),title:'Partida revisada '+(index+1),progress:index%101,startsOn:'2000-01-01',endsOn:'2100-12-31'}));
  await page.setRequestInterception(true);
@@ -585,7 +593,7 @@ async function ganttVolumeScenario(width){
  finally{await context.close();}
 }
 async function taskCreateScenario(mode){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});page.on('pageerror',error=>pageErrors.push({mode:'taskcreate-'+mode,width:390,message:error.message}));
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width:390,height:1000});page.on('pageerror',error=>pageErrors.push({mode:'taskcreate-'+mode,width:390,message:error.message}));
  const posts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0;await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
@@ -616,7 +624,7 @@ async function taskCreateScenario(mode){
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
 }
 async function confirmedProgressScenario(mode,width){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'confirmed-progress-'+mode,width,message:error.message}));
  const planningMode=mode==='planning',beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000010',latestRevision='2026-10-02T09:00:00.000020';
  const original={...baseTask(),revision:beforeRevision},created={id:'new-task',title:'Tarea de ensayo concurrente',status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:beforeRevision};
@@ -697,7 +705,7 @@ async function confirmedProgressScenario(mode,width){
  finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();}
 }
 async function unloadedConfirmedProgressScenario(width,decision){
- const mode='confirmed-progress-unloaded-'+decision.toLowerCase(),context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ const mode='confirmed-progress-unloaded-'+decision.toLowerCase(),context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000010',currentRevision='2026-10-02T09:00:00.000020',cursor='unloaded-progress-cursor';
  const original={...baseTask(),revision:beforeRevision},outside={id:'task-outside',title:'Demolición de portería',status:'BACKLOG',progress:0,startsOn:'2026-10-06',endsOn:'2026-10-12',revision:beforeRevision};
@@ -769,7 +777,7 @@ async function receiptSnapshotCoverageScenario(width,mode){
  checks.push((mode==='invalid-snapshot'?'schedule-explicit-null-and-malformed-receipt-never-fall-back-to-valid-current-task-':'schedule-loaded-recovered-receipt-25-keeps-current-50-blocker-dates-without-snapshot-write-')+width);
 }
 async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'confirmed-progress-snapshots-'+mode,width,message:error.message}));
  const beforeRevision='2026-10-02T09:00:00.000001',decisionRevision='2026-10-02T09:00:00.000010',currentRevision='2026-10-02T09:00:00.000020';
  const original={...baseTask(),status:'BACKLOG',progress:0,revision:beforeRevision},untouched={...baseTask(),id:'task-untouched',title:'Tarea sin decisión nueva',revision:beforeRevision};
@@ -845,7 +853,7 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
  finally{if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}
 }
 async function stalePaginationScenario(){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});
+ const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width:390,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'stale-pagination',width:390,message:error.message}));
  const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000002',original={...baseTask(),revision:beforeRevision},posts=[],requests=[];
  let heldPage;const paginationStarted=new Promise(resolve=>{heldPage={resolve,request:null};});
@@ -902,7 +910,7 @@ async function onboardingEpochScenario(width){
 
 const guideStatus=page=>page.$eval('[data-guide-observation]',node=>node.textContent);
 async function guideObservationScenario(width){
- const mode='guide-observation',context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const mode='guide-observation',context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[];let failureStatus=null,currentScope=scope,role='SITE_MANAGER',projectReads=0;
  await page.setRequestInterception(true);page.on('request',async request=>{try{const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(!url.pathname.startsWith('/api/identity/'))return request.continue();requests.push({path:url.pathname,method:request.method()});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');if(request.method()!=='GET'){posts.push(request.postData());throw Error('Guide scenario permits GET only');}let status=200,body;
   if(url.pathname==='/api/identity/workspace'){
@@ -970,7 +978,7 @@ async function guideHttpDenialScenario(width,action,denial){
 }
 
 async function portfolioAccessRaceScenario(width,denial,format,action='project'){
- const mode=`portfolio-access-race-${action}-${denial}-${format}`,context=await browser.createBrowserContext(),page=await context.newPage();
+ const mode=`portfolio-access-race-${action}-${denial}-${format}`,context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);
  await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[];let workspaceReads=0,projectReads=0,portfolioRequest=null,projectRequest=null,scheduleRequest=null;
  const refreshedScope='b'.repeat(64);
@@ -994,7 +1002,7 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
  }catch(error){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}});
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de acceso sintético');
-  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await showGuide(page);
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');assert.equal(projectReads,1,'Manual portfolio race starts from one explicit project snapshot');await showGuide(page);
   await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);
   await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'22222222-2222-4222-8222-222222222222'});await showWorkspaceSection(page,'workspace-recovery-title');await waitText(page,'Operaciones por comprobar');
   const retainedReferences=await references(),observedGeneration=await page.evaluate(()=>window.__guideObservation.generation);assert.ok(retainedReferences.includes('22222222-2222-4222-8222-222222222222'));
@@ -1028,6 +1036,94 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
   checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});
  }catch(error){await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
  finally{await context.close();}
+}
+
+// Complete AccountWorkspace integration with native tab visibility/focus.
+// API facts are controlled; visibility, clocks and product code are not replaced.
+async function visibleWorkspaceLiveRefreshScenario(width){
+ const mode='visible-live-refresh',context=await browser.createBrowserContext(),page=await context.newPage();
+ await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});
+ page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ await page.evaluateOnNewDocument(()=>{
+  window.__workspaceNativeEvents=[];
+  const observed=event=>window.__workspaceNativeEvents.push({type:event.type,trusted:event.isTrusted,at:Date.now(),visibility:document.visibilityState,focused:document.hasFocus()});
+  window.addEventListener('focus',observed);window.addEventListener('blur',observed);document.addEventListener('visibilitychange',observed);
+ });
+ const initialTask={...baseTask(),title:'Tarea privada del ensayo visible',progress:10,revision:'2026-10-01T12:00:00.000001'},updatedTask={...initialTask,progress:25,revision:'2026-10-01T12:00:00.000002'};
+ const project={id:'p-visible',name:'Obra privada del ensayo visible',status:'ACTIVE'},roleLabel='Jefe de obra';
+ const snapshot=task=>({scope,project,roleLabel,canPlanSchedule:false,tasks:[task],totalTasks:1,nextCursor:null});
+ const projectFacts=[],posts=[],externalRequests=[];let phase='INITIAL_PROJECT',workspaceReads=0,initialRequest=null,automaticRequest=null;
+ const respond=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+ await page.setRequestInterception(true);page.on('request',async request=>{try{
+  const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();externalRequests.push({origin:url.origin,path:url.pathname});return request.abort();}
+  if(!url.pathname.startsWith('/api/identity/'))return request.continue();
+  assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+  if(request.method()!=='GET'){posts.push({method:request.method(),path:url.pathname});throw Error('Visible live refresh must never issue a business write');}
+  assert.equal(url.pathname,'/api/identity/workspace','The visible case permits only the canonical workspace GET');
+  if(!url.search){workspaceReads++;assert.equal(phase,'INITIAL_PROJECT');return respond(request,{scope,organizationName:'Empresa privada del ensayo visible',role:'SITE_MANAGER',roleLabel,canPlanSchedule:false,canManageIntegrations:false,projects:[project],projectsTruncated:false});}
+  assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),project.id);
+  projectFacts.push({phase,at:Date.now(),query:url.search});
+  if(phase==='INITIAL_PROJECT'){assert.equal(initialRequest,null);initialRequest=request;return;}
+  if(phase==='AUTOMATIC_UPDATE'){assert.equal(automaticRequest,null);automaticRequest=request;return;}
+  if(phase==='FOCUS_DENIAL')return respond(request,{code:'WORKSPACE_MEMBERSHIP_REQUIRED'},403);
+  throw Error('Unexpected schedule GET outside an explicitly armed visible phase: '+phase);
+ }catch(error){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}});
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await page.bringToFront();
+  await page.waitForFunction(()=>document.visibilityState==='visible'&&document.hasFocus(),{timeout:10000});
+  assert.equal(await page.evaluate(()=>Object.hasOwn(document,'visibilityState')),false,'Visible case must use the native visibility getter');
+  await waitText(page,'Empresa privada del ensayo visible');assert.equal(workspaceReads,1);assert.equal(projectFacts.length,0);
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra privada del ensayo visible')).click());
+  for(let i=0;i<80&&!initialRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));
+  assert.ok(initialRequest,'The one explicit project snapshot must be observed');assert.equal(projectFacts.length,1);
+  // Arm the new server fact before resolving the manual snapshot. The next GET
+  // is initiated by the mounted product, with no refresh button or fixture call.
+  phase='AUTOMATIC_UPDATE';await respond(initialRequest,snapshot(initialTask));
+  for(let i=0;i<400&&!automaticRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));
+  assert.ok(automaticRequest,'Visible AccountWorkspace must issue its immediate canonical schedule GET');
+  await showWorkspaceSection(page,'schedule-title');await page.waitForSelector('[data-task-id="task-a"]');
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',node=>Number(node.getAttribute('aria-valuenow'))),10);
+  assert.equal(await page.evaluate(()=>document.visibilityState),'visible');assert.equal(projectFacts.length,2);
+  phase='NO_READ_EXPECTED';await respond(automaticRequest,snapshot(updatedTask));
+  await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]')?.getAttribute('aria-valuenow')==='25'&&Boolean(document.querySelector('[data-worksite-live-refresh="CURRENT"]')),{timeout:15000});
+  assert.equal(await page.evaluate(()=>window.__guideObservation?.scope),scope);assert.equal(await page.evaluate(()=>window.__guideObservation?.projectId),project.id);
+  assert.equal(await page.evaluate(()=>window.__guideObservation?.schedule?.loaded),1);assert.equal(workspaceReads,1);assert.equal(projectFacts.length,2);assert.equal(posts.length,0);
+  await page.screenshot({path:path.join(evidence,'workspace-visible-live-current-'+width+'.png'),fullPage:true});
+  // Native Chromium tab activation must produce a real hidden/visible cycle.
+  // No dispatchEvent fallback or visibility override is allowed in this case.
+  const background=await context.newPage();await background.bringToFront();
+  await page.waitForFunction(()=>document.visibilityState==='hidden'&&!document.hasFocus(),{timeout:10000});
+  const hiddenStartedAt=Date.now();await new Promise(resolve=>setTimeout(resolve,6000));
+  assert.ok(Date.now()-hiddenStartedAt>=6000);assert.equal(projectFacts.length,2,'A genuinely hidden tab must not issue another schedule GET');
+  phase='FOCUS_DENIAL';const focusStartedAt=Date.now();await page.bringToFront();
+  await page.waitForFunction(()=>document.visibilityState==='visible'&&document.hasFocus(),{timeout:10000});
+  await page.waitForSelector('[data-guide-observation="UNAVAILABLE"]',{timeout:20000});
+  assert.equal(projectFacts.length,3);const focusRead=projectFacts[2];assert.equal(focusRead.phase,'FOCUS_DENIAL');assert.ok(focusRead.at>=focusStartedAt);
+  // Controller schedule defaults to45s with±10% jitter. A read before40.5s
+  // from the prior round cannot be attributed to that periodic timer.
+  assert.ok(focusRead.at-projectFacts[1].at<45000*.9,'The focus round must precede the earliest periodic refresh');
+  const events=await page.evaluate(()=>window.__workspaceNativeEvents);
+  assert.ok(events.some(event=>event.type==='visibilitychange'&&event.trusted&&event.visibility==='hidden'));
+  assert.ok(events.some(event=>event.type==='visibilitychange'&&event.trusted&&event.visibility==='visible'&&event.at>=focusStartedAt));
+  assert.ok(events.some(event=>event.type==='focus'&&event.trusted&&event.at>=focusStartedAt));
+  const unavailable=await page.evaluate(()=>window.__guideObservation);assert.equal(unavailable.state,'UNAVAILABLE');
+  for(const key of ['scope','projectId','channel'])assert.equal(Object.hasOwn(unavailable,key),false,'Revoked context must not retain '+key);
+  assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);assert.equal(await page.$('#portfolio-overview-title'),null);assert.equal(await page.$('#worker-channel-title'),null);
+  assert.ok(!(await text(page)).includes(initialTask.title));assert.ok(!(await text(page)).includes(project.name));assert.ok(!(await text(page)).includes('Empresa privada del ensayo visible'));
+  assert.ok(await page.$$eval('button',nodes=>nodes.some(node=>node.textContent==='Actualizar'&&!node.disabled)),'Revocation must permit a fresh explicit account consultation');
+  const quietStartedAt=Date.now();await new Promise(resolve=>setTimeout(resolve,52000));
+  const quietWindowMs=Date.now()-quietStartedAt;assert.ok(quietWindowMs>=52000);assert.equal(projectFacts.length,3,'Revoked AccountWorkspace must not repeat the automatic read');
+  assert.equal(workspaceReads,1);assert.equal(posts.length,0);assert.deepEqual(externalRequests,[]);
+  assert.equal(await page.evaluate(()=>document.visibilityState),'visible');assert.equal(await page.evaluate(()=>Object.hasOwn(document,'visibilityState')),false);
+  assert.equal(await page.$eval('[data-guide-observation]',node=>node.dataset.guideObservation),'UNAVAILABLE');assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:path.join(evidence,'workspace-visible-live-denied-'+width+'.png'),fullPage:true});
+  checks.push({mode,width,completeAccountWorkspaceMounted:true,visibilityOverrides:false,syntheticVisibilityEvents:false,fakeTimers:false,nativeTabVisibilityAndFocus:true,manualProjectSnapshots:1,immediateAutomaticUpdates:1,focusAutomaticDenials:1,workspaceReads,projectReads:projectFacts.length,initialProgress:10,updatedProgress:25,denialStatus:403,contextRetired:true,postDenialQuietWindowMs:quietWindowMs,posts:0,externalRequests:0,projectFacts,nativeEvents:events,periodicSuccessCadenceProved:false,productionLoginVerified:false,humanAccepted:false});
+ }catch(error){
+  const native=await page.evaluate(()=>({visibility:document.visibilityState,focused:document.hasFocus(),ownVisibilityGetter:Object.hasOwn(document,'visibilityState'),events:window.__workspaceNativeEvents||[],guide:window.__guideObservation||null})).catch(()=>null);
+  writeFileSync(path.join(evidence,'workspace-visible-live-'+width+'-failure.json'),JSON.stringify({mode,width,phase,error:error.message,workspaceReads,projectFacts,posts,externalRequests,native},null,2));
+  await page.screenshot({path:path.join(evidence,'workspace-visible-live-'+width+'-failure.png'),fullPage:true}).catch(()=>{});throw error;
+ }finally{await context.close();}
 }
 
 try{
@@ -1066,6 +1162,7 @@ try{
  for(const width of [320,768,1280])await scenario('uncertain',width);
  for(const width of [320,390,768,1280])for(const uncertain of [false,true])await mobileImportNavigationScenario(width,uncertain);
  }
+ if([undefined,'visible-live-refresh'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])await visibleWorkspaceLiveRefreshScenario(width);
  assert.deepEqual(pageErrors,[]);
  const proof={status:'PASS',fullSuite:!process.env.WORKSPACE_UI_SCENARIO,focusedScenario:process.env.WORKSPACE_UI_SCENARIO||null,environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
