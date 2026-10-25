@@ -1,0 +1,35 @@
+name: Verified office account fixture diagnosis
+on:
+  push:
+    branches: ['operations/pilot-ci-diagnosis-20261024']
+    paths:
+      - '.github/workflows/pilot-office-account-fixture-diagnosis.yml'
+      - 'scripts/verify-participant-office-account-ui.mjs'
+permissions:
+  contents: read
+jobs:
+  office-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Execute the full existing verified office account UI fixture
+        run: node scripts/verify-participant-office-account-ui.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: office-account-ui-${{ github.run_id }}
+          path: .vercel/verified-office-onboarding-evidence/
+          include-hidden-files: true
+          retention-days: 7
