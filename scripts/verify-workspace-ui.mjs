@@ -926,6 +926,9 @@ async function guideObservationScenario(width){
 
 async function guideHttpDenialScenario(width,action,denial){
  const mode=`guide-http-${action}-${denial}`,context=await browser.createBrowserContext(),page=await context.newPage();
+ // Manual HTML-denial oracle: native visible refresh is exercised separately.
+ // A hidden document keeps its exact two explicit reads causally independent.
+ await page.evaluateOnNewDocument(()=>Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'}));
  await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[];let denyWorkspace=false,projectReads=0,receiptReads=0;
  await page.setRequestInterception(true);page.on('request',async request=>{try{
@@ -961,7 +964,7 @@ async function guideHttpDenialScenario(width,action,denial){
   assert.ok(!(await text(page)).includes('private gateway diagnostic'));assert.ok(!(await text(page)).includes('Unexpected token'));
   assert.equal(projectReads,2);assert.equal(receiptReads,action==='readback'?1:0);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}.png`),fullPage:true});
-  checks.push({mode,width,projectReads,receiptReads,posts:0,htmlDenialClearsAccount:true,htmlDenialClearsView:true,htmlDenialClearsGuideFacts:true,currentToken:true});
+  checks.push({mode,width,projectReads,receiptReads,posts:0,htmlDenialClearsAccount:true,htmlDenialClearsView:true,htmlDenialClearsGuideFacts:true,currentToken:true,backgroundRefreshPrecondition:'document-hidden-for-http-denial-only-oracle'});
  }catch(error){await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
  finally{await context.close();}
 }

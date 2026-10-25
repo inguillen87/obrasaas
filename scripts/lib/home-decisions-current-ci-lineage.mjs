@@ -1,4 +1,4 @@
-import {planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
@@ -4424,9 +4424,70 @@ const companyNativeCount=value=>Number.isSafeInteger(value)&&value>=0;
 const companyNativePattern=(pattern,value)=>typeof value==='string'&&pattern.test(value);
 const companyNativeSourcePath=value=>typeof value==='string'&&/^(src|scripts|tests)\//.test(value)&&!value.includes('..')&&!value.includes('\\');
 function companyNativeRead(readSource,file){let bytes;try{bytes=readSource(file);}catch{companyNativeRequired(false,'SOURCE_MISSING');}companyNativeRequired(Buffer.isBuffer(bytes),'SOURCE_MISSING');return bytes;}
+// Every read is delegated to the physical reader. Snapshots are independent RAW
+// copies used only for comparison; they are never supplied as source authority.
+function companyNativeSourceFrame(manifest,readSource,run){
+ const n=COMPANY_ONBOARDING_UX_NATIVE_REVIEW,r=companyNativeRequired,k=companyNativeKeys;
+ r(typeof readSource==='function','SOURCE_READER');
+ const manifestBefore=JSON.stringify(manifest),snapshots=new Map();let contract,contractBefore;
+ const remember=(file,bytes)=>snapshots.set(file,Buffer.from(bytes));
+ const checkedRead=file=>{
+  r(snapshots.has(file),'SOURCE_READER_OUTSIDE_FRAME');
+  const bytes=companyNativeRead(readSource,file);
+  r(bytes.equals(snapshots.get(file)),'SOURCE_CHANGED_DURING_CALL');return bytes;
+ };
+ const ownerFailure=error=>{
+  if(['HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED','WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED','PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'].includes(error?.code))r(false,'CURRENT_SOURCE_AUTHORITY');
+  throw error;
+ };
+ try{
+  const contractPath='.github/workspace-acceptance-contract.json',raw=companyNativeRead(readSource,contractPath);
+  remember(contractPath,raw);r(raw.equals(Buffer.from(raw.toString('utf8'))),'CONTRACT_UTF8');
+  try{contract=JSON.parse(raw);}catch{r(false,'CONTRACT_JSON');}
+  r(plain(contract),'CONTRACT_SHAPE');contractBefore=JSON.stringify(contract);
+  const hours=Object.hasOwn(contract,WORKSITE_LIVE_HOURS_CURRENT_SECTION),budget=Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION);
+  r(hours===budget,'PARTIAL_CURRENT_SOURCE_AUTHORITY');
+  const additions=hours?['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']:[];
+  r(Array.isArray(manifest)&&manifest.length===n.sourceCount+additions.length,'SOURCE_MANIFEST');
+  const paths=[];
+  for(const ref of manifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);}
+  const historical=paths.filter(file=>!additions.includes(file));
+  r(new Set(paths).size===paths.length&&additions.every(file=>paths.includes(file))&&historical.length===n.sourceCount&&companyNativeSha(JSON.stringify(historical.slice().sort()))===n.sourcePathsSha256,'SOURCE_SET');
+  const snapshot=file=>{
+   const bytes=companyNativeRead(readSource,file);
+   if(snapshots.has(file))r(bytes.equals(snapshots.get(file)),'SOURCE_CHANGED_DURING_CALL');else remember(file,bytes);
+  };
+  for(const file of [...new Set([n.producer,...paths])].sort())snapshot(file);
+  let authorityFiles;
+  try{authorityFiles=[...(hours||progressEvidenceWaitSection(contract)?homeDecisionsValidationFiles(contract):[]),...(hours?worksiteLiveHoursValidationFiles(contract):[]),...(budget?planBudgetValidationFiles(contract):[])];}catch(error){ownerFailure(error);}
+  for(const file of [...new Set(authorityFiles)].sort())snapshot(file);
+  try{
+   if(hours)verifyWorksiteLiveHoursCurrentSources(contract,checkedRead);
+   if(budget)verifyPlanBudgetCurrentSources(contract,checkedRead);
+  }catch(error){ownerFailure(error);}
+  for(const ref of manifest)r(companyNativeSha(checkedRead(ref.path))===ref.sha256,'SOURCE_HASH');
+  return run({contract,readSource:checkedRead,additions,sourceCount:paths.length});
+ }finally{
+  // Visit the whole captured frame even when validation or a prior fence fails.
+  let changed;
+  for(const file of snapshots.keys()){try{checkedRead(file);}catch(error){changed??=error;}}
+  if(JSON.stringify(manifest)!==manifestBefore)changed??=Object.assign(new Error('Current company native manifest changed during call'),{code:'COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED',reason:'SOURCE_MANIFEST_CHANGED_DURING_CALL'});
+  if(contractBefore!==undefined&&JSON.stringify(contract)!==contractBefore)changed??=Object.assign(new Error('Current company native contract changed during call'),{code:'COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED',reason:'CONTRACT_CHANGED_DURING_CALL'});
+  if(changed)throw changed;
+ }
+}
+
+// Source binding only. This does not execute or accept a PostgreSQL/browser proof.
+export function validateCompanyOnboardingUxNativeSourceManifest(manifest,readSource){
+ return companyNativeSourceFrame(manifest,readSource,({additions,sourceCount})=>({status:'PASS',sourceReferences:sourceCount,historicalSourceReferences:COMPANY_ONBOARDING_UX_NATIVE_REVIEW.sourceCount,sourceScope:additions.length?'CURRENT_AUTHENTICATED_OWNERS':'HISTORICAL_SOURCE_SET',nativeOrBrowserAcceptance:false}));
+}
+
 export function validateCompanyOnboardingUxNativeProof(proof,readSource){
- const n=COMPANY_ONBOARDING_UX_NATIVE_REVIEW,r=companyNativeRequired,k=companyNativeKeys,contract=progressEvidenceWaitReaderContract(readSource),wait=progressEvidenceWaitSection(contract);
+ const n=COMPANY_ONBOARDING_UX_NATIVE_REVIEW,r=companyNativeRequired,k=companyNativeKeys;
  k(proof,['version','at','status','participantKycFixture','disposableDatabase','production','provider','checks','checkCount','supplementalChecks','supplementalCheckCount','totalCheckCount','sourceEventsUnique','composedFieldCore','connections','sends','mediaIO','realMediaIO','harnessSha256','sourceManifest','databaseRemoved'],'PROOF_SHAPE');
+ const proofBefore=JSON.stringify(proof);
+ try{return companyNativeSourceFrame(proof.sourceManifest,readSource,({contract,readSource,additions,sourceCount})=>{
+ const wait=progressEvidenceWaitSection(contract);
  r(proof.version===1&&proof.status==='PASS'&&typeof proof.at==='string'&&Number.isFinite(Date.parse(proof.at))&&new Date(proof.at).toISOString()===proof.at,'PROOF_STATE');
  r(proof.disposableDatabase===true&&proof.databaseRemoved===true&&proof.production===false&&proof.provider==='controlled-synthetic-only'&&proof.sourceEventsUnique===true&&proof.connections===1&&companyNativeCount(proof.sends),'PROOF_LIMITS');
  r(Array.isArray(proof.checks)&&proof.checkCount===n.historicalCheckCount&&proof.checks.length===n.historicalCheckCount&&companyNativeSha(JSON.stringify(proof.checks))===n.historicalChecksSha256,'HISTORICAL_CHECKS');
@@ -4465,18 +4526,19 @@ export function validateCompanyOnboardingUxNativeProof(proof,readSource){
  r(typeof readSource==='function','SOURCE_READER');
  const producer=companyNativeRead(readSource,n.producer),text=producer.toString('utf8');
  r(producer.equals(Buffer.from(text))&&companyNativeSha(text.replaceAll('\r\n','\n'))===progressEvidenceWaitCurrentSourcePin(contract,{path:n.producer,sha256:n.producerLfSha256})&&proof.harnessSha256===companyNativeSha(producer),'CURRENT_HARNESS');
- r(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===n.sourceCount,'SOURCE_MANIFEST');
+ r(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===sourceCount,'SOURCE_MANIFEST');
  const paths=[];
  for(const ref of proof.sourceManifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);r(companyNativeSha(companyNativeRead(readSource,ref.path))===ref.sha256,'SOURCE_HASH');}
- r(new Set(paths).size===paths.length&&companyNativeSha(JSON.stringify(paths.slice().sort()))===n.sourcePathsSha256,'SOURCE_SET');
+ r(new Set(paths).size===paths.length&&companyNativeSha(JSON.stringify(paths.filter(file=>!additions.includes(file)).sort()))===n.sourcePathsSha256,'SOURCE_SET');
  if(wait){try{verifyProgressEvidenceWaitCurrentSources(contract,readSource);}catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')r(false,'CURRENT_WAIT_SOURCES');throw error;}}
- return {status:'PASS',checks:n.totalCheckCount,coreChecks:n.addedCheckNames.length,sourceReferences:n.sourceCount,syntheticOnly:true,realAcceptance:false};
+ return {status:'PASS',checks:n.totalCheckCount,coreChecks:n.addedCheckNames.length,sourceReferences:sourceCount,syntheticOnly:true,realAcceptance:false};
+ });}finally{r(JSON.stringify(proof)===proofBefore,'PROOF_CHANGED_DURING_CALL');}
 }
 export function validateCompanyOnboardingUxNativeProofBytes(bytes,readSource){
  companyNativeRequired(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=512*1024,'PROOF_BYTES');
  const text=bytes.toString('utf8');companyNativeRequired(bytes.equals(Buffer.from(text)),'PROOF_UTF8');
  let proof;try{proof=JSON.parse(text);}catch{companyNativeRequired(false,'PROOF_JSON');}
- return validateCompanyOnboardingUxNativeProof(proof,readSource);
+ const before=Buffer.from(bytes);try{return validateCompanyOnboardingUxNativeProof(proof,readSource);}finally{companyNativeRequired(bytes.equals(before),'PROOF_BYTES_CHANGED_DURING_CALL');}
 }
 
 export const COMPANY_ONBOARDING_UX_CURRENT_SECTION='companyOnboardingUxCurrentRevision';
