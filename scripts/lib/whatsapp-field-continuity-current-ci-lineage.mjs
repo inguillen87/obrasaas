@@ -13054,9 +13054,17 @@ function currentWorksiteNativeSourceFiles(contract,familyName,previous){
    restorePlanBudgetPreviousContract(contract);
    const delta=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family);
    requireLineage(delta&&Array.isArray(delta.additions),'An exact Budget native companion delta is required');
-   const currentFamily=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family);
-   requireLineage(currentFamily&&Array.isArray(currentFamily.currentFiles),'The authenticated complete current native family is required');
-   const next=[...currentFamily.currentFiles],restored=restorePlanBudgetSourceSet(contract,family,next);
+   let next;
+   if(delta.contractPointer!==null){
+    const pointer=/^\/extension\/proofs\/(\d+)\/sourceFiles$/.exec(delta.contractPointer),proof=pointer?contract.extension?.proofs?.[Number(pointer[1])]:null;
+    requireLineage(proof&&proof.kind===family&&proof.producer===WHATSAPP_FIELD_CONTINUITY_NATIVE.families[familyName].producer&&contract.extension.proofs.filter(row=>row.kind===family).length===1&&Array.isArray(proof.sourceFiles),'The authenticated complete current native proof is required');
+    next=[...proof.sourceFiles];
+   }else{
+    const currentFamily=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family);
+    requireLineage(currentFamily&&Array.isArray(currentFamily.currentFiles),'The authenticated complete current native family is required');
+    next=[...currentFamily.currentFiles];
+   }
+   const restored=restorePlanBudgetSourceSet(contract,family,next);
    requireLineage(same(restored,current),'The complete pre-Budget native matrix must restore exactly');current=next;
   }catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
  }

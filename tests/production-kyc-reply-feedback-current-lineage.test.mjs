@@ -93,4 +93,11 @@ test('old missing duplicate samecount foreign and stale native manifests cannot 
 });
 test('official index exposes source and contract negatives without certification of dirty local evidence',()=>{
  const checks=kycExpiredCurrentCompositionSelftest(contract,root);assert.ok(checks.length>=35);assert.ok(checks.every(check=>check.result==='PASS'));assert.ok(checks.every(check=>typeof check.boundary==='string'));assert.equal(checks.some(check=>check.sourceState==='EXACT_CI_SOURCE'),false);
+ const before=JSON.stringify(contract),budget=contract.planBudgetCurrentRevision,family=budget.sourceFamilies.find(row=>row.family==='COMPACT'),delta=budget.sourceSetDeltas.find(row=>row.family==='COMPACT'),materials=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'];
+ assert.equal(delta.currentCount,141);assert.equal(delta.currentPathsSha256,'78ace2186e2a52f6a789ee8b51319080b5171420e465b4a63c03d52c5d0d294f');assert.equal(family.currentFiles.length,144);assert.deepEqual(family.currentFiles,currentFiles);
+ for(const change of [...materials.map(file=>files=>files.filter(value=>value!==file)),files=>files.filter(file=>!materials.includes(file)),files=>files.map(file=>file===materials[0]?'src/lib/foreign-same-count-material.mjs':file).sort()]){
+  const changed=structuredClone(contract),current=changed.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT');current.currentFiles=change(current.currentFiles);
+  assert.throws(()=>kycExpiredCurrentCompositionSelftest(changed,root),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED');
+ }
+ assert.equal(JSON.stringify(contract),before);
 });

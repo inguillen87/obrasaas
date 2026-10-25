@@ -2118,9 +2118,10 @@ export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()
    // Authenticate a private snapshot before using the current COMPACT binding.
    // The published127/125/117 lineage and the older fallback remain independent.
    const current=clone(contract);verifyPlanBudgetCurrentSources(current,readSource);
-   const compact=current[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='COMPACT'),family=current[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='COMPACT');
-   assert.ok(compact&&family,'The authenticated current COMPACT delta and family are required');assert.equal(compact.currentCount,family.currentFiles.length);assert.equal(compact.currentPathsSha256,hash(canonical(family.currentFiles)));
-   assert.equal(result.sourceCount,compact.currentCount);assert.equal(result.sourcePathsSha256,compact.currentPathsSha256);
+   // The published Budget delta stays frozen; Own authenticates the current family.
+   const family=current[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='COMPACT');
+   assert.ok(family,'The authenticated current COMPACT family is required');
+   assert.equal(result.sourceCount,family.currentFiles.length);assert.equal(result.sourcePathsSha256,hash(canonical(family.currentFiles)));
   }else assert.equal(result.sourceCount,contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.sourceSetDeltas.find(row=>row.family==='COMPACT')?.currentCount??contract.whatsappFieldContinuityCurrentRevision?.sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount??contract.integratedIdentityCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??contract.participantPreanalysisCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??(contract.planMeasurementCurrentLineage?127:125));
  });
  good('old-117-source-corpus-plus-exact-eight-additions',()=>{assert.equal(section.previousSourceCount,117);assert.equal(section.sourceFiles.length,125);equal(section.sourceAdditions,KYC_EXPIRED_CURRENT_ADDITIONS,'PROOF_BINDING_SOURCE');});
