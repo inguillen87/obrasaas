@@ -13054,7 +13054,9 @@ function currentWorksiteNativeSourceFiles(contract,familyName,previous){
    restorePlanBudgetPreviousContract(contract);
    const delta=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family);
    requireLineage(delta&&Array.isArray(delta.additions),'An exact Budget native companion delta is required');
-   const next=[...current,...delta.additions].sort(),restored=restorePlanBudgetSourceSet(contract,family,next);
+   const currentFamily=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family);
+   requireLineage(currentFamily&&Array.isArray(currentFamily.currentFiles),'The authenticated complete current native family is required');
+   const next=[...currentFamily.currentFiles],restored=restorePlanBudgetSourceSet(contract,family,next);
    requireLineage(same(restored,current),'The complete pre-Budget native matrix must restore exactly');current=next;
   }catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
  }

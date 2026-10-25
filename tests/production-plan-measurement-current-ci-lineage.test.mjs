@@ -31,7 +31,7 @@ assert.equal(sha(JSON.stringify(beforeBudgetContract,null,2)+'\n'),'8b19235b22aa
 const originalLContract=restoreFieldOutboundPreviousContract(restoreOoxmlAccountingPreviousContract(beforeBudgetContract));
 assert.equal(sha(JSON.stringify(originalLContract,null,2)+'\n'),FIELD_OUTBOUND_CURRENT_REVISION.previousContractSha256);
 assert.equal(sha(JSON.stringify(reconstructPublishedHContract(originalLContract),null,2)+'\n'),PLAN_MEASUREMENT_PUBLISHED_H_CONTRACT_SHA256);
-const section=contract.planMeasurementCurrentLineage,previous=restoreParticipantPreanalysisPreviousContract(contract),checkpoint=restoreIntegratedIdentityPreviousContract(contract),currentCount=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount,predecessor=restoreWhatsappFieldContinuityPreviousContract(contract);
+const section=contract.planMeasurementCurrentLineage,previous=restoreParticipantPreanalysisPreviousContract(contract),checkpoint=restoreIntegratedIdentityPreviousContract(contract),currentCount=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='COMPACT').currentFiles.length,predecessor=restoreWhatsappFieldContinuityPreviousContract(contract);
 assert.equal(sha(JSON.stringify(predecessor,null,2)+'\n'),WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256);
 const denied=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
 function changed(edit){for(const snapshot of [contract,originalLContract]){const value=structuredClone(snapshot);edit(value);denied(()=>reconstructPublishedHContract(value));}}

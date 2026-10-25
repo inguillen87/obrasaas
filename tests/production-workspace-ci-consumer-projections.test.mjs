@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,restoreOwnRuntimeDiagnosticPreviousContract,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -18,7 +18,7 @@ function assertCurrentNativeGraph(family,close,priorCount,publishedCount){
   verifyPlanBudgetCurrentSources(value,read);
   const budgetDelta=value[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family),beforeBudget=restorePlanBudgetSourceSet(value,family,actual.files);
   assert.deepEqual(budgetDelta.additions,['src/lib/plan-budget-source.mjs']);
-  assert.equal(actual.files.length,budgetDelta.currentCount);assert.equal(sha(JSON.stringify(actual.files)),budgetDelta.currentPathsSha256);assert.deepEqual(actual.files,[...beforeBudget,...budgetDelta.additions].sort());
+  const ownBase=restoreOwnRuntimeDiagnosticPreviousContract(value,read),beforeOwn=ownBase[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family).currentFiles;assert.deepEqual(actual.files,[...beforeOwn,'src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'].sort());assert.equal(beforeOwn.length,budgetDelta.currentCount);assert.equal(sha(JSON.stringify(beforeOwn)),budgetDelta.currentPathsSha256);assert.deepEqual(beforeOwn,[...beforeBudget,...budgetDelta.additions].sort());
   assert.equal(beforeBudget.length,delta.currentCount);assert.equal(sha(JSON.stringify(beforeBudget)),delta.currentPathsSha256);
   const previous=restoreWorksiteLiveHoursSourceSet(value,family,actual.files);assert.equal(previous.length,priorCount);assert.equal(sha(JSON.stringify(previous)),delta.previousPathsSha256);assert.deepEqual([...previous,...delta.additions].sort(),beforeBudget);
   assert.equal(participantPreanalysisConsumerSourceFiles(family,actual.files,read).length,publishedCount);
