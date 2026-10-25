@@ -20,6 +20,35 @@ test('serialized canonical transaction model deduplicates one report across conc
  const before=f.snapshot();await assert.rejects(f.operations.save(f.session('worker'),{...body,operationId:randomUUID(),payload:{...body.payload,reason:'Hecho distinto con la misma identidad de reporte.'}}),{code:'FIELD_EXECUTION_REPORT_CONFLICT'});assert.deepEqual(f.snapshot(),before);
 });
 
+test('same-operation stock-only receipt recovery reports a replay with no new effects through save and status',async()=>{
+ const f=fieldExecutionFixture(),mandateId=(await f.issue()).mandate.id,body=f.command('REPORT_EXECUTION',f.reportPayload(mandateId)),recorded=await f.operations.save(f.session('worker'),body);
+ assert.equal(recorded.executionReplay,false);assert.equal(recorded.effectsApplied,true);assert.equal(recorded.stockChanged,true);assert.equal(recorded.task,null);
+ const before=f.snapshot(),queryStart=f.queries.length;
+ const replay=await f.operations.save(f.session('worker'),body),status=await f.operations.status(f.session('worker'),{projectId:'p-a',scope:f.scope,operationId:body.operationId});
+ for(const recovered of [replay,status]){
+  assert.equal(recovered.state,'RECORDED');assert.equal(recovered.replayed,true);assert.equal(recovered.receiptId,recorded.receiptId);assert.equal(recovered.operationId,body.operationId);
+  assert.equal(recovered.executionReplay,true);assert.equal(recovered.effectsApplied,false);assert.equal(recovered.stockChanged,false);assert.equal(recovered.taskUpdated,false);assert.equal(recovered.task,null);assert.deepEqual(recovered.execution,recorded.execution);
+ }
+ assert.deepEqual(f.snapshot(),before);assert.equal(f.movements().length,2);assert.equal(f.state.project.metadata.materialInventory.materials[0].balance,'8.000');
+ assert.ok(f.queries.slice(queryStart).every(({sql})=>!/^\s*(?:INSERT|UPDATE|DELETE)\b/.test(sql)),'Recovering an existing operation must not write effects or another receipt');
+ assert.equal(f.receipts().find(row=>row.id===recorded.receiptId).metadata.outcome.effectsApplied,true,'The original committed outcome remains immutable');
+});
+
+test('same-operation progress receipt recovery preserves its execution snapshot and reads the current task without another OUT or task update',async()=>{
+ const f=fieldExecutionFixture({measured:true}),mandateId=(await f.issue()).mandate.id,progress={definitionId:'measurement-a',baseline:'10',unit:'M2',mode:'DELTA',quantity:'2.5001'},body=f.command('REPORT_EXECUTION',{...f.reportPayload(mandateId),progress,evidenceIds:['e-a']}),recorded=await f.operations.save(f.session('worker'),body);
+ assert.equal(recorded.effectsApplied,true);assert.equal(recorded.taskUpdated,true);assert.equal(recorded.task.measurement.executed,'2.5001');
+ const later=await f.report(mandateId,{progress:{...progress,quantity:'1.0000'},evidenceIds:['e-a']});assert.equal(later.task.measurement.executed,'3.5001');
+ const before=f.snapshot(),queryStart=f.queries.length,replay=await f.operations.save(f.session('worker'),body),status=await f.operations.status(f.session('worker'),{projectId:'p-a',scope:f.scope,operationId:body.operationId});
+ for(const recovered of [replay,status]){
+  assert.equal(recovered.state,'RECORDED');assert.equal(recovered.replayed,true);assert.equal(recovered.receiptId,recorded.receiptId);assert.equal(recovered.operationId,body.operationId);
+  assert.equal(recovered.executionReplay,true);assert.equal(recovered.effectsApplied,false);assert.equal(recovered.stockChanged,false);assert.equal(recovered.taskUpdated,false);
+  assert.deepEqual(recovered.execution,recorded.execution);assert.deepEqual(recovered.executionTaskSnapshot,recorded.task);assert.deepEqual(recovered.task,later.task);assert.equal(recovered.task.measurement.executed,'3.5001');
+ }
+ assert.deepEqual(f.snapshot(),before);assert.equal(f.movements().length,4);assert.equal(f.state.proposals.length,2);assert.equal(f.state.project.metadata.materialInventory.materials[0].balance,'6.000');
+ assert.ok(f.queries.slice(queryStart).every(({sql})=>!/^\s*(?:INSERT|UPDATE|DELETE)\b/.test(sql)),'Recovery preserves current task, stock, mandate usage, proposals and receipts');
+ assert.equal(f.receipts().find(row=>row.id===recorded.receiptId).metadata.outcome.taskUpdated,true,'The original task update fact remains immutable');
+});
+
 test('each failure after stock, movements, task, quota, execution or field receipt rolls back every modeled transaction effect',async()=>{
  for(const failure of ["'material.inventory.moved'",'INSERT INTO public."OperationalProposal"','UPDATE public."Task"','UPDATE public."AuditLog"',"'field.execution.applied'","'field.operation.recorded'"]){
   const f=fieldExecutionFixture({measured:true}),m=(await f.issue()).mandate.id,before=f.snapshot();f.controls.fail=failure;

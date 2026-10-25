@@ -112,7 +112,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
   }
   async function recoveredOutcome(client,projectId,receipt) {
     const outcome=receipt.metadata.outcome;
-    if(outcome.kind==='EXECUTION_APPLIED'&&outcome.task)return {...outcome,executionTaskSnapshot:outcome.task,task:publicMeasuredTask(await task(client,projectId,outcome.task.id))};
+    if(outcome.kind==='EXECUTION_APPLIED')return {...outcome,executionReplay:true,effectsApplied:false,stockChanged:false,taskUpdated:false,...(outcome.task?{executionTaskSnapshot:outcome.task,task:publicMeasuredTask(await task(client,projectId,outcome.task.id))}:{})};
     if(outcome.overtime)return overtime.recover(client,projectId,outcome);
     if(outcome.consumption?.id)return {...outcome,recordedConsumptionSnapshot:outcome.consumption,consumption:(await readConsumption(client,projectId,outcome.consumption.id)).consumption};
     if(outcome.adjustment?.id)return {...outcome,adjustment:(await readStockAdjustment(client,projectId,outcome.adjustment.id)).adjustment};

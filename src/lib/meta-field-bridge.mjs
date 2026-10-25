@@ -490,6 +490,14 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
  }
  const plans=createMetaPlanImportTransport({within,resolve,saved,record,result,seal,unseal,commitFence,operationIdFor:metaFieldOperationId,environment,protocol,provider,put,get,analyzer:planAnalyzer,usage,writePending:async(client,r,state)=>{await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);}});
  const executionErrors=new Set(['META_CHANNEL_EXECUTION_DRAFT_EXPIRED','FIELD_EXECUTION_ISSUER_UNAVAILABLE','FIELD_EXECUTION_MANDATE_UNAVAILABLE','FIELD_EXECUTION_MANDATE_REVOKED','FIELD_EXECUTION_MANDATE_CHANGED','FIELD_EXECUTION_MANDATE_EXPIRED','FIELD_EXECUTION_MANDATE_SCOPE','FIELD_EXECUTION_MATERIAL_SCOPE','FIELD_EXECUTION_PROGRESS_SCOPE','FIELD_EXECUTION_ALLOWANCE_EXCEEDED','FIELD_EXECUTION_REPORT_CONFLICT','INVENTORY_STOCK_INSUFFICIENT','INVENTORY_CATALOG_CHANGED','INVENTORY_UNIT_MISMATCH','FIELD_REVISION_CHANGED','FIELD_EVIDENCE_NOT_APPROVED','FIELD_MEASUREMENT_CHANGED']);
+ async function executionSourceFence(client,r){
+  await commitFence(client,r);
+  // Both an applied execution and its safe rejection receipt must close on
+  // the physical inbox lease, including an ordinary single-worksite channel.
+  const source=(await client.query(`SELECT id,clock_timestamp() AS now FROM public."WebhookEvent" WHERE id=$1 AND provider=$2 AND "projectId"=$3 AND status='PENDING' AND "leaseToken"=$4 AND "leaseExpiresAt">clock_timestamp() AND payload->>'payloadDigest'=$5 AND payload->>'channelId'=$6`,[r.event.id,protocol.provider,r.sourceProjectId||r.event.projectId,r.event.leaseToken,r.event.payload.payloadDigest,r.connection.id])).rows;
+  if(source.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+  return source[0].now;
+ }
  async function executeExecution(context,prepared){
   if(!executionPreparations.has(prepared))throw new WorkspaceError('FIELD_EXECUTION_AUTHORITY_FENCE_REQUIRED',403);executionPreparations.delete(prepared);
   try{return await within(async client=>{
@@ -499,15 +507,11 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
    const previous=await saved(client,r);if(previous)return previous;
    executionFrames.set(r,digest(prepared.command));
    try{const {session,service}=operations(client,r),outcome=await service.save(session,prepared.command),recorded=await record(client,r,result(r,'EXECUTION_APPLIED',text(metaFieldExecutionAcknowledgement(outcome,r.project.name)),{businessApplied:outcome.effectsApplied===true,receiptId:outcome.receiptId,reviewState:'RECORDED'}),null);
-    await commitFence(client,r);
-    // Every automatic execution, including a single-worksite ordinary channel,
-    // closes on the physical leased inbox row after all business/reply writes.
-    const source=(await client.query(`SELECT id,clock_timestamp() AS now FROM public."WebhookEvent" WHERE id=$1 AND provider=$2 AND "projectId"=$3 AND status='PENDING' AND "leaseToken"=$4 AND "leaseExpiresAt">clock_timestamp()`,[r.event.id,protocol.provider,r.sourceProjectId||r.event.projectId,r.event.leaseToken])).rows;
-    if(source.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);const now=source[0].now;if(Date.parse(prepared.state.executionDeadline)<=now.getTime())throw new WorkspaceError('META_CHANNEL_EXECUTION_DRAFT_EXPIRED',409);if(outcome.effectsApplied&&Date.parse(outcome.execution.validUntil)<=now.getTime())throw new WorkspaceError('FIELD_EXECUTION_MANDATE_EXPIRED',409);return recorded;
+    const now=await executionSourceFence(client,r);if(Date.parse(prepared.state.executionDeadline)<=now.getTime())throw new WorkspaceError('META_CHANNEL_EXECUTION_DRAFT_EXPIRED',409);if(outcome.effectsApplied&&Date.parse(outcome.execution.validUntil)<=now.getTime())throw new WorkspaceError('FIELD_EXECUTION_MANDATE_EXPIRED',409);return recorded;
    }finally{executionFrames.delete(r);}
   });}catch(error){
    if(!executionErrors.has(error.code))throw error;
-   return within(async client=>{const r=await resolve(client,context,'report');if(mediaIdentity(r)!==prepared.identityDigest||digest(conversation(r))!==prepared.stateDigest)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);const previous=await saved(client,r);if(previous)return previous;return record(client,r,result(r,'INPUT_REVIEW',text('No se aplicó esta ejecución: el mandato, sus cupos o los datos vigentes requieren revisión. Conservamos el mismo reporte y sus cantidades. Consultá el recibo o pedí al responsable revisar la autorización; no generes otro hecho para reemplazar un resultado desconocido.'),{code:error.code}),prepared.state,{preserveConversation:true,disclosure:'REPORT'});});
+   return within(async client=>{const r=await resolve(client,context,'report');if(mediaIdentity(r)!==prepared.identityDigest||digest(conversation(r))!==prepared.stateDigest)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);const previous=await saved(client,r);if(previous)return previous;const recorded=await record(client,r,result(r,'INPUT_REVIEW',text('No se aplicó esta ejecución: el mandato, sus cupos o los datos vigentes requieren revisión. Conservamos el mismo reporte y sus cantidades. Consultá el recibo o pedí al responsable revisar la autorización; no generes otro hecho para reemplazar un resultado desconocido.'),{code:error.code}),prepared.state,{preserveConversation:true,disclosure:'REPORT'});await executionSourceFence(client,r);return recorded;});
   }
  }
  const api={async executeCompany(context){
