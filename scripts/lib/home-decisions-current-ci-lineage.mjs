@@ -4441,7 +4441,7 @@ function companyNativeSourceFrame(manifest,readSource,run){
   const materialPaths=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'],own=contract[PLAN_BUDGET_CURRENT_SECTION]?.ownRuntimeDiagnosticAdvance;
   if(own!==undefined)r(plain(own)&&Array.isArray(own.sourceChanges)&&Array.isArray(own.retainedDependencies),'MATERIAL_SOURCE_AUTHORITY');
   const materialRows=own?.sourceChanges.filter(row=>materialPaths.includes(row?.path))||[],materials=materialRows.length>0;
-  r(materialRows.length===0||materialRows.length===3,'MATERIAL_SOURCE_AUTHORITY');if(materials)r(hours&&budget&&own.sourceChanges.length===57&&own.retainedDependencies.length===5,'MATERIAL_SOURCE_AUTHORITY');
+  r(materialRows.length===0||materialRows.length===3,'MATERIAL_SOURCE_AUTHORITY');if(materials)r(hours&&budget&&own.sourceChanges.length===58&&own.retainedDependencies.length===5,'MATERIAL_SOURCE_AUTHORITY');
   const additions=[...(hours?['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']:[]),...(materials?materialPaths:[])];
   r(Array.isArray(manifest)&&manifest.length===n.sourceCount+additions.length,'SOURCE_MANIFEST');
   const paths=[];for(const ref of manifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);}

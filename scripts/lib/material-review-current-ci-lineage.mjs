@@ -1,3 +1,4 @@
+import {PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,restoreOwnRuntimeDiagnosticPreviousSourceText} from './plan-budget-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
 import {homeDecisionsLegacyOperationsAst} from './home-decisions-current-ci-lineage.mjs';
@@ -367,6 +368,15 @@ export function materialReviewValidationFiles(contract){
  return [...new Set([...existingApiPlanValidationFiles(contract),...value.reviewedSourceChanges.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
 }
 export function verifyMaterialReviewCurrentSources(contract,readSource){
+ const own=Boolean(contract?.[PLAN_BUDGET_CURRENT_SECTION]?.ownRuntimeDiagnosticAdvance),beforeMetadata=own?JSON.stringify(contract):null,snapshots=new Map();
+ const ownCall=run=>{try{return run();}catch(error){if(error?.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}};
+ try{
+  if(own){
+   reject(typeof readSource==='function','Actual current material source reader required');
+   for(const file of ownCall(()=>planBudgetValidationFiles(contract))){const raw=readSource(file);reject(Buffer.isBuffer(raw),'Missing current material source frame: '+file);snapshots.set(file,Buffer.from(raw));}
+   ownCall(()=>verifyPlanBudgetCurrentSources(contract,readSource));
+  }
+
  verifyExistingApiPlanCurrentSources(contract,readSource);
  const value=section(contract);if(!value)return null;
  restoreMaterialReviewPreviousContract(contract);reject(typeof readSource==='function','Actual current material review source reader required');
@@ -376,7 +386,22 @@ export function verifyMaterialReviewCurrentSources(contract,readSource){
   reject(safe(row.path)&&hash(row.sha256),'Exact safe material review source pin required');
   const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current material review source: '+row.path);
   const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===existingApiPlanCurrentSourcePin(contract,row),'Stale current material review source: '+row.path);
-  if(row.unchangedSurfaceSha256)reject(materialReviewUnchangedSurface(row.path,bytes)===row.unchangedSurfaceSha256,'Material review changed an inherited business surface: '+row.path);
+  if(row.unchangedSurfaceSha256){
+   // Only this inherited AST oracle consumes the authenticated0707 text. The
+   // original reader and every current-source pin continue to use physical bytes.
+   const inherited=own&&['src/lib/field-operations-http.mjs','src/lib/field-operations-store.mjs'].includes(row.path)?Buffer.from(ownCall(()=>restoreOwnRuntimeDiagnosticPreviousSourceText(contract,row.path,text))):bytes;
+   reject(materialReviewUnchangedSurface(row.path,inherited)===row.unchangedSurfaceSha256,'Material review changed an inherited business surface: '+row.path);
+  }
  }
  return {version:1,previousContractSha256:value.previousContractSha256,completePreviousContractRestored:true,unchangedBusinessSurfaces:value.reviewedSourceChanges.filter(row=>row.unchangedSurfaceSha256).map(row=>row.path),historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
+
+ }finally{
+  if(own){
+   let failure;const check=run=>{try{run();}catch(error){failure??=error;}};
+   check(()=>ownCall(()=>verifyPlanBudgetCurrentSources(contract,readSource)));
+   for(const[file,before]of snapshots)check(()=>{const raw=readSource(file);reject(Buffer.isBuffer(raw)&&raw.equals(before),'Current material source RAW changed during inherited verification: '+file);});
+   check(()=>reject(JSON.stringify(contract)===beforeMetadata,'Current material caller metadata changed during inherited verification'));
+   if(failure)throw failure;
+  }
+ }
 }
