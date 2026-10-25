@@ -1,0 +1,48 @@
+name: Field overtime and mobile fixture diagnosis
+on:
+  push:
+    branches: ['operations/field-people-fixtures-diagnosis-20261025']
+    paths:
+      - '.github/workflows/pilot-field-people-fixtures-diagnosis.yml'
+      - 'scripts/verify-field-overtime-ui.mjs'
+      - 'scripts/verify-mobile-identity-ui.mjs'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: overtime-configure320-diagnostic
+            command: OVERTIME_UI_SCENARIO=configure OVERTIME_UI_WIDTH=320 node scripts/verify-field-overtime-ui.mjs
+          - name: mobile-identity-full
+            command: node scripts/verify-mobile-identity-ui.mjs
+    name: ${{ matrix.name }}
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Execute the original assertions within the declared diagnostic scope
+        run: ${{ matrix.command }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: field-people-fixtures-${{ github.run_id }}-${{ matrix.name }}
+          path: |
+            .vercel/private/field-overtime-diagnostic/
+            .vercel/private/field-overtime-ui-proof.json
+            .vercel/mobile-identity-evidence/
+          include-hidden-files: true
+          retention-days: 7
