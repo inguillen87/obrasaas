@@ -1,0 +1,53 @@
+name: Current pilot UI regression diagnosis
+on:
+  push:
+    branches: ['operations/pilot-ci-diagnosis-20261024']
+    paths:
+      - '.github/workflows/pilot-current-ui-regressions.yml'
+      - 'scripts/verify-field-operations-ui.mjs'
+      - 'scripts/verify-workspace-ui.mjs'
+      - 'scripts/verify-participants-ui.mjs'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: field-full
+            command: node scripts/verify-field-operations-ui.mjs
+          - name: guide-http-denial
+            command: WORKSPACE_UI_SCENARIO=guide-http-denial node scripts/verify-workspace-ui.mjs
+          - name: self-identity-recovery
+            command: PARTICIPANTS_UI_SCENARIO=self-attendance-conflict PARTICIPANTS_UI_WIDTH=390 node scripts/verify-participants-ui.mjs
+          - name: participants-full
+            command: node scripts/verify-participants-ui.mjs
+    name: ${{ matrix.name }}
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Execute the existing scenario without weakening its assertions
+        run: ${{ matrix.command }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: current-ui-${{ github.run_id }}-${{ matrix.name }}
+          path: |
+            .vercel/field-operations-evidence/
+            .vercel/workspace-evidence/
+            .vercel/participants-evidence/
+          include-hidden-files: true
+          retention-days: 7
