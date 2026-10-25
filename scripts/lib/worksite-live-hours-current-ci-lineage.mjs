@@ -1,3 +1,4 @@
+import {restoreOwnRuntimeDiagnosticPreviousSourceText} from './plan-budget-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {WORKSITE_LIVE_HOURS_CURRENT_REVISION} from './worksite-live-hours-current-ci-reviewed.mjs';
@@ -137,6 +138,6 @@ export const worksiteLiveHoursPreviousSourcePin=(contract,ref)=>currentGate.prev
 export const restoreWorksiteLiveHoursSourceSet=(contract,family,files)=>currentGate.restoreSourceSet(contract,family,restorePlanPartidaPreviewSourceSet(contract,family,files));
 export const verifyWorksiteLiveHoursCurrentSources=(contract,readSource)=>{if(Object.hasOwn(contract,PLAN_PARTIDA_PREVIEW_CURRENT_SECTION))verifyPlanPartidaPreviewCurrentSources(contract,readSource);return currentGate.verifyCurrentSources(contract,readSource);};
 export const verifyWorksiteLiveHoursActualClosure=(contract,family,closure,readSource)=>{if(!Object.hasOwn(contract,PLAN_PARTIDA_PREVIEW_CURRENT_SECTION))return currentGate.verifyActualClosure(contract,family,closure,readSource);const result=verifyPlanPartidaPreviewActualClosure(contract,family,closure,readSource);currentGate.verifyActualClosure(contract,family,restorePlanPartidaPreviewClosure(contract,family,closure),readSource);return result;};
-export const restoreWorksiteLiveHoursPreviousProducerText=currentGate.restorePreviousProducerText;
+export const restoreWorksiteLiveHoursPreviousProducerText=(contract,producer,bytes)=>{try{return currentGate.restorePreviousProducerText(contract,producer,Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))?Buffer.from(restoreOwnRuntimeDiagnosticPreviousSourceText(contract,producer,bytes.toString('utf8'))):bytes);}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.reason||error.message);throw error;}};
 export const worksiteLiveHoursProofSourceAdditions=spec=>{const added=planPartidaPreviewProofSourceAdditions(spec);return [...currentGate.proofSourceAdditions(added.length?{...spec,sourceFiles:spec.sourceFiles.filter(file=>!added.includes(file))}:spec),...added];};
 export const worksiteLiveHoursValidationFiles=contract=>[...new Set([...currentGate.validationFiles(contract),...planPartidaPreviewValidationFiles(contract)])].sort();

@@ -1,3 +1,4 @@
+import {restoreOwnRuntimeDiagnosticPreviousSourceText,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreIdentityDestinationUxPreviousProducerText} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -19,7 +20,9 @@ const root=new URL('../',import.meta.url),read=file=>readFileSync(new URL(file,r
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const lf=value=>Buffer.from(value.toString('utf8').replaceAll('\r\n','\n'));
 const actualContract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
-const publishedProducer=(file,bytes=read(file))=>actualContract.identityDestinationUxCurrentRevision?.browser.producerDelta.producer===file?restoreIdentityDestinationUxPreviousProducerText(actualContract,file,bytes):bytes;
+verifyPlanBudgetCurrentSources(actualContract,read); // Physical current bytes precede every pure historical projection.
+const own0707Producer=(file,bytes=read(file))=>Buffer.from(restoreOwnRuntimeDiagnosticPreviousSourceText(actualContract,file,bytes.toString('utf8')));
+const publishedProducer=(file,bytes=read(file))=>{const own=own0707Producer(file,bytes);return actualContract.identityDestinationUxCurrentRevision?.browser.producerDelta.producer===file?restoreIdentityDestinationUxPreviousProducerText(actualContract,file,own):own;};
 const fixture=authenticateIntegratedIdentityUiProducerMigrationSource(read(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH));
 const denied=fn=>assert.throws(fn,{code:'INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED'});
 // This is a pure current-metadata shadow, not a native/browser result. Its
@@ -66,6 +69,6 @@ test('UI migration retains complete checkpoint and native source sets and every 
 test('Plan lower validator restores unchanged I G and H lineage while binding actual current UI producers',()=>{
  assert.throws(()=>verifyPlanMeasurementCurrentSources(current(),read),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
  const c=JSON.parse(read('.github/workspace-acceptance-contract.json')),result=verifyPlanMeasurementCurrentSources(c,read);assert.equal(result.publishedCurrentSourceCount,127);assert.equal(result.previousSourceCount,125);assert.equal(result.historicalSourceCount,117);assert.equal(result.publishedContractSha256,'9dab901cb93f3834cad0f1ea9ba386c5bb12acc913463a7dfb6368847af3fd37');
- const producer='scripts/verify-workspace-plan-recovery-ui.mjs',raw=read(producer),old=restoreIntegratedIdentityUiProducerText(producer,raw),section=c.planMeasurementCurrentLineage;assert.equal(sha(restorePlanMeasurementPublishedGProducerText(section,producer,raw)),'9835f6f8af3a3d81bc770aa611bcf9233324a7ff196d63f4a1c9194c5b931f51');assert.equal(restorePlanMeasurementPublishedGProducerText(section,producer,raw),restorePlanMeasurementPublishedGProducerText(section,producer,old));
- assert.throws(()=>verifyPlanMeasurementCurrentSources(c,file=>file===producer?old:read(file)));assert.throws(()=>restorePlanMeasurementPublishedGProducerText(section,producer,Buffer.concat([raw,Buffer.from('\n')])));
+ const producer='scripts/verify-workspace-plan-recovery-ui.mjs',raw=own0707Producer(producer),old=restoreIntegratedIdentityUiProducerText(producer,raw),section=c.planMeasurementCurrentLineage;assert.equal(sha(restorePlanMeasurementPublishedGProducerText(section,producer,raw)),'9835f6f8af3a3d81bc770aa611bcf9233324a7ff196d63f4a1c9194c5b931f51');assert.equal(restorePlanMeasurementPublishedGProducerText(section,producer,raw),restorePlanMeasurementPublishedGProducerText(section,producer,old));
+ assert.throws(()=>verifyPlanMeasurementCurrentSources(c,file=>file===producer?old:read(file)));assert.throws(()=>restorePlanMeasurementPublishedGProducerText(section,producer,Buffer.concat([raw,Buffer.from('\n')])));verifyPlanBudgetCurrentSources(actualContract,read);
 });

@@ -1,5 +1,5 @@
 import historicalWeeklyRuntime from './fixtures/plan-budget-weekly-164-runtime.json' with {type:'json'};
-import {restorePlanBudgetPreviousContract,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,verifyPlanBudgetCurrentSources,planBudgetCurrentSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {planBudgetValidationFiles,restorePlanBudgetPreviousContract,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,verifyPlanBudgetCurrentSources,planBudgetCurrentSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursPreviousContract,restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION as destinationExpected,IDENTITY_DESTINATION_UX_CURRENT_SECTION as destinationKey,restoreIdentityDestinationUxPreviousContract,identityDestinationUxCurrentSourcePin,identityDestinationUxPreviousSourcePin,restoreIdentityDestinationUxPreviousProducerText,identityDestinationUxProofSourceAdditions,verifyIdentityDestinationUxCurrentSources,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -205,7 +205,11 @@ test('participant draft companion restores the complete published9b26 contract a
  assert.equal(draftExpected.sourceSetChanges,0);assert.deepEqual(restoreWeeklyCypPreviousContract(contract).extension,previous.extension);assert.deepEqual(restoreWeeklyCypPreviousContract(contract).evidenceProducers,previous.evidenceProducers);assert.deepEqual(contract[key],previous[key]);assert.deepEqual(contract[phoneKey],previous[phoneKey]);
  assert.deepEqual(draftExpected.fixtureSourceDeltas.map(row=>row.producer),['scripts/verify-participants-ui.mjs','scripts/verify-participant-kyc-chat-closure-ui.mjs']);for(const delta of draftExpected.fixtureSourceDeltas)assert.deepEqual(delta.additions,['participant-kyc-capture.js','participant-kyc-capture.module.css','participant-kyc-preanalysis-view.mjs'].map(name=>'src/app/(identity)/cuenta/'+name));
  assert.equal(verifyParticipantDraftSafetyCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
- const uiFiles=draftExpected.reviewedSourceChanges.map(row=>row.path),noUiRead=file=>{assert.equal(uiFiles.includes(file),false,'Global Home verifier must retain its existing source closure: '+file);return read(file);};
+ // Home keeps its published family source set; the composed Own diagnostic
+ // additionally verifies one exact retained source outside that family.
+ const uiFiles=draftExpected.reviewedSourceChanges.map(row=>row.path),requiredRetainedUi=planBudgetValidationFiles(contract).filter(file=>uiFiles.includes(file));
+ assert.deepEqual(requiredRetainedUi,['scripts/verify-participants-ui.mjs','src/app/(identity)/cuenta/participant-panel.js']);
+ const noUiRead=file=>{assert.equal(uiFiles.includes(file)&&!requiredRetainedUi.includes(file),false,'Composed Home verification must not read unrelated UI sources: '+file);return read(file);};
  assert.equal(verifyHomeDecisionsCurrentSources(contract,noUiRead).nativeOrBrowserAcceptance,false);
  assert.equal(contract.extension.proofs.find(row=>row.id==='field-task-pagination-ui').sourceFiles.includes('src/app/(identity)/cuenta/participant-panel.js'),false);
 });
