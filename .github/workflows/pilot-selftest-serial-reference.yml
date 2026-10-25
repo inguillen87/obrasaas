@@ -1,0 +1,156 @@
+name: Synthetic original selftest serial reference
+"on":
+  push:
+    branches: ['operations/pilot-ci-diagnosis-20261024']
+    paths: ['.github/workflows/pilot-selftest-serial-reference.yml']
+permissions:
+  contents: read
+jobs:
+  serial-reference:
+    if: github.repository == 'inguillen87/obrasaas' && github.event_name == 'push' && github.ref == 'refs/heads/operations/pilot-ci-diagnosis-20261024'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      # Diagnostic reference for this exact source SHA only, not future parallel equality.
+      SERIAL_REFERENCE_HEAD: '6c550fa0e6fe73ee68af376c3e5bf1ba04cf88df'
+      SERIAL_REFERENCE_TREE: '0fcd7eb0f4cc7c77b4f39b69821d17119ca13f26'
+      SERIAL_REFERENCE_MAIN_SHA256: '9522f2d4b0c04c51b02491f0aac1c16ff9b8585568c00322045a2c8724b000cc'
+      SERIAL_REFERENCE_EVIDENCE: ${{ runner.temp }}/obrasaas-original-serial-reference
+    steps:
+      - name: Require the literal reviewed release target and a fresh audit directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SERIAL_REFERENCE_HEAD" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SERIAL_REFERENCE_TREE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SERIAL_REFERENCE_MAIN_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          mkdir -- "$SERIAL_REFERENCE_EVIDENCE"
+          printf '%s\n' 'Original serial synthetic selftest reference only; no release-gate, publication, provider or human acceptance.' > "$SERIAL_REFERENCE_EVIDENCE/boundary.txt"
+          printf '%s\n' 'Reference bound only to source 6c550fa0e6fe73ee68af376c3e5bf1ba04cf88df; no empirical equality with a future changed Main/metadata is established.' >> "$SERIAL_REFERENCE_EVIDENCE/boundary.txt"
+          printf '%s\n' 'No runtime egress instrumentation is installed; zero egress is not established by this workflow.' >> "$SERIAL_REFERENCE_EVIDENCE/boundary.txt"
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > "$SERIAL_REFERENCE_EVIDENCE/job-started-at.txt"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        id: source
+        with:
+          persist-credentials: false
+          ref: '6c550fa0e6fe73ee68af376c3e5bf1ba04cf88df'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        id: runtime
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Record the exact physical source before dependency installation
+        id: initial_source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$SERIAL_REFERENCE_EVIDENCE/source-snapshot.mjs" <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {execFileSync} from 'node:child_process';
+          import {createHash} from 'node:crypto';
+          const phase=process.argv[2],out=process.env.SERIAL_REFERENCE_EVIDENCE;
+          if(!['before','pre-run','after'].includes(phase)||!path.isAbsolute(out))throw new Error('Invalid snapshot request');
+          const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+          const git=args=>execFileSync('git',args,{encoding:'utf8',maxBuffer:16*1024*1024});
+          const problems=[],metadata={version:1,phase,recordedAt:new Date().toISOString(),scope:'ORIGINAL_SERIAL_SYNTHETIC_REFERENCE_NOT_RELEASE_ACCEPTANCE',expectedHead:process.env.SERIAL_REFERENCE_HEAD,expectedTree:process.env.SERIAL_REFERENCE_TREE,workflowEventHead:process.env.GITHUB_SHA,workflowDefinitionSha:process.env.GITHUB_WORKFLOW_SHA,workflowRef:process.env.GITHUB_WORKFLOW_REF,repository:process.env.GITHUB_REPOSITORY,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,workflow:process.env.GITHUB_WORKFLOW,event:process.env.GITHUB_EVENT_NAME,node:process.version,platform:process.platform,arch:process.arch,runnerOs:process.env.RUNNER_OS||null,runnerArch:process.env.RUNNER_ARCH||null,imageOs:process.env.ImageOS||null,imageVersion:process.env.ImageVersion||null,runtimeEgressMeasured:false,providerAcceptanceVerified:false,productionAcceptanceVerified:false};
+          metadata.comparisonScope={referenceHeadOnly:process.env.SERIAL_REFERENCE_HEAD,futureParallelEmpiricalEqualityEstablished:false,futureRequirement:'Preserve original selftest bytes as a serial entry and execute serial and parallel paths on one legitimately bound final corpus.'};
+          try{
+            metadata.head=git(['rev-parse','HEAD']).trim();
+            metadata.tree=git(['rev-parse','HEAD^{tree}']).trim();
+            metadata.trackedStatus=git(['status','--porcelain=v1','--untracked-files=no']);
+            if(metadata.head!==metadata.expectedHead)problems.push('HEAD_MISMATCH');
+            if(metadata.tree!==metadata.expectedTree)problems.push('TREE_MISMATCH');
+            if(metadata.trackedStatus!=='')problems.push('TRACKED_SOURCE_DIRTY');
+            const files=git(['ls-files','-z']).split('\0').filter(Boolean);
+            metadata.sources=files.map(file=>{
+              if(path.isAbsolute(file)||file.split('/').includes('..'))throw new Error('Unsafe tracked path');
+              const stat=fs.lstatSync(file);
+              if(!stat.isFile()||stat.isSymbolicLink())throw new Error('Non-regular tracked source');
+              const bytes=fs.readFileSync(file);return {path:file,bytes:bytes.length,sha256:hash(bytes)};
+            });
+            metadata.sourceCount=metadata.sources.length;
+            metadata.sourceManifestSha256=hash(JSON.stringify(metadata.sources));
+            const selected=['.github/scripts/verify-workspace-ci-parallelization.mjs','.github/workflows/workspace-acceptance.yml','.github/workspace-acceptance-contract.json','package.json','package-lock.json','requirements.txt'];
+            metadata.selectedSources=selected.map(file=>{
+              const row=metadata.sources.find(row=>row.path===file);if(!row)throw new Error('Required source absent');return row;
+            });
+            if(metadata.selectedSources[0].sha256!==process.env.SERIAL_REFERENCE_MAIN_SHA256)problems.push('ORIGINAL_MAIN_BYTES_MISMATCH');
+            if(phase!=='before'){
+              const before=JSON.parse(fs.readFileSync(path.join(out,'source-before.json'),'utf8'));
+              metadata.samePhysicalSourceAsBefore=JSON.stringify(metadata.sources)===JSON.stringify(before.sources);
+              if(!metadata.samePhysicalSourceAsBefore)problems.push('PHYSICAL_SOURCE_CHANGED');
+              if(before.node!==metadata.node||before.platform!==metadata.platform||before.arch!==metadata.arch)problems.push('RUNTIME_CHANGED');
+            }
+            if(phase==='pre-run')for(const file of ['selftest.json','selftest.xml'])if(fs.existsSync(path.join('.vercel/workspace-ci-evidence',file)))problems.push('STALE_ORIGINAL_OUTPUT_'+file);
+          }catch(error){problems.push('SNAPSHOT_ERROR:'+error.name+':'+error.message);}
+          if(phase==='after'){
+            metadata.originalStepOutcome=process.env.ORIGINAL_STEP_OUTCOME||'';
+            metadata.originalStepConclusion=process.env.ORIGINAL_STEP_CONCLUSION||'';
+            metadata.jobStatusAtRetention=process.env.JOB_STATUS_AT_RETENTION||'';
+            try{const bytes=fs.readFileSync(path.join(out,'selftest.log'));metadata.log={path:'selftest.log',bytes:bytes.length,sha256:hash(bytes)};}catch{problems.push('ORIGINAL_LOG_MISSING');}
+            metadata.outputs=[];
+            for(const name of ['selftest.json','selftest.xml']){
+              const source=path.join('.vercel/workspace-ci-evidence',name),destination=path.join(out,name);
+              if(!fs.existsSync(source)){problems.push('ORIGINAL_OUTPUT_MISSING_'+name);continue;}
+              const bytes=fs.readFileSync(source);fs.writeFileSync(destination,bytes,{flag:'wx'});
+              if(!fs.readFileSync(destination).equals(bytes))problems.push('RETAINED_OUTPUT_CHANGED_'+name);
+              metadata.outputs.push({path:name,source,bytes:bytes.length,sha256:hash(bytes)});
+            }
+            const receiptFile=path.join(out,'process-exit.json');
+            try{metadata.processExit=JSON.parse(fs.readFileSync(receiptFile,'utf8'));if(metadata.processExit.nodeExitCode!==0||metadata.processExit.teeExitCode!==0)problems.push('PROCESS_OR_LOG_FAILED');}catch{problems.push('PROCESS_EXIT_NOT_OBSERVED');}
+            if(metadata.originalStepOutcome!=='success'||metadata.originalStepConclusion!=='success')problems.push('ORIGINAL_STEP_NOT_SUCCESS');
+            try{
+              const original=JSON.parse(fs.readFileSync(path.join(out,'selftest.json'),'utf8'));
+              const sourceDigest=file=>metadata.sources?.find(row=>row.path===file)?.sha256;
+              if(original.state!=='PASS'||original.head!==metadata.expectedHead||original.verifierSha256!==process.env.SERIAL_REFERENCE_MAIN_SHA256||original.workflowSha256!==sourceDigest('.github/workflows/workspace-acceptance.yml')||original.packageLockSha256!==sourceDigest('package-lock.json')||original.requirementsSha256!==sourceDigest('requirements.txt')||!Array.isArray(original.checks)||!original.checks.length||original.checks.some(row=>row.result!=='PASS'))problems.push('ORIGINAL_RESULT_NOT_COMPLETE_PASS');
+              metadata.originalCheckCount=Array.isArray(original.checks)?original.checks.length:null;
+              metadata.originalChecksJsonSha256=Array.isArray(original.checks)?hash(JSON.stringify(original.checks)):null;
+            }catch{problems.push('ORIGINAL_RESULT_NOT_READABLE');}
+          }
+          metadata.problems=problems;
+          metadata.state=problems.length?'INCOMPLETE_OR_FAILED_REFERENCE':phase==='after'?'COMPLETE_SERIAL_REFERENCE_NOT_RELEASE_ACCEPTANCE':'SOURCE_VERIFIED';
+          fs.writeFileSync(path.join(out,'source-'+phase+'.json'),JSON.stringify(metadata,null,2)+'\n',{flag:'wx'});
+          if(problems.length){console.error(JSON.stringify({phase,state:metadata.state,problems}));process.exitCode=1;}
+          else console.log(JSON.stringify({phase,state:metadata.state,head:metadata.head,sourceCount:metadata.sourceCount,sourceManifestSha256:metadata.sourceManifestSha256,originalCheckCount:metadata.originalCheckCount}));
+          NODE
+          node "$SERIAL_REFERENCE_EVIDENCE/source-snapshot.mjs" before
+      - name: Install the original locked dependencies
+        id: dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Recheck immutable source and fresh original outputs
+        id: pre_run
+        run: node "$SERIAL_REFERENCE_EVIDENCE/source-snapshot.mjs" pre-run
+      - name: Execute the complete original serial CLI once
+        id: reference
+        timeout-minutes: 170
+        shell: bash
+        run: |
+          set -euo pipefail
+          started_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          printf '%s\n' "$started_at" > "$SERIAL_REFERENCE_EVIDENCE/reference-started-at.txt"
+          set +e
+          node .github/scripts/verify-workspace-ci-parallelization.mjs selftest --expected-head "$SERIAL_REFERENCE_HEAD" 2>&1 | tee "$SERIAL_REFERENCE_EVIDENCE/selftest.log"
+          pipeline_statuses=("${PIPESTATUS[@]}")
+          set -e
+          ended_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          printf '{"nodeExitCode":%s,"teeExitCode":%s,"startedAt":"%s","endedAt":"%s"}\n' "${pipeline_statuses[0]}" "${pipeline_statuses[1]}" "$started_at" "$ended_at" > "$SERIAL_REFERENCE_EVIDENCE/process-exit.json"
+          if [[ "${pipeline_statuses[0]}" -ne 0 ]]; then exit "${pipeline_statuses[0]}"; fi
+          exit "${pipeline_statuses[1]}"
+      - name: Retain original bytes and verify the final source without relabeling failures
+        if: always() && steps.initial_source.outcome == 'success'
+        env:
+          ORIGINAL_STEP_OUTCOME: ${{ steps.reference.outcome }}
+          ORIGINAL_STEP_CONCLUSION: ${{ steps.reference.conclusion }}
+          JOB_STATUS_AT_RETENTION: ${{ job.status }}
+        run: node "$SERIAL_REFERENCE_EVIDENCE/source-snapshot.mjs" after
+      - name: Upload only the synthetic reference and its audit metadata
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: synthetic-original-serial-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/obrasaas-original-serial-reference/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
