@@ -973,6 +973,7 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
  const mode=`portfolio-access-race-${action}-${denial}-${format}`,context=await browser.createBrowserContext(),page=await context.newPage();
  await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[];let workspaceReads=0,projectReads=0,portfolioRequest=null,projectRequest=null,scheduleRequest=null;
+ const projectRequestLedger=[];let projectReadPhase='INITIAL_PROJECT';
  const refreshedScope='b'.repeat(64);
  const references=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const open=indexedDB.open('obrasaas-pending-receipts-v1');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction('references','readonly'),read=tx.objectStore('references').getAll();let rows;read.onsuccess=()=>{rows=read.result;};tx.oncomplete=()=>{db.close();resolve(JSON.stringify(rows));};tx.onerror=()=>{db.close();reject(tx.error);};};}));
  await page.setRequestInterception(true);page.on('request',async request=>{try{
@@ -987,7 +988,7 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
   if(url.pathname==='/api/identity/workspace'){
    if(!url.search){workspaceReads++;body={scope:workspaceReads===1?scope:refreshedScope,organizationName:workspaceReads===1?'Empresa de acceso sintético':'Empresa recién consultada',role:workspaceReads===1?'SITE_MANAGER':'AUDITOR',roleLabel:workspaceReads===1?'Jefe de obra':'Auditor',canPlanSchedule:false,canManageIntegrations:false,projects:[{id:workspaceReads===1?'p-a':'p-c',name:workspaceReads===1?'Obra de prueba A':'Obra de nueva consulta'},...(workspaceReads===1?[{id:'p-b',name:'Obra de prueba B'}]:[])],projectsTruncated:false};}
    else if(url.searchParams.has('portfolio')){assert.equal(url.searchParams.get('scope'),scope);portfolioRequest=request;return;}
-   else{assert.equal(url.searchParams.get('scope'),scope);projectReads++;if(url.searchParams.get('projectId')==='p-b'){projectRequest=request;return;}assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:action!=='project',tasks:[baseTask()],totalTasks:1,nextCursor:null};}
+   else{assert.equal(url.searchParams.get('scope'),scope);projectReads++;const projectId=url.searchParams.get('projectId');projectRequestLedger.push({number:projectReads,projectId,scope:url.searchParams.get('scope'),phase:projectReadPhase,queryKeys:[...url.searchParams.keys()].sort()});assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.ok(!['ACCESS_UNAVAILABLE','FRESH_ACCOUNT'].includes(projectReadPhase),'No project-page GET may start after access became unavailable');if(url.searchParams.get('projectId')==='p-b'){assert.equal(action,'project');assert.equal(projectRequestLedger.filter(row=>row.projectId==='p-b').length,1,'Only one canonical request may follow the explicit project-B action');projectRequest=request;return;}assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:action!=='project',tasks:[baseTask()],totalTasks:1,nextCursor:null};}
   }else if(url.pathname==='/api/identity/worker-channel')body={scope,projectId:'p-a',channelReady:true,truncated:false,records:[{workerId:'own-worker',name:'Persona sintética',revision,state:'VERIFIED',eligible:true,binding:{id:'race-binding',verifiedAt:'2026-10-01T12:00:00Z',revokedAt:null}}]};
   else throw Error('Unexpected portfolio race endpoint '+url.pathname);
   await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
@@ -995,22 +996,33 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de acceso sintético');
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await showGuide(page);
+  // The real mounted schedule hook immediately re-reads the selected project.
+  // A canonical response must reach CURRENT before beginning the access race.
+  await page.waitForFunction(()=>{const live=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return live.length===1&&live[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});
+  assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),'p-a');assert.equal(projectReads,2);assert.deepEqual(projectRequestLedger.map(row=>({projectId:row.projectId,phase:row.phase})),[{projectId:'p-a',phase:'INITIAL_PROJECT'},{projectId:'p-a',phase:'INITIAL_PROJECT'}]);projectReadPhase='PROJECT_A_BACKGROUND';
   await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);
   await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'22222222-2222-4222-8222-222222222222'});await showWorkspaceSection(page,'workspace-recovery-title');await waitText(page,'Operaciones por comprobar');
   const retainedReferences=await references(),observedGeneration=await page.evaluate(()=>window.__guideObservation.generation);assert.ok(retainedReferences.includes('22222222-2222-4222-8222-222222222222'));
   await showWorkspaceSection(page,'workspace-home-title');await click(page,'Consultar resumen');await page.waitForFunction(()=>document.querySelector('#portfolio-overview-title')?.closest('section').getAttribute('aria-busy')==='true');
   for(let i=0;i<80&&!portfolioRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(portfolioRequest,'The portfolio read must be dispatched before the concurrent action');
   if(action==='project'){
+   projectReadPhase='CONCURRENT_PROJECT_B';
    await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba B')).click());await page.waitForSelector('[data-guide-observation="CONSULTING"]');
    for(let i=0;i<40&&!projectRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(projectRequest,'The project read must be dispatched before access denial');
   }else{
-   await showWorkspaceSection(page,'schedule-title');await fill(page);if(action==='token')await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Confirmar planificación');
+   await showWorkspaceSection(page,'schedule-title');
+   // Schedule/token variants can legitimately trigger another native GET A
+   // when returning to the schedule. The five-second gap is product behavior,
+   // not a guessed new aggregate count. Keep its real CURRENT result visible.
+   await page.waitForFunction(()=>{const live=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return live.length===1&&live[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});
+   assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),'p-a');projectReadPhase='SCHEDULE_OR_TOKEN_PENDING';await fill(page);if(action==='token')await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Confirmar planificación');
    if(action==='token')await page.waitForFunction(()=>typeof window.__resolveToken==='function');
    else{for(let i=0;i<80&&!scheduleRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(scheduleRequest,'The schedule command must be dispatched before access denial');}
   }
   const pendingReferences=await references();if(action==='schedule')assert.ok(pendingReferences.includes(posts[0].operationId));
   await portfolioRequest.respond({status:denial,contentType:format==='html'?'text/html':'application/json',headers:{'Cache-Control':'no-store'},body:format==='html'?'<html><body>private gateway diagnostic</body></html>':JSON.stringify({code:'WORKSPACE_CONTEXT_CHANGED'})});
   await page.waitForSelector('[data-guide-observation="UNAVAILABLE"]',{timeout:6000});
+  projectReadPhase='ACCESS_UNAVAILABLE';const projectReadsAtAccessLoss=projectReads;
   assert.ok(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Actualizar')?.disabled===false),'An access denial must allow explicit account refresh');
   assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#portfolio-overview-title'),null);
   assert.ok(!(await text(page)).includes('Empresa de acceso sintético'));assert.ok(!(await text(page)).includes('private gateway diagnostic'));assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));
@@ -1018,14 +1030,14 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
   // The old project response arrives after access was invalidated. It must not
   // restore private work or an observed guide state, even when cancellation
   // and response delivery race in the browser transport.
-  if(action==='project')await projectRequest.respond({status:200,contentType:'application/json',body:JSON.stringify({scope,project:{id:'p-b',name:'Obra privada de respuesta anterior'},canPlanSchedule:false,tasks:[{...baseTask(),title:'Tarea privada de respuesta anterior'}],totalTasks:1,nextCursor:null})}).catch(()=>{});
+  if(action==='project')await projectRequest.respond({status:200,contentType:'application/json',body:JSON.stringify({scope,project:{id:'p-b',name:'Obra privada de respuesta anterior',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:false,tasks:[{...baseTask(),title:'Tarea privada de respuesta anterior'}],totalTasks:1,nextCursor:null})}).catch(()=>{});
   else if(action==='token')await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});
   else{const payload=posts[0];await scheduleRequest.respond({status:200,contentType:'application/json',body:JSON.stringify({scope,saved:true,replayed:false,task:{...baseTask(),startsOn:payload.startsOn,endsOn:payload.endsOn,revision:'2026-10-01T12:00:00.111111'},receipt:{id:'workspace_schedule_'+ 'b'.repeat(64),taskId:'task-a',recordedAt:'2026-10-01T12:00:00.111111',before:{startsOn:'2026-10-01',endsOn:'2026-10-05'},after:{startsOn:payload.startsOn,endsOn:payload.endsOn}}})}).catch(()=>{});}
   await new Promise(resolve=>setTimeout(resolve,180));assert.equal(await page.$eval('[data-guide-observation]',node=>node.dataset.guideObservation),'UNAVAILABLE');assert.ok(!(await text(page)).includes('respuesta anterior'));assert.ok(!(await text(page)).includes('Cambio confirmado'));assert.equal(posts.length,action==='schedule'?1:0);
   const survivingReferences=await references();assert.ok(survivingReferences.includes('22222222-2222-4222-8222-222222222222'));if(action==='schedule')assert.equal(survivingReferences,pendingReferences);else if(action==='project')assert.equal(survivingReferences,retainedReferences);
-  await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);
-  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});
+  projectReadPhase='FRESH_ACCOUNT';await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);
+  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,projectReadsAtAccessLoss,'No project-page GET after access loss or during explicit fresh account lookup');assert.equal(projectRequestLedger.filter(row=>row.projectId==='p-b').length,action==='project'?1:0,'Concurrent project-B action dispatches once, schedule/token never select B');assert.ok(projectRequestLedger.every(row=>row.scope===scope&&['p-a','p-b'].includes(row.projectId)&&!['ACCESS_UNAVAILABLE','FRESH_ACCOUNT'].includes(row.phase)),'Every retained project-page request belongs to the original scope before access loss');assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  checks.push({mode,width,denial,format,action,posts:posts.length,projectReads,projectRequestLedger,projectAReads:projectRequestLedger.filter(row=>row.projectId==='p-a').length,projectBReads:projectRequestLedger.filter(row=>row.projectId==='p-b').length,nativeCurrentBeforeRace:true,nativeCurrentBeforeScheduleOrToken:action!=='project',noProjectReadsAfterAccessLoss:true,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});
  }catch(error){await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
  finally{await context.close();}
 }
