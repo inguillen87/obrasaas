@@ -78,7 +78,7 @@ test('registration-phase or superseded inspection cannot create an operational r
  assert.throws(()=>f.admin.ownOperationalAuthority(pre),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');assert.throws(()=>f.admin.ownOperationalAuthority(original),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');
  f.state.registered=false;const pending=await f.admin.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});assert.throws(()=>f.admin.ownOperationalAuthority(pending),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
 });
-for(const [name,status] of [['unverified','NOT_VERIFIED'],['missing',undefined]])test('ADMIN '+name+' phone verification cannot mint operational authority through a forged inspection DTO',async()=>{
+for(const [name,status] of [['unverified','NOT_VERIFIED'],['missing',undefined],['expired','EXPIRED']])test('ADMIN '+name+' phone verification cannot mint operational authority through a forged inspection DTO',async()=>{
  const f=await fixture();f.calls.length=0;if(status===undefined)delete f.phone.code_verification_status;else f.phone.code_verification_status=status;
  const inspection=await f.admin.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});
  assert.equal(inspection.registered,true);assert.equal(inspection.platformType,'CLOUD_API');assert.equal(Object.hasOwn(inspection,'phoneCodeVerified'),false);
@@ -176,4 +176,90 @@ test('runtime rechecks the canonical external guard before reply POST and retain
  const f=await fixture(),scoped=await f.runtime();f.calls.length=0;
  await assert.rejects(scoped.sendReply({...reply(f),beforeExternal:async()=>{throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);}}),error=>error.code==='META_OWN_COMPANY_UNAVAILABLE');assert.equal(f.calls.length,0);
  f.state.failPost=f.policy.phoneNumberId+'/messages';await assert.rejects(scoped.sendReply(reply(f)),error=>error.code==='META_CUSTOMER_PROVIDER_UNCONFIRMED');assert.equal(f.calls.filter(call=>call.method==='POST').length,1);
+});
+
+async function expiredTransportFixture(){
+ const f=await fixture();f.phone.code_verification_status='EXPIRED';return f;
+}
+
+test('existing ACTIVE OWN runtime transports an exact connected Cloud phone with an expired ownership code after all current checks',async()=>{
+ const f=await expiredTransportFixture(),before=structuredClone(f.connection);f.afterAdministrativeExpiry();
+ const scoped=await f.runtime();
+ assert.deepEqual(f.calls.map(call=>[call.method,call.path]),[['GET','debug_token'],...['system_users','owned_apps','owned_whatsapp_business_accounts'].map(edge=>['GET',f.policy.businessId+'/'+edge]),['GET','debug_token'],['GET',f.policy.wabaId+'/phone_numbers'],['GET',f.policy.wabaId+'/subscribed_apps']]);
+ assert.equal(f.calls.filter(call=>call.method==='POST').length,0);assert.equal(scoped.requestCode,undefined);assert.equal(scoped.verifyCode,undefined);
+ assert.ok((await scoped.sendReply(reply(f))).messageId);
+ assert.deepEqual(f.calls.filter(call=>call.method==='POST'),[{path:f.policy.phoneNumberId+'/messages',method:'POST'}]);
+ assert.equal(f.phone.code_verification_status,'EXPIRED');assert.deepEqual(f.connection,before);
+});
+
+for(const [name,mutate] of [
+ ['pending registration',f=>{f.state.registered=false;}],
+ ['non-Cloud platform',f=>{f.phone.platform_type='NOT_APPLICABLE';}],
+ ['unknown platform',f=>{f.phone.platform_type='NEW_PLATFORM';}],
+ ['missing platform',f=>{delete f.phone.platform_type;}],
+ ['business app',f=>{f.phone.is_on_biz_app=true;}],
+ ['ambiguous business-app mode',f=>{delete f.phone.is_on_biz_app;}],
+ ['different phone ID',f=>{f.phone.id='990000001';}],
+ ['different display',f=>{f.phone.display_phone_number='+5491100000001';}],
+ ['revoked token',f=>{f.debug.is_valid=false;}],
+ ['different system user',f=>{f.debug.user_id='990000001';}],
+ ['changed token expiry',f=>{f.debug.expires_at+=3600;}],
+ ['changed data access expiry',f=>{f.debug.data_access_expires_at=1;}],
+ ['unexpected scope',f=>{f.debug.scopes.push('ads_read');}],
+ ['contradictory granular targets',f=>{f.debug.granular_scopes[1].target_ids=['990000001'];}],
+ ['unowned system user',f=>{f.state.missingEdge='system_users';}],
+ ['unowned app',f=>{f.state.missingEdge='owned_apps';}],
+ ['unowned WABA',f=>{f.state.missingEdge='owned_whatsapp_business_accounts';}],
+ ['paged ownership',f=>{f.state.pagingEdge='owned_whatsapp_business_accounts';}],
+ ['revoked subscription',f=>{f.state.subscribed=false;}],
+ ['disabled canonical connection',f=>{f.canonical.connection.enabled=false;}],
+ ['revoked canonical grant',f=>{f.canonical.connection.metadata.ownCompanyRuntime.state='REVOKED';}],
+ ['changed canonical vault',f=>{f.canonical.connection.encryptedAccessToken+='x';}],
+ ['inactive issuer',f=>{f.canonical.issuer=false;}],
+ ['missing activation receipt',f=>{f.canonical.receipt=false;}],
+ ['changed company phone declaration',f=>{f.declaration.revision+=1;}],
+ ['expired credential grant',f=>{f.time=Date.parse(f.connection.metadata.ownCompanyRuntime.validUntil);}],
+])test('expired OTP never bypasses '+name,async()=>{
+ const f=await expiredTransportFixture();mutate(f);await assert.rejects(f.runtime());assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+});
+
+for(const status of ['DISCONNECTED','UNKNOWN',undefined])test('expired OTP does not authorize raw phone status '+String(status),async()=>{
+ const f=await expiredTransportFixture(),original=f.fetchImpl;
+ f.fetchImpl=async(url,options)=>{const response=await original(url,options);if(new URL(url).pathname.endsWith('/phone_numbers')){const body=await response.json();if(status===undefined)delete body.data[0].status;else body.data[0].status=status;return Response.json(body);}return response;};
+ await assert.rejects(f.runtime(),{code:'META_OWN_COMPANY_PHONE_REJECTED'});assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+});
+
+for(const [step,path,occurrence] of [['initial token','debug_token',1],['system user','system_users',1],['owned app','owned_apps',1],['owned WABA','owned_whatsapp_business_accounts',1],['second token','debug_token',2],['exact phone','phone_numbers',1],['current subscription','subscribed_apps',1]])test('expired transport denies canonical revocation after '+step+' await',async()=>{
+ for(const reason of ['connection','declaration','issuer','receipt','vault']){
+  const f=await expiredTransportFixture(),issuedAt=f.time;let seen=0,revoked=false;
+  f.state.afterRead=async observed=>{if((observed===path||observed.endsWith('/'+path))&&++seen===occurrence){revoked=true;if(reason==='connection')f.canonical.connection.enabled=false;if(reason==='declaration')f.declaration.revision+=1;if(reason==='issuer')f.canonical.issuer=false;if(reason==='receipt')f.canonical.receipt=false;if(reason==='vault')f.canonical.connection.encryptedAccessToken+='x';}};
+  await assert.rejects(f.runtime(),{code:'META_OWN_COMPANY_UNAVAILABLE'});assert.equal(revoked,true);assert.equal(f.time,issuedAt);assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+ }
+});
+
+test('expired transport purpose is consumed and cannot authorize a standalone inspection, a copied factory option or PRE_REGISTRATION',async()=>{
+ const f=await expiredTransportFixture(),scoped=await f.runtime();f.calls.length=0;
+ await assert.rejects(scoped.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId}),{code:'META_OWN_COMPANY_PHONE_REJECTED'});
+ await assert.rejects(scoped.sendReply(reply(f)),{code:'META_OWN_COMPANY_OWNER_UNVERIFIED'});
+ await assert.rejects(scoped.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId,inspectionPhase:'PRE_REGISTRATION'}),{code:'META_OWN_COMPANY_PHONE_REJECTED'});
+ const capability=await f.capability();
+ for(const purpose of [true,'TRANSPORT_OP',{purpose:'TRANSPORT_OP',active:true,claimed:false,capability}]){
+  const forged=createMetaCustomerProvider({environment:f.environment,fetchImpl:f.fetchImpl,now:()=>f.time,ownCapability:capability,ownAudit:{},ownFence:f.fence,transportOperation:purpose,ownTransportOperation:purpose});
+  await assert.rejects(forged.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId}));
+ }
+ assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+});
+
+test('expired runtime transport neither enters template administration nor exposes setup or template mutations',async()=>{
+ const f=await expiredTransportFixture(),scoped=await f.runtime();f.calls.length=0;
+ await assert.rejects(f.base.forOwnTemplateAdministration({capability:await f.capability(),connection:f.connection,token:f.token,beforeExternal:f.fence,context:f.context,blueprintKey:'open_attendance_reminder'}),{code:'META_OWN_COMPANY_PHONE_REJECTED'});
+ for(const execute of [()=>scoped.subscribe({token:f.token,wabaId:f.policy.wabaId}),()=>scoped.register({token:f.token,phoneNumberId:f.policy.phoneNumberId,pin:'123456'}),()=>scoped.templates({token:f.token,wabaId:f.policy.wabaId}),()=>scoped.createTemplate({token:f.token,wabaId:f.policy.wabaId,definition:{}}),()=>scoped.sendTemplate({...reply(f),message:{}})])await assert.rejects(execute,{code:'META_OWN_COMPANY_ADAPTER_UNAVAILABLE'});
+ assert.ok(f.calls.every(call=>call.method==='GET'&&!call.path.endsWith('/message_templates')));
+});
+
+test('expired transport rechecks the final send boundary and never retries an uncertain POST or changes activation evidence',async()=>{
+ const f=await expiredTransportFixture(),scoped=await f.runtime(),before=structuredClone(f.connection);f.calls.length=0;
+ await assert.rejects(scoped.sendReply({...reply(f),beforeExternal:async()=>{f.canonical.connection.enabled=false;}}),{code:'META_OWN_COMPANY_UNAVAILABLE'});assert.equal(f.calls.length,0);
+ f.canonical.connection.enabled=true;f.state.failPost=f.policy.phoneNumberId+'/messages';
+ await assert.rejects(scoped.sendReply(reply(f)),{code:'META_CUSTOMER_PROVIDER_UNCONFIRMED'});assert.equal(f.calls.filter(call=>call.method==='POST').length,1);assert.deepEqual(f.connection,before);
 });

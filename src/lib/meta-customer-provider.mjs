@@ -11,6 +11,9 @@ import {normalizeCompanyPhone} from './company-onboarding-policy.mjs';
 const pilotAudits=new WeakMap(),pilotInspections=new WeakMap();
 const ownAudits=new WeakMap(),ownInspections=new WeakMap();
 const ownTemplateAdministrations=new WeakMap();
+// Only the internal forConnection inspection can consume this purpose. Neither
+// an exported factory option nor a copied capability/inspection can mint it.
+const ownTransportInspections=new WeakMap();
 // Opaque, module-private witnesses. Public DTOs/errors cannot mint these.
 const ownRuntimeDiagnosticFrames=new WeakMap(),ownRuntimeDiagnosticResults=new WeakMap();
 const ownScopes=['business_management',...META_CUSTOMER_REQUIRED_SCOPES];
@@ -197,7 +200,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  }
  // Runtime grants enter only through forConnection, after the canonical row
  // and credential commitments match. Public administrative import stays 4h.
- async function auditOwnCapability(capability,token,fence=null,templateAdministration=null,diagnostic=null){
+ async function auditOwnCapability(capability,token,fence=null,templateAdministration=null,diagnostic=null,transportOperation=null){
   const current=ownCompanyTransportPolicy(capability,environment,now()),runtime=ownCompanyCapabilityKind(capability)==='RUNTIME',base=metaCustomerReadiness(environment);
   if(readiness!==metaCustomerReadiness||!['app','secret','version','vault','callback'].every(key=>base.gates[key]===true)||typeof token!=='string'||token.trim()!==token||token.length<20||token.length>8192)throw new WorkspaceError('META_OWN_COMPANY_CONFIGURATION_PENDING',503);
   if(runtime&&customerTokenDigest(token)!==current.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
@@ -216,6 +219,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    if(result.paging?.next||!Array.isArray(result.data)||result.data.length>100||result.data.some(item=>!metaAssetId(String(item?.id)))||new Set(result.data.map(item=>String(item.id))).size!==result.data.length||!result.data.some(item=>String(item.id)===expected))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
   }
   const audit=Object.freeze({});ownAudits.set(audit,{policyDigest:current.policyDigest,tokenDigest:customerTokenDigest(token),systemUserId:String(debug.user_id),tokenExpiresAt:ownTokenExpiry(debug),dataAccessExpiresAt:ownDataAccessExpiry(debug),expiresAt:Math.min(Date.parse(current.expiresAt),debug.expires_at*1000,debug.data_access_expires_at?debug.data_access_expires_at*1000:Infinity,now()+60000)});
+  if(transportOperation)ownTransportInspections.set(audit,transportOperation);
   return createMetaCustomerProvider({environment,fetchImpl,now,readiness,ownCapability:capability,ownAudit:audit,ownFence:runtime?fence:null,ownTemplateAdministration:templateAdministration,ownDiagnostic:diagnostic});
  }
 
@@ -223,8 +227,11 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   const current=ownCompanyTransportPolicy(capability,environment,now()),canonical=ownCompanyConnectionPolicy(connection,environment,now()),runtime=Object.hasOwn(connection.metadata,'ownCompanyRuntime');
   if(current.policyDigest!==canonical?.policyDigest||ownCompanyCapabilityKind(capability)!==(runtime?'RUNTIME':'ADMIN')||runtime&&(current.connectionId!==connection.id||current.grantDigest!==canonical.grantDigest||current.tokenDigest!==customerTokenDigest(token||'')))throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
   if(runtime&&typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
-  const scoped=await auditOwnCapability(capability,token,runtime?beforeExternal:null,null,diagnostic),verified=await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});
-  if(runtime&&(verified.registered!==true||verified.platformType!=='CLOUD_API'||await scoped.inspectSubscription({token,wabaId:connection.whatsappBusinessId})!==true))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);return scoped;
+  const operation=runtime?{purpose:'TRANSPORT_OP',capability,connectionId:current.connectionId,grantDigest:current.grantDigest,tokenDigest:current.tokenDigest,wabaId:current.wabaId,phoneNumberId:current.phoneNumberId,active:true,claimed:false}:null;
+  try{
+   const scoped=await auditOwnCapability(capability,token,runtime?beforeExternal:null,null,diagnostic,operation),verified=await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});
+   if(runtime&&(verified.registered!==true||verified.platformType!=='CLOUD_API'||await scoped.inspectSubscription({token,wabaId:connection.whatsappBusinessId})!==true))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);return scoped;
+  }finally{if(operation)operation.active=false;}
  }
  function captureOwnRuntimePhone(phone,policy,token,sequence){
   const frame=ownRuntimeDiagnosticFrames.get(ownDiagnostic);
@@ -344,6 +351,8 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     const ownPolicy=ownCapability?ownCompanyTransportPolicy(ownCapability,environment,now()):null;
     if(ownPolicy&&(numberMode!=='DEDICATED'||wabaId!==ownPolicy.wabaId||phoneNumberId!==ownPolicy.phoneNumberId))throw new WorkspaceError('META_OWN_COMPANY_ASSET_REJECTED',403);
     if(ownPolicy&&customerTokenDigest(token||'')!==ownAudits.get(ownAudit)?.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
+    const operation=ownTransportInspections.get(ownAudit),transportInspection=operation?.active===true&&operation.claimed===false&&operation.purpose==='TRANSPORT_OP'&&operation.capability===ownCapability&&operation.connectionId===ownPolicy?.connectionId&&operation.grantDigest===ownPolicy?.grantDigest&&operation.tokenDigest===customerTokenDigest(token||'')&&operation.wabaId===wabaId&&operation.phoneNumberId===phoneNumberId&&ownTemplateAdministration===null&&numberMode==='DEDICATED'&&inspectionPhase===META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL;
+    if(transportInspection)operation.claimed=true;
    const customerBusinessApp=numberMode==='BUSINESS_APP'&&!ownCapability&&!pilotCapability&&readiness===metaCustomerReadiness,hasExpectedPhone=customerBusinessApp&&expectedPhoneE164!=null;
    if(customerBusinessApp&&(!metaAssetId(wabaId)||phoneNumberId!=null&&!metaAssetId(phoneNumberId)))throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
    if(hasExpectedPhone){try{if(normalizeCompanyPhone(expectedPhoneE164,true)!==expectedPhoneE164)throw new Error();}catch{throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_UNCONFIRMED',409);}}
@@ -366,7 +375,11 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    }else phone=phoneNumberId?eligible.find(item=>String(item.id)===phoneNumberId):numberMode==='BUSINESS_APP'&&eligible.length===1?eligible[0]:null;
    if(!phone||!metaAssetId(String(phone.id)))throw new WorkspaceError(numberMode==='BUSINESS_APP'?'META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED':'META_CUSTOMER_PHONE_WABA_MISMATCH',403);
    if(ownPolicy)captureOwnRuntimePhone(phone,ownPolicy,token,sequence);
-   if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&phone.code_verification_status!=='VERIFIED'){rejectOwnPhone('VERIFICATION_STATUS',sequence);}
+   // An expired ownership code does not unregister an already connected number.
+   // Continue every original mode/display/subscription/fence check; this never
+   // grants setup authority or changes the internal phoneCodeVerified fact.
+   const registeredExpiredTransport=transportInspection&&operation.active&&phone.code_verification_status==='EXPIRED'&&phone.status==='CONNECTED'&&phone.platform_type==='CLOUD_API'&&phone.is_on_biz_app===false;
+   if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&phone.code_verification_status!=='VERIFIED'&&!registeredExpiredTransport){rejectOwnPhone('VERIFICATION_STATUS',sequence);}
    if(numberMode==='BUSINESS_APP'&&!customerBusinessApp&&eligible.length!==1)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
    if(pilotCapability&&(phone.is_on_biz_app!==false||!['CLOUD_API','NOT_APPLICABLE'].includes(phone.platform_type)||phone.platform_type==='NOT_APPLICABLE'&&phone.status==='CONNECTED'||inspectionPhase===META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL&&(phone.platform_type!=='CLOUD_API'||phone.status!=='CONNECTED')))throw new WorkspaceError('META_DEVELOPMENT_PILOT_DEDICATED_UNVERIFIED',403);
    // Phone verification is not the Cloud API registration signal.
