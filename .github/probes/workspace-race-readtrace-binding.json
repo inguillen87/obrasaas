@@ -1,0 +1,32 @@
+{
+  "schema": "workspace-race-diagnostic-binding.v1",
+  "status": "SEALED_DIAGNOSTIC_ONLY_NOT_PUBLIC_AUTHORITY",
+  "baseSourceSha": "73c810d211f4e0540a130f2e989f77257bc86410",
+  "diagnosticSourceSha": "64a9de0310a1d964cd077f1992e07533a076ab85",
+  "baseOpsSha": "c6c462c16ffbc3b49c14e7517c10b9ab4f0665aa",
+  "sourceBranch": "operations/workspace-race-source-20261025",
+  "opsBranch": "operations/workspace-race-readtrace-20261025",
+  "target": "scripts/verify-workspace-ui.mjs",
+  "candidateSha256": "d7ed81d603ea489f523b897b59540f9265f9a8af04571bd5e14de417b5680181",
+  "baseHarnessSha256": "f64cd377e2e7904687df582027486aa712a047c8365b0231ccd348313fd9f78d",
+  "baseInventorySha256": "ad8d01405582dc3c7fd55c37e6cccd921ee2802fdd6eb155fcf6f936ea134eeb",
+  "sourceFiles": 1380,
+  "sourceOwnMetadata": {
+    "ownerCount": 76,
+    "modified": 58,
+    "added": 18,
+    "readerCount": 140,
+    "validatedForInstrumentedHarness": false,
+    "metadataFilesMustRemainByteExact": true
+  },
+  "scenario": "portfolio-access-race",
+  "command": [
+    "node",
+    "scripts/verify-workspace-ui.mjs"
+  ],
+  "expectedAssertionsUnchanged": true,
+  "expectedDiagnosticClassification": "DIAGNOSTIC_ONLY_NOT_PUBLIC_AUTHORITY",
+  "physicalAcceptance": false,
+  "diagnosticGitSourceFilesSha256": "c34683eb248947f456b5fc0970b6441ef5f6f6b3e4d116b1c81e5b45a7b64857",
+  "publicSourceContractValidated": false
+}
