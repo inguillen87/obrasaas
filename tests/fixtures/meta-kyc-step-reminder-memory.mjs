@@ -22,7 +22,7 @@ export async function stepReminderFixture(step='CONSENT',options={}){
  actual=createMetaCustomerProvider({environment:fixture.environment,now:()=>fixture.now.getTime(),fetchImpl:async(url,options)=>{
   assert.equal(new URL(url).hostname,'graph.facebook.com');assert.equal(options.method,'POST');const body=JSON.parse(options.body);assert.equal(body.type,'text');assert.match(body.text.body,/foto todavía no se guardó/);assert.doesNotMatch(body.text.body,/OpenAI|OpenCV|ONNX|\bAPI\b|\bOCR\b/);requests.push(body);if(controls.loseAck)throw new Error('Synthetic accepted send with lost ACK');return new Response(JSON.stringify({messages:[{id:'wamid.GuidedReminder_'+requests.length}]}),{status:200,headers:{'Content-Type':'application/json'}});
  }});
- for(const [target,title]of [['BACK_CONSENT','Autorizar imágenes'],['OCR','Autorizar dorso'],['BIOMETRIC',options.ocrConsent===true?'Con lectura asistida':'Sin lectura asistida'],['FRONT',options.biometricConsent===true?'Con comparación facial':'Sin comparación facial']]){
+ for(const [target,title]of [['BACK_CONSENT','Autorizar imágenes'],['OCR','Autorizar dorso'],['BIOMETRIC',options.ocrConsent===true?'Con lectura asistida':'Sin lectura asistida'],['FRONT',fixture.state().biometricNoticeVersion==='participant-private-biometric-v3'?(options.biometricConsent===true?'Comparar antes de guardar':'Revisión manual'):(options.biometricConsent===true?'Con comparación facial':'Sin comparación facial')]]){
   if(fixture.state().step===step)break;await fixture.choose(title);if(target===step)break;
  }
  while(fixture.state().step!==step&&['FRONT','BACK','SELFIE'].includes(fixture.state().step))await fixture.image();

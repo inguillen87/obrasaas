@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,realpathSync,readFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,realpathSync,readFileSync,lstatSync} from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
@@ -26,6 +26,14 @@ const phoneFormatPath='src/lib/company-phone-format.mjs';copyFileSync(path.join(
 const entitlementPath='src/lib/company-entitlement.mjs';copyFileSync(path.join(root,entitlementPath),path.join(dir,entitlementPath));sourcePaths.push(entitlementPath);copiedSourcePaths.add(entitlementPath);
 const officeIdentityPath='src/lib/identity-return-path.mjs';copyFileSync(path.join(root,officeIdentityPath),path.join(dir,officeIdentityPath));sourcePaths.push(officeIdentityPath);copiedSourcePaths.add(officeIdentityPath);
 for(const file of ['src/app/(identity)/identity.module.css','src/app/(identity)/identity-load-guard.js']){copyFileSync(path.join(root,file),path.join(dir,file));sourcePaths.push(file);copiedSourcePaths.add(file);}
+
+// Complete only the two independently observed imports; no broad copy adapter.
+const kycFixtureRoot=realpathSync(dir),kycInside=file=>{const relative=path.relative(kycFixtureRoot,file);return relative!==''&&!path.isAbsolute(relative)&&relative!=='..'&&!relative.startsWith('..'+path.sep);};
+for(const file of ['src/lib/procurement-quantity.js','src/lib/capture-quality-policy.mjs']){
+ const target=path.join(dir,file),original=readFileSync(path.join(root,file));assert.ok(kycInside(target));mkdirSync(path.dirname(target),{recursive:true});assert.ok(kycInside(realpathSync(path.dirname(target))));try{assert.equal(lstatSync(target).isSymbolicLink(),false);}catch(error){if(error.code!=='ENOENT')throw error;}
+ copyFileSync(path.join(root,file),target);assert.deepEqual(readFileSync(target),original,'Exact observed workspace dependency copy');if(!sourcePaths.includes(file))sourcePaths.push(file);copiedSourcePaths.add(file);
+}
+
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||file.startsWith('src/app/(identity)/cuenta/'))assert.deepEqual(bytes,readFileSync(path.join(dir,file)));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:createHash('sha256').update(readFileSync(new URL('./lib/company-subscription-ui-fixture.mjs',import.meta.url))).digest('hex')});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);

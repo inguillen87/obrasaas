@@ -209,9 +209,12 @@ test('participant draft companion restores the complete published9b26 contract a
  // Home keeps its published family source set; the composed Own diagnostic
  // additionally verifies one exact retained source outside that family.
  const uiFiles=draftExpected.reviewedSourceChanges.map(row=>row.path),requiredRetainedUi=planBudgetValidationFiles(contract).filter(file=>uiFiles.includes(file));
- assert.deepEqual(requiredRetainedUi,['scripts/verify-participants-ui.mjs','src/app/(identity)/cuenta/participant-panel.js']);
+ assert.deepEqual(requiredRetainedUi,["scripts/verify-participant-kyc-chat-closure-ui.mjs","scripts/verify-participants-ui.mjs","src/app/(identity)/cuenta/participant-panel.js"]);
+ assert.deepEqual(requiredRetainedUi.filter(file=>file!=='scripts/verify-participant-kyc-chat-closure-ui.mjs'),["scripts/verify-participants-ui.mjs","src/app/(identity)/cuenta/participant-panel.js"]);
+ const closureOwner=contract.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path==='scripts/verify-participant-kyc-chat-closure-ui.mjs');assert.equal(closureOwner.status,'MODIFIED');assert.equal(sha(read(closureOwner.path).toString('utf8').replaceAll('\r\n','\n')),closureOwner.currentSha256);
  const noUiRead=file=>{assert.equal(uiFiles.includes(file)&&!requiredRetainedUi.includes(file),false,'Composed Home verification must not read unrelated UI sources: '+file);return read(file);};
  assert.equal(verifyHomeDecisionsCurrentSources(contract,noUiRead).nativeOrBrowserAcceptance,false);
+ denied(()=>verifyHomeDecisionsCurrentSources(contract,file=>file==='scripts/verify-participant-kyc-chat-closure-ui.mjs'?null:read(file)));
  assert.equal(contract.extension.proofs.find(row=>row.id==='field-task-pagination-ui').sourceFiles.includes('src/app/(identity)/cuenta/participant-panel.js'),false);
 });
 
@@ -351,18 +354,18 @@ function companyNativePhysicalManifest(){
  function scan(relative){for(const entry of readdirSync(relative,{withFileTypes:true})){const file=relative+'/'+entry.name;if(entry.isDirectory())scan(file);else files.add(file);}}
  scan('src/lib');
  for(const file of ['scripts/lib/company-channel-disposable-fixture.mjs','scripts/lib/company-channel-migration.mjs','scripts/lib/disposable-postgres-cleanup.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','tests/fixtures/own-company-meta.mjs',...canonicalParticipantKycSourceFiles()])files.add(file);
- const paths=[...files].sort();assert.equal(paths.length,243);assert.equal(new Set(paths).size,243);
+ const paths=[...files].sort();assert.equal(paths.length,250);assert.equal(new Set(paths).size,250);
  return paths.map(path=>({path,sha256:sha(read(path))}));
 }
 const companyNativeDenied=error=>error?.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED';
 test('company native source frame authenticates243 physical RAW sources while preserving238 historical and54 semantic checks',()=>{
  const manifest=companyNativePhysicalManifest(),before=serialize(manifest),contractBefore=read('.github/workspace-acceptance-contract.json');
  const result=validateCompanyOnboardingUxNativeSourceManifest(manifest,read);
- assert.deepEqual(result,{status:'PASS',sourceReferences:243,historicalSourceReferences:238,sourceScope:'CURRENT_AUTHENTICATED_OWNERS',nativeOrBrowserAcceptance:false});
+ assert.deepEqual(result,{status:'PASS',sourceReferences:250,historicalSourceReferences:238,sourceScope:'CURRENT_AUTHENTICATED_OWNERS',nativeOrBrowserAcceptance:false});
  assert.equal(serialize(manifest),before);assert.deepEqual(read('.github/workspace-acceptance-contract.json'),contractBefore);
  assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.sourceCount,238);assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.totalCheckCount,54);assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.addedCheckNames.length,5);
  assert.equal(companyExpected.native.sourceCount,238);assert.equal(companyExpected.native.totalCheckCount,54);
- const historical=manifest.map(row=>row.path).filter(path=>!['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'].includes(path)).sort();
+ const historical=manifest.map(row=>row.path).filter(path=>!['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','scripts/lib/synthetic-capture-quality.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs',"src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"].includes(path)).sort();
  assert.equal(historical.length,238);assert.equal(sha(JSON.stringify(historical)),COMPANY_ONBOARDING_UX_NATIVE_REVIEW.sourcePathsSha256);
 });
 test('company native source frame rejects missing foreign duplicate and corrupt source references',()=>{
@@ -400,14 +403,24 @@ test('company native source frame rejects caller manifest mutation and preserves
 });
 
 test('company native historical source-set frame preserves the238 minimum reader without declaring historical proof acceptance',()=>{
- const additions=['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'],manifest=companyNativePhysicalManifest().filter(row=>!additions.includes(row.path)),allowed=new Set(manifest.map(row=>row.path));assert.equal(manifest.length,238);allowed.add(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer);allowed.add('.github/workspace-acceptance-contract.json');
+ const additions=['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','scripts/lib/synthetic-capture-quality.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs',"src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"],manifest=companyNativePhysicalManifest().filter(row=>!additions.includes(row.path)),allowed=new Set(manifest.map(row=>row.path));assert.equal(manifest.length,238);allowed.add(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer);allowed.add('.github/workspace-acceptance-contract.json');
  const outside=[];const result=validateCompanyOnboardingUxNativeSourceManifest(manifest,file=>{if(!allowed.has(file)){outside.push(file);return null;}return file==='.github/workspace-acceptance-contract.json'?Buffer.from('{}'):read(file);});
  assert.deepEqual(outside,[]);assert.deepEqual(result,{status:'PASS',sourceReferences:238,historicalSourceReferences:238,sourceScope:'HISTORICAL_SOURCE_SET',nativeOrBrowserAcceptance:false});
 });
 
 test("native materials membership requires all three exact source owners and the complete bounded actual owner frame",function nativeMaterials(){
- const manifest=companyNativePhysicalManifest(),paths=["src/lib/field-execution-policy.mjs","src/lib/field-execution-store.mjs","src/lib/meta-field-execution-conversation.mjs"],contract=current(),own=contract.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance;assert.equal(own.sourceChanges.length,77);assert.equal(own.retainedDependencies.length,5);
+ const manifest=companyNativePhysicalManifest(),paths=["src/lib/field-execution-policy.mjs","src/lib/field-execution-store.mjs","src/lib/meta-field-execution-conversation.mjs"],contract=current(),own=contract.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance;assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+ assert.equal(own.sourceChanges.length,168);assert.equal(sha(serialize(own.sourceChanges.map(({path,status,previousSha256,previousBytes})=>({path,status,previousSha256,previousBytes})))),'5d1233d36cb473fc0a65e3c04270f223437b4021d0cc015eeb97382bbf046c5a');
+ assert.deepEqual(own.retainedDependencies.map(row=>row.path),["src/app/(identity)/cuenta/kyc-camera-session.mjs","src/app/(identity)/cuenta/participant-panel.module.css"]);
  for(const path of paths){const row=own.sourceChanges.find(r=>r.path===path);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(sha(read(path).toString('utf8').replaceAll('\r\n','\n')),row.currentSha256);const changed=structuredClone(contract);changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges=changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.filter(r=>r.path!==path);assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(manifest,p=>p==='.github/workspace-acceptance-contract.json'?Buffer.from(serialize(changed)):read(p)),companyNativeDenied);}
  const allowed=new Set([...planBudgetValidationFiles(contract),...homeDecisionsValidationFiles(contract),...worksiteLiveHoursValidationFiles(contract)]),nativePaths=new Set(manifest.map(r=>r.path));const limited=file=>allowed.has(file)||nativePaths.has(file)||file===COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer||file==='.github/workspace-acceptance-contract.json'?read(file):null;
- assert.equal(validateCompanyOnboardingUxNativeSourceManifest(manifest,limited).sourceReferences,243);
+ assert.equal(validateCompanyOnboardingUxNativeSourceManifest(manifest,limited).sourceReferences,250);
+});
+
+test('current material authority survives the closed KYC ownership expansion and denies partial resealing',()=>{
+ const contract=current(),advance=contract.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance,before=JSON.stringify(contract);assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+ for(const file of ['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs']){const row=advance.sourceChanges.find(row=>row.path===file);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);}
+ for(const file of ['src/lib/capture-quality-gate.mjs','src/lib/participant-facial-precommit.mjs'])assert.throws(()=>verifyPlanBudgetCurrentSources(contract,path=>path===file?null:read(path)),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});
+ for(const mutate of [value=>value.sourceChanges.pop(),value=>value.sourceChanges.push(structuredClone(value.sourceChanges[0])),value=>value.retainedDependencies.push({path:'src/lib/foreign.mjs',sha256:'f'.repeat(64),bytes:1,previousMetadataSha256:null,metadataPins:[]})]){const changed=structuredClone(contract);mutate(changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance);assert.throws(()=>verifyPlanBudgetCurrentSources(changed,read),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});}
+ assert.equal(JSON.stringify(contract),before);
 });

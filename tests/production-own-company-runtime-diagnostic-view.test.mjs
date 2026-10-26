@@ -27,6 +27,20 @@ test('client permits an observed display mismatch while keeping the actual displ
  assert.equal(ownCompanyRuntimeDiagnosticLabels(projection).number,'No se pudo confirmar la coincidencia');assert.equal(Object.hasOwn(projection,'displayPhoneNumber'),false);
 });
 
+test('client reports an expired ownership code and completed registered transport check without authorizing setup or claiming delivery',()=>{
+ const projection=ownCompanyRuntimeDiagnostic({...result(),codeVerificationState:'EXPIRED'}),labels=ownCompanyRuntimeDiagnosticLabels(projection);
+ assert.equal(labels.verification,'Código de verificación vencido');assert.equal(labels.registration,'Registro informado por Meta');assert.equal(labels.summary,'Consulta completada');assert.equal(projection.accepted,false);assert.equal(projection.roundTrip,'NOT_VERIFIED');assert.equal(projection.canManage,false);
+ assert.doesNotMatch(JSON.stringify(labels),/credencial vencida|autorizado|activado|entregado|EXPIRED/);
+ for(const action of ['CONNECT_OWN_NUMBER','ACTIVATE_OWN_NUMBER']){assert.equal(ownCompanyNumberCanAct(projection,action,time),false);assert.throws(()=>ownCompanyNumberCommand(projection,{action},expected,{now:time}));}
+ for(const patch of [{registered:false},{platformState:'NOT_APPLICABLE'},{displayMatchesExpected:false},{codeVerificationPresent:false},{codeVerificationState:'NOT_VERIFIED'},{codeVerificationState:'OTHER'},{codeVerificationState:'MISSING',codeVerificationPresent:false}])assert.throws(()=>ownCompanyRuntimeDiagnostic({...result(),codeVerificationState:'EXPIRED',...patch}));
+});
+
+test('client preserves a rejected expired display mismatch only for the observed registered Cloud tuple',()=>{
+ const value={...result(),codeVerificationState:'EXPIRED',operationalCheck:'REJECTED',denialStage:'DISPLAY_PHONE_MATCH',displayMatchesExpected:false};
+ assert.equal(ownCompanyRuntimeDiagnostic(value).displayMatchesExpected,false);
+ for(const patch of [{registered:false},{platformState:'NOT_APPLICABLE'},{displayMatchesExpected:true}])assert.throws(()=>ownCompanyRuntimeDiagnostic({...value,...patch}));
+});
+
 test('client rejects unknown, private, writable, accepted or internally contradictory diagnostic fields',()=>{
  for(const patch of [{token:'private'},{displayPhoneNumber:'+5491100000001'},{phoneNumberId:'220000001'},{rawError:{stage:'VERIFICATION_STATUS'}},{grantDigest:'b'.repeat(64)},{canManage:true},{readOnly:false},{accepted:true},{roundTrip:'VERIFIED'},{inspectionState:'STALE'},{denialStage:'INSPECTION_SUPERSEDED'},{codeVerificationState:'NEW_PROVIDER_VALUE'},{platformState:'NEW_PLATFORM'},{registered:'true'},{codeVerificationPresent:false},{displayComparable:false},{platformState:'MISSING'},{operationalCheck:'REJECTED'},{denialStage:'VERIFICATION_STATUS'}])assert.throws(()=>ownCompanyRuntimeDiagnostic({...result(),...patch}),{code:'META_OWN_COMPANY_DIAGNOSTIC_UNCONFIRMED'});
  assert.throws(()=>ownCompanyRuntimeDiagnostic({...result(),codeVerificationPresent:false,codeVerificationState:'MISSING',operationalCheck:'REJECTED',denialStage:'DISPLAY_PHONE_MATCH',displayMatchesExpected:false}));

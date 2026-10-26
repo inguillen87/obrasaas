@@ -4,8 +4,8 @@ import {existsSync,lstatSync,readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fieldTaskPaginationUiCiOptions,fieldTaskPaginationSourceClosure} from '../scripts/verify-field-task-pagination-ui.mjs';
-import {WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI as current} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
-import {FIELD_TASK_PAGINATION_CI_VERSION,FIELD_TASK_PAGINATION_CI_KIND,FIELD_TASK_PAGINATION_CI_PROOF_ID,FIELD_TASK_PAGINATION_CI_EVIDENCE as prefix,FIELD_TASK_PAGINATION_UNIT_FILES,fieldTaskPaginationCiSourceClosure,fieldTaskPaginationCiLocalImports,fieldTaskPaginationUnitCases,parseFieldTaskPaginationTap,validateFieldTaskPaginationCi} from '../scripts/verify-field-task-pagination-ci.mjs';
+import {WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI as historical} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
+import {FIELD_TASK_PAGINATION_CI_VERSION,FIELD_TASK_PAGINATION_CI_KIND,FIELD_TASK_PAGINATION_CI_PROOF_ID,FIELD_TASK_PAGINATION_CI_EVIDENCE as prefix,FIELD_TASK_PAGINATION_UNIT_FILES,fieldTaskPaginationCiSourceClosure,fieldTaskPaginationCiLocalImports,fieldTaskPaginationUnitCases,parseFieldTaskPaginationTap,fieldTaskPaginationCurrentMetadata,validateFieldTaskPaginationCi} from '../scripts/verify-field-task-pagination-ci.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex'),head='a'.repeat(40),tree='b'.repeat(40);
 const identity={repository:'inguillen87/obrasaas',workflow:'.github/workflows/workspace-acceptance.yml',runId:42,runAttempt:1,event:'workflow_dispatch',job:'field'};
@@ -16,11 +16,11 @@ const denied=run=>assert.throws(run,{code:'FIELD_TASK_PAGINATION_CI_REJECTED'});
 // executes a browser or claims that this synthetic identity was a real CI run.
 function fixture(){
  const overrides=new Map(),evidence=new Map(),readSource=file=>{if(overrides.has(file))return overrides.get(file);return existsSync(file)&&lstatSync(file).isFile()?readFileSync(file):null;},refs=files=>files.map(path=>({path,sha256:sha(readSource(path))}));
- const sourceFiles=fieldTaskPaginationCiSourceClosure(readSource),spec={id:FIELD_TASK_PAGINATION_CI_PROOF_ID,lane:'field',blockId:65,path:prefix+'current-ci.json',kind:FIELD_TASK_PAGINATION_CI_KIND,producer:'scripts/verify-field-task-pagination-ci.mjs',producerSha256:sha(readSource('scripts/verify-field-task-pagination-ci.mjs')),sourceFiles,checkNames:[...current.checkNames]};
+ const current=fieldTaskPaginationCurrentMetadata(readSource),sourceFiles=fieldTaskPaginationCiSourceClosure(readSource),spec={id:FIELD_TASK_PAGINATION_CI_PROOF_ID,lane:'field',blockId:65,path:prefix+'current-ci.json',kind:FIELD_TASK_PAGINATION_CI_KIND,producer:'scripts/verify-field-task-pagination-ci.mjs',producerSha256:sha(readSource('scripts/verify-field-task-pagination-ci.mjs')),sourceFiles,checkNames:[...current.checkNames]};
  const requestGroup=new Map();current.commandEqualityGroups.forEach((group,index)=>group.forEach(position=>requestGroup.set(position,index)));
  const requests=current.requestMatrix.map((row,index)=>{const value=structuredClone(row);if(row.method==='POST'){const group=requestGroup.get(index);value.operationId='00000000-0000-4000-8000-'+String(group+1).padStart(12,'0');value.bodySha256=sha('synthetic exact body '+group);}return value;});
  const closure=fieldTaskPaginationSourceClosure(readSource),rawFiles=[...new Set([...closure.files,'package.json','package-lock.json','scripts/verify-field-task-pagination-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs'])].sort();
- const raw={version:1,status:'PASS',sourceState:'EXACT_CI_SOURCE',trackedClean:true,ciRun:structuredClone(identity),sourceRevision:head,sourceTree:tree,checkedAt:'2026-10-17T00:00:01.000Z',sourceManifest:refs(rawFiles),sourceBytesUnchanged:true,externalImports:closure.externalImports,widths:[320,390,1440],checks:[...current.checkNames],totalCheckCount:33,requests,errors:[],screenshots:[],mediaActions:[320,390,1440].map(width=>({width,buttons:current.mediaActionLabels.map(label=>({label,width:100,height:44,words:label.split(' ').map(word=>({word,lineRects:1}))}))})),actualConsumerComponentsMounted:true,productionPagerFactoryReused:true,pagingActivatedWithKeyboard:true,syntheticOnly:true,providerCalls:0,productionDataTouched:false,humanAccepted:false,posts:current.postCount,cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,attempts:[{attempt:1,phase:'POSTCONDITION',postcondition:'ABSENT',removalAttempted:true,retryScheduled:false,rmCompleted:true}],postcondition:{absent:true}}}};
+ const raw={version:current.rawVersion,status:'PASS',sourceState:'EXACT_CI_SOURCE',trackedClean:true,ciRun:structuredClone(identity),sourceRevision:head,sourceTree:tree,checkedAt:'2026-10-17T00:00:01.000Z',sourceManifest:refs(rawFiles),sourceBytesUnchanged:true,externalImports:closure.externalImports,widths:[320,390,1440],checks:[...current.checkNames],totalCheckCount:33,requests,errors:[],screenshots:[],mediaActions:[320,390,1440].map(width=>({width,buttons:current.mediaActionLabels.map(label=>({label,width:100,height:44,words:label.split(' ').map(word=>({word,lineRects:1}))}))})),actualConsumerComponentsMounted:true,productionPagerFactoryReused:true,pagingActivatedWithKeyboard:true,syntheticOnly:true,providerCalls:0,productionDataTouched:false,humanAccepted:false,posts:current.postCount,cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,attempts:[{attempt:1,phase:'POSTCONDITION',postcondition:'ABSENT',removalAttempted:true,retryScheduled:false,rmCompleted:true}],postcondition:{absent:true}}}};
  const rawPath=prefix+'run-synthetic/browser.json';for(const[index,name]of current.screenshotNames.entries()){const value=Buffer.from('synthetic screenshot bytes '+index),width=Number(/-(320|390|1440)\.png$/.exec(name)[1]);evidence.set(path.posix.dirname(rawPath)+'/'+name,value);raw.screenshots.push({path:name,sha256:sha(value),geometry:{width,scrollWidth:width}});}
  const unitSuites=FIELD_TASK_PAGINATION_UNIT_FILES.map((file,index)=>{const names=fieldTaskPaginationUnitCases(readSource,file),value=Buffer.from(['TAP version 13',...names.map((name,i)=>'ok '+(i+1)+' - '+name),'1..'+names.length,'# tests '+names.length,'# pass '+names.length,'# fail 0','# cancelled 0','# skipped 0','# todo 0',''].join('\n')),filePath=prefix+'unit-'+index+'.tap';evidence.set(filePath,value);return{file,sourceSha256:sha(readSource(file)),exitCode:0,tap:{path:filePath,bytes:value.length,sha256:sha(value)},result:parseFieldTaskPaginationTap(value)};});
  const logs={};for(const key of ['stdout','stderr']){const value=Buffer.from(key==='stdout'?'synthetic process observation\n':''),file=prefix+'browser.'+key+'.log';evidence.set(file,value);logs[key]={path:file,bytes:value.length,sha256:sha(value)};}
@@ -76,4 +76,43 @@ test('unit failures omissions shortened TAP skips duplicates and changed source 
 test('provider production human acceptance malformed raw and extra authority metadata are always rejected',()=>{
  for(const edit of [r=>{r.providerCalls=1;},r=>{r.productionDataTouched=true;},r=>{r.humanAccepted=true;},r=>{r.actualConsumerComponentsMounted=false;},r=>{r.productionPagerFactoryReused=false;},r=>{r.pagingActivatedWithKeyboard=false;},r=>{r.syntheticOnly=false;},r=>{r.realAuthorityAccepted=true;}]){const value=fixture();edit(value.raw);value.reseal();denied(value.validate);}
  const value=fixture();value.proof.humanAccepted=true;denied(value.validate);for(const text of ['null','{malformed']){const f=fixture(),bytes=Buffer.from(text);f.evidence.set(f.proof.rawBrowser.path,bytes);f.proof.rawBrowser.bytes=bytes.length;f.proof.rawBrowser.sha256=sha(bytes);denied(f.validate);}
+});
+
+// The selector always reads the actual on-disk contract and source files. Only
+// browser/process evidence below is synthetic; no CI or provider claim follows.
+test('current raw2 matrix authenticates exact producer and separates nine pending inventory reads from raw1 history',()=>{
+ const read=file=>existsSync(file)&&lstatSync(file).isFile()?readFileSync(file):null,current=fieldTaskPaginationCurrentMetadata(read);
+ assert.equal(current.rawVersion,2);assert.equal(current.requestMatrix.length,108);assert.equal(current.postCount,9);assert.equal(current.checkNames.length,33);
+ assert.equal(historical.rawVersion,1);assert.equal(historical.requestMatrix.length,99);assert.deepEqual(current.checkNames,historical.checkNames);
+ const positions=[[9,10],[22,23],[35,36],[48,49],[61,62],[74,75],[84,85],[94,95],[104,105]];
+ assert.equal(positions.length,9);for(const[base,pending]of positions){const a=current.requestMatrix[base],b=current.requestMatrix[pending];assert.equal(a.method,'GET');assert.equal(a.mode,'consumption');assert.equal(a.path,'/api/identity/field-operations');assert.equal(a.inventoryFilter,null);assert.equal(b.inventoryFilter,'PENDING');assert.deepEqual(Object.keys(a),['width','mode','path','method','afterTask','inventoryFilter','responseStatus']);assert.deepEqual(Object.keys(b),Object.keys(a));assert.deepEqual({...b,inventoryFilter:null},a);assert.equal(pending,base+1);}
+ assert.equal(current.requestMatrix.filter(row=>row.inventoryFilter==='PENDING').length,9);assert.equal(current.requestMatrix.filter(row=>Object.hasOwn(row,'inventoryFilter')).length,18);
+ assert.deepEqual(current.commandEqualityGroups,[[80,90,100],[83],[87],[93],[97],[103],[107]]);
+ assert.deepEqual(current.requestMatrix.filter(row=>row.method==='POST'),historical.requestMatrix.filter(row=>row.method==='POST'));
+ assert.ok(Object.isFrozen(current)&&Object.isFrozen(current.requestMatrix)&&current.requestMatrix.every(Object.isFrozen)&&Object.isFrozen(current.commandEqualityGroups)&&current.commandEqualityGroups.every(Object.isFrozen));
+});
+
+test('raw1 missing pending duplicate swapped filtered and extra inventory observations cannot certify current raw2',()=>{
+ const pending=[10,23,36,49,62,75,85,95,105];
+ for(const edit of [r=>{r.version=1;},r=>{r.requests=r.requests.filter(row=>row.inventoryFilter!=='PENDING').map(row=>{delete row.inventoryFilter;return row;});},r=>{delete r.requests[pending[0]].inventoryFilter;},r=>{r.requests.splice(pending[0],1);},r=>{r.requests.splice(pending[0],1,structuredClone(r.requests[pending[0]-1]));},r=>{[r.requests[pending[0]-1],r.requests[pending[0]]]=[r.requests[pending[0]],r.requests[pending[0]-1]];},r=>{[r.requests[pending[0]],r.requests[pending[1]]]=[r.requests[pending[1]],r.requests[pending[0]]];},r=>{r.requests.push(structuredClone(r.requests[pending[0]]));}]){const value=fixture();edit(value.raw);value.reseal();denied(value.validate);}
+});
+
+test('current pagination selection rejects changed producer contract missing sources and producer substitution',()=>{
+ const read=file=>existsSync(file)&&lstatSync(file).isFile()?readFileSync(file):null,file='scripts/verify-field-task-pagination-ui.mjs',contract='.github/workspace-acceptance-contract.json';
+ assert.equal(fieldTaskPaginationCurrentMetadata(read).rawVersion,2);
+ for(const target of [file,contract]){denied(()=>fieldTaskPaginationCurrentMetadata(name=>name===target?Buffer.from('export const unrelated=true;'):read(name)));denied(()=>fieldTaskPaginationCurrentMetadata(name=>name===target?null:read(name)));}
+ const original=read(file);denied(()=>fieldTaskPaginationCurrentMetadata(name=>name===file?Buffer.concat([original,Buffer.from('\n// unreviewed producer')]):read(name)));
+ const altered=JSON.parse(read(contract)),row=altered.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);assert.ok(row);row.currentSha256='f'.repeat(64);
+ denied(()=>fieldTaskPaginationCurrentMetadata(name=>name===contract?Buffer.from(JSON.stringify(altered)):read(name)));
+});
+
+// Measure the ordinary reader schedule first, then alter only the final RAW
+// read in a negative call. LF-equivalent source and JSON-equivalent contract
+// bytes must still fail the independent final RAW equality fence.
+test('current pagination source selection rechecks exact RAW producer and contract bytes after authentication',()=>{
+ const source='scripts/verify-field-task-pagination-ui.mjs',contract='.github/workspace-acceptance-contract.json',read=file=>existsSync(file)&&lstatSync(file).isFile()?readFileSync(file):null,counts=new Map();
+ const counted=file=>{counts.set(file,(counts.get(file)||0)+1);return read(file);};assert.equal(fieldTaskPaginationCurrentMetadata(counted).rawVersion,2);
+ for(const target of [source,contract]){const original=read(target),changed=target===contract?Buffer.concat([original,Buffer.from('\n')]):Buffer.from(original.toString().includes('\r\n')?original.toString().replaceAll('\r\n','\n'):original.toString().replaceAll('\n','\r\n'));assert.ok(!original.equals(changed));const seen=new Map(),last=counts.get(target);assert.ok(last>1);
+  denied(()=>fieldTaskPaginationCurrentMetadata(file=>{const count=(seen.get(file)||0)+1;seen.set(file,count);return file===target&&count===last?changed:read(file);}));assert.equal(seen.get(target),last);
+ }
 });

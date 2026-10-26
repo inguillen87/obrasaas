@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import checkpoint from './fixtures/whatsapp-field-continuity-contract-052.json' with {type:'json'};
-import {WHATSAPP_FIELD_CONTINUITY_SECTION as section,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256 as previousSha,WHATSAPP_FIELD_CONTINUITY_CHECKPOINT_PATH as checkpointPath,composeWhatsappFieldContinuityContract,restoreWhatsappFieldContinuityPreviousContract,whatsappFieldContinuityCurrentSourcePin,whatsappFieldContinuityValidationFiles,verifyWhatsappFieldContinuityCurrentSources,restoreWhatsappFieldContinuitySourceSet,whatsappFieldContinuityProofSourceAdditions,WHATSAPP_FIELD_CONTINUITY_NATIVE,validateWhatsappFieldNeutralStepNative,whatsappFieldNeutralStepShadowFixture} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
+import {WHATSAPP_FIELD_CONTINUITY_SECTION as section,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256 as previousSha,WHATSAPP_FIELD_CONTINUITY_CHECKPOINT_PATH as checkpointPath,composeWhatsappFieldContinuityContract,restoreWhatsappFieldContinuityPreviousContract,whatsappFieldContinuityCurrentSourcePin,whatsappFieldContinuityValidationFiles,verifyWhatsappFieldContinuityCurrentSources,restoreWhatsappFieldContinuitySourceSet,whatsappFieldContinuityProofSourceAdditions,WHATSAPP_FIELD_CONTINUITY_NATIVE,whatsappFieldCompanyNativeSourceFiles,validateWhatsappFieldNeutralStepNative,whatsappFieldNeutralStepShadowFixture} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {restoreDocumentTaskAssociationPreviousContract} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -79,9 +79,9 @@ function assertCurrentNativeReceipt(familyName){
  assert.deepEqual(delta.additions,['src/lib/field-hours-report.mjs']);const worksiteFiles=[...previous,...delta.additions].sort();
  assert.equal(worksiteFiles.length,familyName==='COMPANY'?237:140);assert.equal(worksiteFiles.length,delta.currentCount);assert.equal(sha(JSON.stringify(worksiteFiles)),delta.currentPathsSha256);assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,kind,worksiteFiles),previous);
  assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);const budget=contract.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family===kind);assert.ok(budget);assert.deepEqual(budget.additions,['src/lib/plan-budget-source.mjs']);assert.equal(worksiteFiles.length,budget.previousCount);assert.equal(sha(JSON.stringify(worksiteFiles)),budget.previousPathsSha256);const files=[...worksiteFiles,...budget.additions].sort();assert.equal(files.length,budget.currentCount);assert.equal(sha(JSON.stringify(files)),budget.currentPathsSha256);assert.deepEqual(restorePlanBudgetSourceSet(contract,kind,files),worksiteFiles);
-  const ownAdditions=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'];
+  const ownAdditions=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs','src/lib/capture-quality-gate.mjs','src/lib/capture-quality-policy.mjs','src/lib/participant-facial-attempt.mjs','src/lib/participant-facial-policy.mjs','src/lib/participant-facial-precommit.mjs','src/lib/private-capture-quality.mjs',...(familyName==='COMPANY'?['scripts/lib/synthetic-capture-quality.mjs','tests/fixtures/meta-kyc-challenge-legacy-v2.mjs']:['scripts/lib/synthetic-capture-quality.mjs'])];
   const currentFiles=familyName==='COMPANY'?contract.extension.proofs.find(row=>row.kind===kind)?.sourceFiles:contract.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family===kind)?.currentFiles;
-  assert.ok(Array.isArray(currentFiles));assert.deepEqual(currentFiles,[...files,...ownAdditions].sort());assert.equal(currentFiles.length,familyName==='COMPANY'?241:144);
+  assert.ok(Array.isArray(currentFiles));assert.deepEqual(currentFiles,[...files,...ownAdditions].sort());assert.equal(currentFiles.length,familyName==='COMPANY'?249:151);
   const ownPrevious=restoreOwnRuntimeDiagnosticPreviousContract(contract,read),ownPreviousFiles=familyName==='COMPANY'?ownPrevious.extension.proofs.find(row=>row.kind===kind).sourceFiles:ownPrevious.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family===kind).currentFiles;
   assert.deepEqual(ownPreviousFiles,files);assert.equal(ownPreviousFiles.length,familyName==='COMPANY'?238:141);assert.deepEqual(restorePlanBudgetSourceSet(contract,kind,currentFiles),worksiteFiles);
   const proof={harnessSha256:sha(read(family.producer)),sourceManifest:currentFiles.map(path=>({path,sha256:sha(read(path))})),[family.dtoField]:whatsappFieldNeutralStepShadowFixture(familyName)};
@@ -97,7 +97,7 @@ function assertCurrentNativeReceipt(familyName){
   if(familyName==='COMPANY')wrongCurrentFamily.extension.proofs.find(row=>row.kind===kind).kind='PG_PARTICIPANT_KYC_PREANALYSIS';
   else wrongCurrentFamily.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family===kind).family='CONSUMPTION_FEEDBACK';
   denied(()=>validateWhatsappFieldNeutralStepNative(proof,familyName,wrongCurrentFamily,read));
-  if(familyName==='COMPANY'){const wrongPointer=structuredClone(contract);wrongPointer.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family===kind).contractPointer='/extension/proofs/0/sourceFiles';denied(()=>validateWhatsappFieldNeutralStepNative(proof,familyName,wrongPointer,read));}
+  if(familyName==='COMPANY'){const wrongPointer=structuredClone(contract);wrongPointer.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family===kind).contractPointer='/extension/proofs/0/sourceFiles';assert.throws(()=>validateWhatsappFieldNeutralStepNative(proof,familyName,wrongPointer,read),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'IMMUTABLE_COMPANION'});}
  rejectProof(p=>{p.sourceManifest=p.sourceManifest.filter(row=>row.path!=='src/lib/field-hours-report.mjs');});
  rejectProof(p=>{p.sourceManifest=previous.map(path=>({path,sha256:sha(read(path))}));});
  rejectProof(p=>{p.sourceManifest.find(row=>row.path==='src/lib/field-hours-report.mjs').path='src/lib/foreign-native-source.mjs';});
@@ -113,3 +113,10 @@ function assertCurrentNativeReceipt(familyName){
 
 test("current native COMPANY receipt binds the exact live-hours union and rejects historical or resealed manifests",()=>assertCurrentNativeReceipt("COMPANY"));
 test("current native OWN receipt binds the exact live-hours union and rejects historical or resealed manifests",()=>assertCurrentNativeReceipt("OWN"));
+
+test('actual COMPANY collector and raw validator reject missing current KYC roots and RAW changes',()=>{
+ const contract=current(),family=WHATSAPP_FIELD_CONTINUITY_NATIVE.families.COMPANY,files=contract.extension.proofs.find(row=>row.kind==='PG_COMPANY_KYC').sourceFiles,libraries=files.filter(file=>file.startsWith('src/lib/')).sort(),before=JSON.stringify(contract);
+ assert.deepEqual(whatsappFieldCompanyNativeSourceFiles(read,libraries),files);
+ for(const missing of ['scripts/lib/synthetic-capture-quality.mjs','tests/fixtures/meta-kyc-challenge-legacy-v2.mjs','src/lib/private-capture-quality.mjs'])denied(()=>whatsappFieldCompanyNativeSourceFiles(path=>path===missing?null:read(path),libraries));
+ const raw=read(family.producer);let calls=0;denied(()=>whatsappFieldCompanyNativeSourceFiles(path=>path===family.producer&&++calls>1?Buffer.concat([raw,Buffer.from('\n// foreign source\n')]):read(path),libraries));assert.ok(calls>1);assert.equal(JSON.stringify(contract),before);
+});

@@ -5,7 +5,7 @@ import {companyKycMemoryFixture} from './fixtures/company-kyc-memory.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
 
 for(const action of ['INVITE','ASSIGN_EXISTING'])for(const status of ['PENDING','CLAIMED'])for(const lifecycle of ['expired','revoked'])test(action+' '+lifecycle+' cannot erase '+status+' before identity provider or Worker UPDATE',async()=>{
- const f=await companyKycMemoryFixture();f.worker.metadata.participant.kyc.version=1;
+ const f=await companyKycMemoryFixture({historicalChallengeVersion:2});f.worker.metadata.participant.kyc.version=1;
  if(status==='CLAIMED')await f.execute(f.code);
  f.worker.revision='2026-10-07T00:00:00.000001';const p=f.worker.metadata.participant;
  if(lifecycle==='expired')p.invitation.expiresAt=new Date(f.now.getTime()-1000).toISOString();

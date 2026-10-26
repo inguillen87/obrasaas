@@ -77,6 +77,912 @@ export function fieldTaskPaginationCiSourceClosure(readSource){
  return sorted;
 }
 function currentMetadata(){const value=WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI;reject(value?.status==='REVIEWED_FROZEN_CURRENT_SOURCE'&&value.ciVersion===FIELD_TASK_PAGINATION_CI_VERSION&&value.rawVersion===1&&Array.isArray(value.checkNames)&&value.checkNames.length===33&&new Set(value.checkNames).size===33&&same(value.widths,FIELD_TASK_PAGE_WIDTHS)&&same(value.unitFiles,FIELD_TASK_PAGINATION_UNIT_FILES),'The frozen complete 33-check consumer matrix is required');return value;}
+// Raw v1 and its frozen 99-row matrix above remain historical evidence.
+// These are the exact current GET base/PENDING events emitted by the unchanged
+// inventory load protocol; selecting them requires the reviewed physical source.
+function freezeCurrentPaginationData(value){if(value&&typeof value==='object'){for(const row of Object.values(value))freezeCurrentPaginationData(row);Object.freeze(value);}return value;}
+const currentPaginationRequestsRaw2=freezeCurrentPaginationData([
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "material-request",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "material-request",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "material-request",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0200",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "material-request",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 320,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "material-request",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 390,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "material-request",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 1440,
+  "mode": "material-request",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 503
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "evidence",
+  "path": "/api/identity/field-media",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 320,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "evidence",
+  "path": "/api/identity/field-media",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 390,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "evidence",
+  "path": "/api/identity/field-media",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "progress",
+  "path": "/api/identity/field-operations",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": null,
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "GET",
+  "afterTask": null,
+  "inventoryFilter": "PENDING",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/workspace",
+  "method": "GET",
+  "afterTask": "task-0100",
+  "responseStatus": 200
+ },
+ {
+  "width": 1440,
+  "mode": "consumption",
+  "path": "/api/identity/field-operations",
+  "method": "POST",
+  "afterTask": null,
+  "responseStatus": 503
+ }
+]);
+const currentPaginationCommandGroupsRaw2=freezeCurrentPaginationData([[80,90,100],[83],[87],[93],[97],[103],[107]]);
+export function fieldTaskPaginationCurrentMetadata(readSource){
+ reject(typeof readSource==='function','Actual current pagination source reader required');
+ const metadata=Buffer.from(bytes(readSource,contractPath));let contract;try{contract=JSON.parse(metadata);}catch{reject(false,'Current pagination contract must parse');}reject(plain(contract),'Current pagination contract object required');
+ const authenticate=action=>{try{return action();}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}};
+ authenticate(()=>verifyPlanBudgetCurrentSources(contract,readSource));
+ const original=Buffer.from(bytes(readSource,producer));
+ try{
+  const currentPin=authenticate(()=>planBudgetCurrentSourcePin(contract,{path:producer,sha256:'4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604'}));
+  reject(currentPin==='c82288b7b813ebdad37bf7602d1ebf3216330595ee40d9efbc6bab5280334f7a'&&currentPin!=='4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604'&&sha(original.toString('utf8').replaceAll('\r\n','\n'))===currentPin,'The exact current raw2 producer must be authenticated by its Own source row');
+  const legacy=currentMetadata();
+  return freezeCurrentPaginationData({...legacy,status:'AUTHENTICATED_CURRENT_SOURCE_RAW2',rawVersion:2,requestMatrix:currentPaginationRequestsRaw2,commandEqualityGroups:currentPaginationCommandGroupsRaw2});
+ }finally{
+  authenticate(()=>verifyPlanBudgetCurrentSources(contract,readSource));
+  reject(bytes(readSource,contractPath).equals(metadata)&&bytes(readSource,producer).equals(original),'Current pagination producer or contract RAW bytes changed during selection');
+ }
+}
+
 export function fieldTaskPaginationUnitCases(readSource,file){
  if(file==='tests/production-workspace-task-page.test.mjs')return boundedTaskPageUnitCases(readSource,file);
  const tree=parse(bytes(readSource,file).toString('utf8'),{sourceType:'module'}),names=[];function walk(node){if(!node||typeof node!=='object')return;if(node.type==='CallExpression'&&node.callee?.name==='test'){reject(node.arguments[0]?.type==='StringLiteral','Every unit case must have an explicit literal name');names.push(node.arguments[0].value);}for(const value of Object.values(node))if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')walk(value);}walk(tree.program);reject(names.length>0&&new Set(names).size===names.length,'Distinct source-declared unit cases required');return names;
@@ -125,7 +1031,7 @@ function validateRequests(requests,current){
  const representatives=current.commandEqualityGroups.map(group=>requests[group[0]]);reject(new Set(representatives.map(row=>row.operationId)).size===representatives.length,'Independent explicit operations must not share UUIDs');
 }
 export function validateFieldTaskPaginationCi(proof,{expectedHead,expectedTree,readSource,readEvidence,spec,runId,runAttempt}){
- const current=currentMetadata();reject(/^[a-f0-9]{40}$/.test(expectedHead)&&/^[a-f0-9]{40}$/.test(expectedTree)&&typeof readSource==='function'&&typeof readEvidence==='function','Exact immutable source and evidence readers required');
+ const current=fieldTaskPaginationCurrentMetadata(readSource);reject(/^[a-f0-9]{40}$/.test(expectedHead)&&/^[a-f0-9]{40}$/.test(expectedTree)&&typeof readSource==='function'&&typeof readEvidence==='function','Exact immutable source and evidence readers required');
  const sourceContract=JSON.parse(bytes(readSource,contractPath));if(sourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources(sourceContract,readSource);
  keys(proof,['version','status','sourceRevision','sourceTree','sourceState','trackedClean','ciRun','harnessSha256','sourceManifest','checks','rawBrowser','browserExecution','unitSuites','providerCalls','productionDataTouched','humanAccepted'],'CI envelope');
  reject(proof.version===FIELD_TASK_PAGINATION_CI_VERSION&&proof.status==='PASS'&&proof.sourceRevision===expectedHead&&proof.sourceTree===expectedTree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,'Current exact CI source required');

@@ -2,6 +2,7 @@
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {preparePhoto,verifyPhoto} from './field-media-preparation.mjs';
 import {createKycCameraSession} from './kyc-camera-session.mjs';
+import {createKycQualityMonitor,inspectKycPhotoQuality} from './kyc-image-quality.mjs';
 import styles from './participant-panel.module.css';
 
 export const KYC_PHOTO_LIMIT=1024*1024;
@@ -14,6 +15,7 @@ function KycPhotoPreparationInner({kind,disabled,active=true,onChange}){
  const documentPhoto=kind==='front'||kind==='back',title=kind==='back'?'Dorso del documento':kind==='front'?'Frente del documento':'Fotografía del rostro';
  const [photo,setPhoto]=useState(null),[phase,setPhase]=useState('EMPTY'),[reviewed,setReviewed]=useState(false),[notice,setNotice]=useState('');
  const [cameraState,setCameraState]=useState({phase:'CLOSED',error:null});
+ const [liveQuality,setLiveQuality]=useState(null);
  const original=useRef(null),generation=useRef(0),controller=useRef(null),acceptance=useRef(null),useButton=useRef(null),urls=useRef(new Set()),alive=useRef(true);
  const video=useRef(null),camera=useRef(null),cameraContext=useRef({disabled,active}),cameraButton=useRef(null),reviewChoice=useRef(null),cameraFocus=useRef(0),pendingCameraFocus=useRef(null);
  useLayoutEffect(()=>{
@@ -31,9 +33,14 @@ function KycPhotoPreparationInner({kind,disabled,active=true,onChange}){
  });
  const revoke=()=>{urls.current.forEach(url=>URL.revokeObjectURL(url));urls.current.clear();};
  useEffect(()=>{alive.current=true;const allocated=urls.current,localGeneration=generation;return()=>{alive.current=false;localGeneration.current++;acceptance.current?.abort();acceptance.current=null;controller.current?.abort();allocated.forEach(url=>URL.revokeObjectURL(url));allocated.clear();};},[]);
+ useEffect(()=>{
+  if(cameraState.phase!=='LIVE'||disabled||!active)return;
+  const monitor=createKycQualityMonitor({getVideo:()=>video.current,isAllowed:()=>alive.current&&cameraContext.current.active&&!cameraContext.current.disabled&&Boolean(video.current?.srcObject),onResult:value=>setLiveQuality(prior=>prior?.code===value.code?prior:{ok:value.ok,code:value.code,message:value.message})});
+  monitor.start();return()=>monitor.dispose();
+ },[cameraState.phase,disabled,active]);
  useEffect(()=>{const stop=()=>{cameraFocus.current++;pendingCameraFocus.current=null;camera.current?.close();},visibility=()=>{if(document.hidden)stop();};window.addEventListener('pagehide',stop);document.addEventListener('visibilitychange',visibility);return()=>{window.removeEventListener('pagehide',stop);document.removeEventListener('visibilitychange',visibility);};},[]);
  function reset(){cameraFocus.current++;pendingCameraFocus.current=null;camera.current?.close();generation.current++;acceptance.current?.abort();acceptance.current=null;controller.current?.abort();revoke();original.current=null;setPhoto(null);setReviewed(false);setPhase('EMPTY');setNotice('');onChange(null);}
- function openCamera(){if(disabled||!active||phase==='USING'||phase==='PREPARING')return;cameraFocus.current++;pendingCameraFocus.current=null;setNotice('');void camera.current?.open(kind);}
+ function openCamera(){if(disabled||!active||phase==='USING'||phase==='PREPARING')return;cameraFocus.current++;pendingCameraFocus.current=null;setLiveQuality(null);setNotice('');void camera.current?.open(kind);}
  function closeCamera(){pendingCameraFocus.current={ticket:++cameraFocus.current,generation:generation.current,review:false};camera.current?.close();}
  async function captureCamera(){const ticket=++cameraFocus.current;pendingCameraFocus.current=null;const file=await camera.current?.capture();if(file&&alive.current&&cameraContext.current.active&&!cameraContext.current.disabled)void prepare(file,0,ticket);}
  async function prepare(file,rotation=0,focusTicket=null){
@@ -44,6 +51,9 @@ function KycPhotoPreparationInner({kind,disabled,active=true,onChange}){
   try{
    const copy=file.size>KYC_PHOTO_LIMIT||rotation!==0?await preparePhoto(file,{maxBytes:KYC_PHOTO_LIMIT,originalLimits:KYC_ORIGINAL_LIMITS,rotation,signal}):{file,...await verifyPhoto(file,{originalLimits:KYC_ORIGINAL_LIMITS,signal}),rotation:0};
    if(!alive.current||current!==generation.current||signal.aborted)return;
+   const quality=await inspectKycPhotoQuality(copy.file,{kind,signal});
+   if(!alive.current||current!==generation.current||signal.aborted)return;
+   if(!quality.ok)throw new Error(quality.message);
    const preview=URL.createObjectURL(copy.file),originalUrl=copy.file===file?preview:URL.createObjectURL(file);urls.current.add(preview);urls.current.add(originalUrl);
    original.current=file;if(focusTicket!==null)pendingCameraFocus.current={ticket:focusTicket,generation:current,review:true};setPhoto({...copy,preview,originalUrl,originalBytes:file.size,originalName:file.name,reduced:copy.file!==file});setPhase('READY');
   }catch(error){if(alive.current&&current===generation.current&&!signal.aborted){original.current=null;setPhase('EMPTY');setNotice(error.message);}}
@@ -71,6 +81,7 @@ function KycPhotoPreparationInner({kind,disabled,active=true,onChange}){
   <div className={styles.cameraBox} hidden={!cameraOpen} aria-label={'Cámara: '+title.toLowerCase()}>
    <div className={styles.cameraViewport}><video ref={video} autoPlay playsInline muted className={styles.cameraVideo} data-mirrored={!documentPhoto} aria-label={'Vista previa de cámara: '+title.toLowerCase()}/><span className={documentPhoto?styles.cameraDocumentFrame:styles.cameraFaceFrame} aria-hidden="true"/></div>
    <p className={styles.cameraHint}>{cameraState.phase==='PERMISSION'?'Esperando tu permiso de cámara…':cameraState.phase==='CAPTURING'?'Tomando la fotografía…':documentPhoto?'Ubicá el documento completo dentro del marco.':'Centrala frente a tu rostro y mirá a la cámara.'}</p>
+   {cameraState.phase==='LIVE'&&<p className={styles.photoHint} role="status" aria-live="polite">{liveQuality?.message||'Comprobando luz y nitidez en este dispositivo…'}</p>}
    <p className={styles.photoHint}>La vista previa queda en este dispositivo. Después vas a revisar la fotografía antes de usarla.</p>
    <div className={styles.actions}><button type="button" disabled={disabled||!active||cameraState.phase!=='LIVE'} onClick={captureCamera}>Tomar fotografía</button><button type="button" onClick={closeCamera}>Cerrar cámara</button></div>
   </div>

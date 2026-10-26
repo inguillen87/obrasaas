@@ -6,6 +6,7 @@ import {beginMetaKycConversation,planMetaKycConversation} from '../src/lib/meta-
 import {resolveMetaKycAuthority,metaKycDispatchReceiptId,resolveMetaKycExpiryFeedbackAuthority,metaKycExpiryAuthorityDigest,resolveMetaKycContextFeedbackAuthority} from '../src/lib/meta-kyc-identity.mjs';
 import {createMetaKycExpiryFeedback,META_KYC_EXPIRY_REPLY,metaKycExpiryReceiptId} from '../src/lib/meta-kyc-expiry-feedback.mjs';
 import {companyKycMemoryFixture} from './fixtures/company-kyc-memory.mjs';
+import {prepareMetaKycChallenge as prepareHistoricalV2Challenge} from './fixtures/meta-kyc-challenge-legacy-v2.mjs';
 import {readFile} from 'node:fs/promises';
 import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
@@ -28,16 +29,17 @@ test('challenge has 256 bits, exact grammar and deterministic event-bound deposi
 test('challenge preparation rejects an unauthorized manager before querying a worker',async()=>{
  let reads=0;await assert.rejects(prepareMetaKycChallenge({query:async()=>{reads++;}},{role:'EMPLOYEE'},{},{workerId:'worker-a'}),{code:'PARTICIPANT_MANAGE_REQUIRED'});assert.equal(reads,0);
 });
+// Historical v2 INVITED/TTL oracle. New v3 requires prior account acceptance.
 test('manager creates a phone-scoped expiring challenge, stores no plain code, and replay cannot reveal it',async()=>{
  const f=kycMemoryFixture(),input={operationId:randomUUID(),workerId:f.worker.id,revision:f.worker.revision};f.worker.metadata.participant.invitation.expiresAt=new Date(f.now.getTime()+3600000).toISOString();
  delete f.worker.metadata.participant.kycChatChallenge;
  // Exact project DTO from workspace.projectOperation has no organizationId.
- const result=await prepareMetaKycChallenge({query:f.query},f.issuer,{id:f.project.id,name:f.project.name,metadata:{}},input);assert.match(result.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal(result.expiresAt,f.worker.metadata.participant.invitation.expiresAt);assert.equal(f.worker.metadata.participant.kycChatChallenge.senderE164,f.worker.phone);assert.ok(!JSON.stringify([...f.audits.values(),f.worker.metadata]).includes(result.code));
- const replay=await prepareMetaKycChallenge({query:f.query},f.issuer,f.project,input);assert.equal(replay.codeUnavailable,true);assert.equal(replay.code,undefined);assert.deepEqual(f.worker.metadata.participant.permissions,{attendance:false,report:false});
+ const result=await prepareHistoricalV2Challenge({query:f.query},f.issuer,{id:f.project.id,name:f.project.name,metadata:{}},input);assert.match(result.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal(result.expiresAt,f.worker.metadata.participant.invitation.expiresAt);assert.equal(f.worker.metadata.participant.kycChatChallenge.senderE164,f.worker.phone);assert.ok(!JSON.stringify([...f.audits.values(),f.worker.metadata]).includes(result.code));
+ const replay=await prepareHistoricalV2Challenge({query:f.query},f.issuer,f.project,input);assert.equal(replay.codeUnavailable,true);assert.equal(replay.code,undefined);assert.deepEqual(f.worker.metadata.participant.permissions,{attendance:false,report:false});
 });
 
 for(const status of ['PENDING','CLAIMED'])for(const expired of [false,true])test(`new preparation cannot overwrite an ${expired?'expired':'live'} ${status} capture with another UUID`,async()=>{
- const f=kycMemoryFixture();f.worker.metadata.participant.kycChatChallenge.status=status;
+ const f=await companyKycMemoryFixture({historicalChallengeVersion:2});await f.join();f.worker.metadata.participant.kycChatChallenge.status=status;
  if(expired)f.worker.metadata.participant.kycChatChallenge.expiresAt=new Date(f.now.getTime()-1).toISOString();
  const before=JSON.stringify(f.worker.metadata),audits=JSON.stringify([...f.audits]);
  await assert.rejects(prepareMetaKycChallenge({query:f.query},f.issuer,f.project,{operationId:randomUUID(),workerId:f.worker.id,revision:f.worker.revision}),{code:'PARTICIPANT_KYC_CHAT_CLOSURE_REQUIRED'});
@@ -218,7 +220,7 @@ test('WhatsApp schema2 marker cannot downgrade a committed current capture after
 // Actual cipher/resolvers/transactions/outbox/provider with synthetic SQL and
 // HTTP. The mutex models serialization here; this is not a PG lock-race proof.
 async function expiryFixture(kind,{active=true,expired=true,own=false,factory=createMetaKycExpiryFeedback,afterReserve=async()=>{},providerAfterFirstFence=null}={}){
- const runtime=own?await ownCompanyRuntimeFixture({time:Date.now()}):null,f=kind==='COMPANY'?await companyKycMemoryFixture({active,captureImageSetVersion:2}):kycMemoryFixture({active,captureImageSetVersion:2,ownRuntime:runtime});
+ const runtime=own?await ownCompanyRuntimeFixture({time:Date.now()}):null,f=kind==='COMPANY'?await companyKycMemoryFixture({active,captureImageSetVersion:2,historicalChallengeVersion:active?undefined:2}):kycMemoryFixture({active,captureImageSetVersion:2,ownRuntime:runtime});
  await f.execute(f.code);const prompt=[...f.outbounds.values()].at(-1).outcome.messageId;
  if(expired)f.now.setTime(f.now.getTime()+31*60*1000);
  const context=f.receive({type:'image',context:{id:prompt},image:{id:'150000011',mime_type:'image/png'}}),requests=[],controls={loseAck:false,beforeSql:null,commitOutcome:null,afterOwnBoundary:null,afterFirstFence:providerAfterFirstFence};let tail=Promise.resolve();
@@ -348,4 +350,17 @@ test('OWN actual provider boundary is followed by the expiry fence before the on
   t.controls.afterOwnBoundary=()=>{changed=true;t.f.controls.issuerActive=false;};await assert.rejects(t.adapter.send(t.context,receipt.reply));assert.equal(changed,true);assert.ok(t.runtime.calls.some(call=>call.method==='GET'&&call.path==='debug_token'));assert.equal(t.requests.length,mutant?1:0);assert.equal(t.f.outbounds.get(customerOutboundId(t.context.eventId)).outcome.state,'SEND_STARTED');assert.deepEqual(t.f.worker,before);unchangedMedia(t.f);
   const recovered=await t.adapter.feedback(t.context,{recoverOnly:true});assert.equal(recovered.reply,undefined);assert.equal(recovered.replyState,'SEND_STARTED');assert.equal(t.requests.length,mutant?1:0);
  }
+});
+
+// Current preparation remains canonical: no new v3 before account acceptance.
+test('new v3 challenge denies INVITED without effects and issues only after canonical account acceptance',async()=>{
+ const f=await companyKycMemoryFixture({historicalChallengeVersion:2}),client={query:f.query},before=structuredClone(f.worker),audits=structuredClone([...f.audits]),start=f.control.sql.length;
+ await prepareMetaKycChallenge.beforeProject(client,f.issuer,{projectId:f.target.id});
+ await assert.rejects(prepareMetaKycChallenge(client,f.issuer,f.target,{workerId:f.worker.id,revision:f.worker.revision,operationId:randomUUID()},{environment:f.environment}),{code:'PARTICIPANT_FACIAL_ACCOUNT_ACCEPTANCE_REQUIRED'});
+ assert.deepEqual(f.worker,before);assert.deepEqual([...f.audits],audits);assert.equal(f.control.sql.slice(start).some(sql=>/^(UPDATE|INSERT)/.test(sql)),false);assert.equal(f.control.graph,0);assert.equal(f.control.cdn,0);assert.equal(f.blob.puts(),0);
+ await f.join();assert.equal(f.worker.metadata.participant.status,'ACTIVE');assert.equal(f.worker.metadata.participant.clerkUserId,f.member.clerkUserId);
+ delete f.worker.metadata.participant.kycChatChallenge;const permissions=structuredClone(f.worker.metadata.participant.permissions);
+ await prepareMetaKycChallenge.beforeProject(client,f.issuer,{projectId:f.target.id});const input={workerId:f.worker.id,revision:f.worker.revision,operationId:randomUUID()},value=await prepareMetaKycChallenge(client,f.issuer,f.target,input,{environment:f.environment}),challenge=f.worker.metadata.participant.kycChatChallenge;
+ assert.equal(value.saved,true);assert.equal(challenge.analysisConsentVersion,3);assert.equal(challenge.captureImageSetVersion,2);assert.equal(challenge.participantClerkUserId,f.member.clerkUserId);assert.equal(challenge.status,'PENDING');assert.equal(Date.parse(challenge.expiresAt)-Date.parse(challenge.createdAt),24*60*60*1000);assert.deepEqual(f.worker.metadata.participant.permissions,permissions);assert.equal(f.control.graph,0);assert.equal(f.control.cdn,0);assert.equal(f.blob.puts(),0);
+ const stable=structuredClone(f.worker),stableAudits=structuredClone([...f.audits]),replay=await prepareMetaKycChallenge(client,f.issuer,f.target,input,{environment:f.environment});assert.equal(replay.codeUnavailable,true);assert.equal(replay.code,undefined);assert.deepEqual(f.worker,stable);assert.deepEqual([...f.audits],stableAudits);
 });

@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_REVISION,PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
@@ -4441,8 +4441,9 @@ function companyNativeSourceFrame(manifest,readSource,run){
   const materialPaths=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'],own=contract[PLAN_BUDGET_CURRENT_SECTION]?.ownRuntimeDiagnosticAdvance;
   if(own!==undefined)r(plain(own)&&Array.isArray(own.sourceChanges)&&Array.isArray(own.retainedDependencies),'MATERIAL_SOURCE_AUTHORITY');
   const materialRows=own?.sourceChanges.filter(row=>materialPaths.includes(row?.path))||[],materials=materialRows.length>0;
-  r(materialRows.length===0||materialRows.length===3,'MATERIAL_SOURCE_AUTHORITY');if(materials)r(hours&&budget&&own.sourceChanges.length===77&&own.retainedDependencies.length===5,'MATERIAL_SOURCE_AUTHORITY');
-  const additions=[...(hours?['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']:[]),...(materials?materialPaths:[])];
+  r(materialRows.length===0||materialRows.length===3,'MATERIAL_SOURCE_AUTHORITY');if(materials){const reviewedOwn=PLAN_BUDGET_CURRENT_REVISION.ownRuntimeDiagnosticAdvance;r(hours&&budget&&plain(reviewedOwn)&&same(own.sourceChanges.map(row=>row.path),reviewedOwn.sourceChanges.map(row=>row.path))&&same(own.retainedDependencies,reviewedOwn.retainedDependencies),'MATERIAL_SOURCE_AUTHORITY');}
+  const kycPaths=["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"],kycRows=own?.sourceChanges.filter(row=>kycPaths.includes(row?.path))||[],kyc=kycRows.length>0;r(kycRows.length===0||kycRows.length===kycPaths.length,'MATERIAL_SOURCE_AUTHORITY');
+  const additions=[...(hours?['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']:[]),...(materials?materialPaths:[]),...(kyc?kycPaths:[])];
   r(Array.isArray(manifest)&&manifest.length===n.sourceCount+additions.length,'SOURCE_MANIFEST');
   const paths=[];for(const ref of manifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);}
   const historical=paths.filter(file=>!additions.includes(file));
@@ -4454,6 +4455,7 @@ function companyNativeSourceFrame(manifest,readSource,run){
   verifyOwners=()=>{try{
    if(hours)verifyWorksiteLiveHoursCurrentSources(contract,checkedRead);if(budget)verifyPlanBudgetCurrentSources(contract,checkedRead);
    if(materials)for(const file of materialPaths){const row=own.sourceChanges.find(row=>row.path===file),bytes=checkedRead(file);r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(bytes.toString('utf8').replaceAll('\r\n','\n')),'MATERIAL_SOURCE_AUTHORITY');}
+   if(kyc)for(const file of kycPaths){const row=own.sourceChanges.find(row=>row.path===file),bytes=checkedRead(file);r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(bytes.toString('utf8').replaceAll('\r\n','\n')),'MATERIAL_SOURCE_AUTHORITY');}
   }catch(error){ownerFailure(error);}};
   verifyOwners();
   for(const ref of manifest)r(companyNativeSha(checkedRead(ref.path))===ref.sha256,'SOURCE_HASH');

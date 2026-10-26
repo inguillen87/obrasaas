@@ -7,8 +7,8 @@ import {createMetaKycContextFeedback,META_KYC_CONTEXT_REPLY} from '../../src/lib
 import {encryptCustomerSecret,decryptCustomerSecret} from '../../src/lib/meta-customer-credentials.mjs';
 import {metaCustomerContentDigest} from '../../src/lib/meta-customer-callback.mjs';
 // Synthetic SQL transaction adapter and actual provider serializer; no network.
-export async function contextFeedbackFixture(kind,{active=true,expired=false,stale=true,text=null,own=false,grantLifetimeMs=null,factory=createMetaKycContextFeedback,afterReserve=async()=>{},providerAfterFirstFence=null}={}){
- const runtime=own?await ownCompanyRuntimeFixture({time:Date.now()}):null,f=kind==='COMPANY'?await companyKycMemoryFixture({active,captureImageSetVersion:2,grantLifetimeMs}):kycMemoryFixture({active,captureImageSetVersion:2,ownRuntime:runtime});
+export async function contextFeedbackFixture(kind,{active=true,expired=false,stale=true,text=null,own=false,grantLifetimeMs=null,historicalChallengeVersion,factory=createMetaKycContextFeedback,afterReserve=async()=>{},providerAfterFirstFence=null}={}){
+ const runtime=own?await ownCompanyRuntimeFixture({time:Date.now()}):null,f=kind==='COMPANY'?await companyKycMemoryFixture({active,captureImageSetVersion:2,grantLifetimeMs,historicalChallengeVersion}):kycMemoryFixture({active,captureImageSetVersion:2,ownRuntime:runtime});
  if(kind==='PROJECT'&&grantLifetimeMs!==null)f.connection.metadata.customerVerification.expiresAt=new Date(f.now.getTime()+grantLifetimeMs).toISOString();
  await f.execute(f.code);const originalState=f.state(),original=[...f.outbounds.values()].at(-1);if(stale)await f.choose('Autorizar imágenes');const prompt=stale?original.outcome.messageId:[...f.outbounds.values()].at(-1).outcome.messageId;
  if(expired)f.now.setTime(f.now.getTime()+31*60*1000);

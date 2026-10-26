@@ -4,7 +4,7 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler
 
-from api._biometric_core import MAX_BODY, BiometricError, authorize, evaluate
+from api._biometric_core import MAX_BODY, BiometricError, authorize, evaluate, evaluate_capture_quality
 
 _inference_lock = threading.Lock()
 
@@ -40,7 +40,7 @@ class handler(BaseHTTPRequestHandler):
             if not _inference_lock.acquire(timeout=2):
                 raise BiometricError("BIOMETRIC_SERVICE_BUSY", 503)
             try:
-                result = evaluate(value)
+                result = evaluate_capture_quality(value) if isinstance(value, dict) and "mode" in value else evaluate(value)
             finally:
                 _inference_lock.release()
             self.respond(200, result)

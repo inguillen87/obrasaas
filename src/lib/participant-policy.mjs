@@ -6,7 +6,7 @@ import {validateParticipantOnboardingChoice} from './participant-onboarding-poli
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
 import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
 import {VERIFIED_OFFICE_ACTION,participantVerifiedOfficeEmail} from './participant-verified-office.mjs';
-import {participantOcrNotice,participantBiometricNotice} from './participant-analysis-consent.mjs';
+import {participantOcrNotice,participantBiometricNotice,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION} from './participant-analysis-consent.mjs';
 export {PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE} from './participant-analysis-consent.mjs';
 export {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
 export {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,participantKycImageSet} from './participant-kyc-image-set.mjs';
@@ -80,13 +80,15 @@ export function participantCommand(input){
 export function participantKycInput(input){
  const externalChoice=Object.hasOwn(input||{},'ocrConsent')||Object.hasOwn(input||{},'ocrNoticeVersion');
  const biometricChoice=Object.hasOwn(input||{},'biometricConsent')||Object.hasOwn(input||{},'biometricNoticeVersion');
+ const precommit=input?.biometricNoticeVersion===PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,manualFrom=precommit&&Object.hasOwn(input,'biometricManualFromOperationId');
  const backChoice=hasBackChoice(input);
- participantKeys(input,['operationId','projectId','scope','workerId','revision','noticeVersion','consent','front','selfie',...(externalChoice?['ocrConsent','ocrNoticeVersion']:[]),...(biometricChoice?['biometricConsent','biometricNoticeVersion']:[]),...(backChoice?backKeys:[])]);participantContext(input);participantRevision(input.revision);
+ participantKeys(input,['operationId','projectId','scope','workerId','revision','noticeVersion','consent','front','selfie',...(externalChoice?['ocrConsent','ocrNoticeVersion']:[]),...(biometricChoice?['biometricConsent','biometricNoticeVersion']:[]),...(precommit?['biometricMode']:[]),...(manualFrom?['biometricManualFromOperationId']:[]),...(backChoice?backKeys:[])]);participantContext(input);participantRevision(input.revision);
  if(!operationId(input.operationId)||!workspaceId(input.workerId)||input.consent!==true||input.noticeVersion!==PARTICIPANT_NOTICE_VERSION)throw new WorkspaceError('PARTICIPANT_PRIVACY_REQUIRED');
  if(externalChoice&&(typeof input.ocrConsent!=='boolean'||!participantOcrNotice(input.ocrNoticeVersion)))throw new WorkspaceError('PARTICIPANT_OCR_CONSENT_REQUIRED',400);
  if(biometricChoice&&(typeof input.biometricConsent!=='boolean'||!participantBiometricNotice(input.biometricNoticeVersion)))throw new WorkspaceError('PARTICIPANT_BIOMETRIC_CONSENT_REQUIRED',400);
+ if(precommit&&(!['ASSISTED','MANUAL'].includes(input.biometricMode)||input.biometricConsent!==(input.biometricMode==='ASSISTED')||manualFrom&&(input.biometricMode!=='MANUAL'||!operationId(input.biometricManualFromOperationId)||input.biometricManualFromOperationId.toLowerCase()===input.operationId.toLowerCase())))throw new WorkspaceError('PARTICIPANT_BIOMETRIC_CONSENT_REQUIRED',400);
  if(backChoice)validateBackChoice(input);
- try{return {...input,...(backChoice?{back:decodePrivateImage(input.back)}:{}),ocrConsent:externalChoice&&input.ocrConsent,ocrNoticeVersion:externalChoice?input.ocrNoticeVersion:null,biometricConsent:biometricChoice&&input.biometricConsent,biometricNoticeVersion:biometricChoice?input.biometricNoticeVersion:null,operationId:input.operationId.toLowerCase(),front:decodePrivateImage(input.front),selfie:decodePrivateImage(input.selfie)};}catch(error){throw new WorkspaceError(error instanceof PrivateImageError?error.code:'PARTICIPANT_INPUT_INVALID',error.code==='PRIVATE_IMAGE_TOO_LARGE'?413:400);}
+ try{return {...input,...(manualFrom?{biometricManualFromOperationId:input.biometricManualFromOperationId.toLowerCase()}:{}),...(backChoice?{back:decodePrivateImage(input.back)}:{}),ocrConsent:externalChoice&&input.ocrConsent,ocrNoticeVersion:externalChoice?input.ocrNoticeVersion:null,biometricConsent:biometricChoice&&input.biometricConsent,biometricNoticeVersion:biometricChoice?input.biometricNoticeVersion:null,operationId:input.operationId.toLowerCase(),front:decodePrivateImage(input.front),selfie:decodePrivateImage(input.selfie)};}catch(error){throw new WorkspaceError(error instanceof PrivateImageError?error.code:'PARTICIPANT_INPUT_INVALID',error.code==='PRIVATE_IMAGE_TOO_LARGE'?413:400);}
 }
 export const participantReceiptId=(actorId,projectId,key)=>'participant_'+digest([actorId,projectId,key.toLowerCase()]);
 export async function assertOwnParticipant(client,member,session,projectId,workerId,{lock=false}={}){

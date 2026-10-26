@@ -10,7 +10,7 @@ import {participantKycChatCapabilities,participantOnboardingNextStep} from '../s
 // Canonical store/bridge commands with signed synthetic events, private synthetic
 // storage and in-memory SQL. This does not prove PostgreSQL locks or live delivery.
 async function retryFixture(){
- const f=await companyKycMemoryFixture({captureImageSetVersion:2});await f.join();
+ const f=await companyKycMemoryFixture({captureImageSetVersion:2,historicalChallengeVersion:2});await f.join();
  const scope='a'.repeat(64),rows=value=>({rows:structuredClone(value),rowCount:value.length});let writes=0;
  const revision=()=>/^r\d+$/.test(f.worker.revision)?'2026-10-07T00:00:00.'+f.worker.revision.slice(1).padStart(6,'0'):f.worker.revision;
  const client={query:async(sql,args=[])=>{
@@ -24,7 +24,7 @@ async function retryFixture(){
  const store=createParticipantStore({workspace,connect:f.connect,environment:f.environment,prepareKycChat:prepareMetaKycChallenge});
  const session={authenticated:true,verification:'clerk-production-jwt',userId:f.issuer.clerkUserId,organizationId:'org_Synthetic',organizationRole:'org:admin'};
  const command=(action,payload={})=>({operationId:randomUUID(),projectId:f.target.id,scope,action,payload:{workerId:f.worker.id,revision:revision(),...payload}});
- const capture=async code=>{const initial=await f.execute(code);await f.choose('Autorizar imágenes');await f.choose('Autorizar dorso');await f.choose('Sin lectura asistida');await f.choose('Sin comparación facial');await f.image();await f.image();await f.image();const final=await f.choose('Guardar identidad');return{initial,final};};
+ const capture=async code=>{const initial=await f.execute(code);await f.choose('Autorizar imágenes');await f.choose('Autorizar dorso');await f.choose('Sin lectura asistida');await f.choose(f.state().biometricNoticeVersion==='participant-private-biometric-v3'?'Revisión manual':'Sin comparación facial');await f.image();await f.image();await f.image();const final=await f.choose(f.state().biometricNoticeVersion==='participant-private-biometric-v3'?'Presentar identidad':'Guardar identidad');return{initial,final};};
  const io=()=>[f.control.graph,f.control.cdn,f.controls.sends,f.blob.puts(),f.blob.objects.size];
  const projection=()=>publicParticipantKycChat({...f.worker,organizationId:f.target.organizationId},{now:new Date(f.now),member:currentMember,canManage:currentMember.identityOnly!==true&&['ADMIN','DIRECTOR'].includes(currentMember.role),environment:f.environment});
  return{...f,client,store,session,scope,command,capture,io,projection,member:value=>currentMember=value,writes:()=>writes};

@@ -102,13 +102,13 @@ async function mobileImportNavigationScenario(width,uncertain){
  const requests=[],posts=[],draft={id:'mobile-plan-draft',revision:3,status:'READY',existingTaskCount:1,source:{contentType:'application/pdf',bytes:42,sha256:'c'.repeat(64)},sourceAvailable:true,rows:[{title:'Fundaciones sintéticas',startsOn:'2026-10-08',endsOn:'2026-10-10',evidence:'Fila 1 del archivo sintético',uncertainty:''}],warnings:[],failure:null,createdAt:'2026-10-06T00:00:00Z',updatedAt:'2026-10-06T00:00:00Z',decision:null};
  await page.setRequestInterception(true);page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(!url.pathname.startsWith('/api/'))return request.continue();requests.push({method:request.method(),path:url.pathname,query:url.search});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');let body,status=200;
-  if(url.pathname==='/api/identity/workspace'){assert.equal(request.method(),'GET');if(!url.search)body={scope,organizationName:'Empresa sintética de navegación de importación',role:'DIRECTOR',roleLabel:'Director de obra',canManageIntegrations:false,canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[baseTask()],totalTasks:1,nextCursor:null};}}
+  if(url.pathname==='/api/identity/workspace'){assert.equal(request.method(),'GET');if(!url.search)body={scope,organizationName:'Empresa sintética de navegación de importación',role:'DIRECTOR',roleLabel:'Director de obra',canManageIntegrations:false,canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Director de obra',canPlanSchedule:true,tasks:[baseTask()],totalTasks:1,nextCursor:null};}}
   else if(url.pathname==='/api/identity/project-preparation'){assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');body=projectPreparationSnapshot({scope,projectId:'p-a',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:'Obra de prueba A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'p-a'});}
   else{assert.equal(url.pathname,'/api/identity/plan-import');if(request.method()==='GET'){assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.has('operationId'),false,'Navigation never consults an uncertain reference automatically');if(url.searchParams.has('draftId')){assert.equal(url.searchParams.get('draftId'),draft.id);body={scope,projectId:'p-a',draft};}else body={scope,projectId:'p-a',canApprove:true,drafts:[draft],truncated:false};}else{assert.ok(uncertain);assert.equal(request.method(),'POST');const input=JSON.parse(request.postData());posts.push(input);assert.equal(posts.length,1);assert.equal(input.action,'APPLY');assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');assert.equal(input.draftId,draft.id);assert.equal(input.expectedRevision,3);assert.equal(input.reason,'Correcciones sintéticas conservadas al navegar.');assert.equal(input.rows[0].title,'Fundaciones corregidas para revisión');status=503;body={code:'PLAN_IMPORT_UNCONFIRMED'};}}
   await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
  }catch(error){pageErrors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
  try{
-  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false');await showWorkspaceSection(page,'schedule-title');await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tareas');await click(page,'Para revisar · 2026-10-06 · 1 tareas');await waitText(page,'Compará cada fila con el archivo');
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false');await showWorkspaceSection(page,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tareas');await click(page,'Para revisar · 2026-10-06 · 1 tareas');await waitText(page,'Compará cada fila con el archivo');
   await page.$eval('[data-plan-import] fieldset input:not([type])',node=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,'Fundaciones corregidas para revisión');node.dispatchEvent(new Event('input',{bubbles:true}));});await page.$$eval('[data-plan-import] fieldset input[type=date]',nodes=>{const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;for(const [index,node] of nodes.entries()){setter.call(node,index?'2026-10-13':'2026-10-12');node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));}});await page.type('[data-plan-import] textarea','Correcciones sintéticas conservadas al navegar.');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();
   if(uncertain){await click(page,'Aplicar 1 tareas');await waitText(page,'La confirmación no llegó.');assert.equal(posts.length,1);}else assert.equal(posts.length,0);
   await page.waitForNetworkIdle({idleTime:100,timeout:15000});const referencesBefore=await page.evaluate(value=>window.__workspaceReferences(value),scope);if(uncertain){assert.equal(referencesBefore.length,1);assert.equal(referencesBefore[0].resource,'plan-import');assert.equal(referencesBefore[0].operationId,posts[0].operationId);}else assert.deepEqual(referencesBefore,[]);
@@ -148,7 +148,7 @@ async function scenario(mode,width=390){
    }else{
     const projectId=url.searchParams.get('projectId');assert.equal(url.searchParams.get('scope'),scope);
     if(mode==='race'&&projectId==='p-a')await new Promise(resolve=>setTimeout(resolve,600));
-    body={scope,project:{id:projectId,name:projectId==='p-b'?'Obra de prueba B':'Obra de prueba A'},canPlanSchedule:mode!=='readonly',tasks:mode==='empty'?[]:[projectId==='p-b'?{...baseTask(),id:'task-b',title:'Tarea visible de la última obra'}:baseTask()],totalTasks:mode==='empty'?0:1,nextCursor:null};
+    body={scope,project:{id:projectId,name:projectId==='p-b'?'Obra de prueba B':'Obra de prueba A',status:'ACTIVE'},roleLabel:mode==='readonly'?'Auditor':'Jefe de obra',canPlanSchedule:mode!=='readonly',tasks:mode==='empty'?[]:[projectId==='p-b'?{...baseTask(),id:'task-b',title:'Tarea visible de la última obra'}:record?.task||baseTask()],totalTasks:mode==='empty'?0:1,nextCursor:null};
    }
    await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){if(!request.isInterceptResolutionHandled()){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}}
@@ -163,7 +163,7 @@ async function scenario(mode,width=390){
  }
  await showWorkspaceSection(page,'schedule-title');
  if(mode==='empty'){await waitText(page,'no tiene tareas registradas');assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);checks.push('empty-project-does-not-create-tasks-or-gantt-bars');await context.close();return;}
- await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');
+ await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Horizontal overflow at '+width);
  assert.ok((await text(page)).includes('37 %'));
   if(mode==='readonly'){assert.equal(await page.$$eval('button',nodes=>nodes.filter(node=>node.textContent==='Planificar fechas').length),0);checks.push('read-only-role-has-no-schedule-write-control');const before=requests.length;await click(page,'Meses');await page.waitForFunction(()=>document.querySelector('[data-gantt-scroll]').dataset.ganttScale==='MONTHS');assert.equal(requests.length,before);assert.equal(posts.length,0);checks.push('read-only-gantt-zoom-is-local-without-business-write-'+width);await context.close();return;}
@@ -218,7 +218,8 @@ async function scheduleConflictScenario(mode,width=390){
  const project={id:'p-a',name:'Obra de conflicto sintética',status:'ACTIVE'},target={...baseTask(),id:'task-z',title:'Tarea de segunda página'};
  const firstRevision='2026-10-01T10:00:00.123456',secondRevision='2026-10-02T10:00:00.123456';
  let currentTask={...target,title:'Título vigente de la tarea consultada',startsOn:'2026-10-02',endsOn:'2026-10-06',revision:firstRevision,...(mode==='get-failed'?{status:'EN_PROCESO',progress:37.5}:{})};
- const posts=[],directedReads=[],receiptReads=[];let applications=0;
+ const initialPage=[baseTask(),...Array.from({length:99},(_,index)=>({...baseTask(),id:'task-b-'+String(index).padStart(3,'0'),title:'Partida anterior de la página '+index}))],pageCursor=initialPage.at(-1).id;
+ const posts=[],directedReads=[],receiptReads=[],pageReadLedger=[];let applications=0,savedTask=null,pageReadPhase='INITIAL',explicitCursorPending=false;
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
@@ -232,7 +233,7 @@ async function scheduleConflictScenario(mode,width=390){
     if(mode==='retry-conflict'&&posts.length===1){assert.equal(p.expectedRevision,revision);status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED',saved:false};}
     else if(posts.length===(mode==='retry-conflict'?2:1)){assert.equal(p.expectedRevision,revision);status=409;body={code:'SCHEDULE_REVISION_CHANGED',saved:false};}
     else if(mode==='changed-again'&&posts.length===2){assert.equal(p.expectedRevision,firstRevision);currentTask={...currentTask,startsOn:'2026-10-03',endsOn:'2026-10-08',revision:secondRevision};status=409;body={code:'SCHEDULE_REVISION_CHANGED',saved:false};}
-    else{assert.equal(p.expectedRevision,currentTask.revision);applications++;body={scope,saved:true,replayed:false,task:{...currentTask,startsOn:p.startsOn,endsOn:p.endsOn,revision:'2026-10-03T10:00:00.123456'},receipt:{id:'workspace_schedule_'+'b'.repeat(64),taskId:target.id,recordedAt:'2026-10-03T10:00:00.123456',before:{startsOn:currentTask.startsOn,endsOn:currentTask.endsOn},after:{startsOn:p.startsOn,endsOn:p.endsOn}}};}
+    else{assert.equal(p.expectedRevision,currentTask.revision);applications++;body={scope,saved:true,replayed:false,task:{...currentTask,startsOn:p.startsOn,endsOn:p.endsOn,revision:'2026-10-03T10:00:00.123456'},receipt:{id:'workspace_schedule_'+'b'.repeat(64),taskId:target.id,recordedAt:'2026-10-03T10:00:00.123456',before:{startsOn:currentTask.startsOn,endsOn:currentTask.endsOn},after:{startsOn:p.startsOn,endsOn:p.endsOn}}};savedTask=body.task;}
    }else if(url.searchParams.has('taskId')){
     assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','taskId']);assert.equal(url.searchParams.get('projectId'),project.id);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('taskId'),target.id);directedReads.push(url.search);
     if(mode==='get-failed'&&directedReads.length===1){status=503;body={saved:false,code:'WORKSPACE_OPERATION_UNCONFIRMED'};}
@@ -243,12 +244,13 @@ async function scheduleConflictScenario(mode,width=390){
     receiptReads.push(url.search);assert.equal(mode,'retry-conflict');assert.equal(url.searchParams.get('operationId'),posts[0].operationId);body={scope,state:'NOT_OBSERVED',definitive:false};
    }else if(url.searchParams.get('portfolio')==='1')body={scope,organizationName:'Empresa sintética de conflicto',role:'SITE_MANAGER',projects:[],nextCursor:null};
    else if(!url.search)body={scope,organizationName:'Empresa sintética de conflicto',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,canManageIntegrations:false,projects:[project],projectsTruncated:false};
-   else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),project.id);body={scope,project,canPlanSchedule:true,tasks:url.searchParams.has('afterTask')?[target]:[baseTask()],totalTasks:2,nextCursor:url.searchParams.has('afterTask')?null:'task-a'};}
+   else{assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),project.id);const cursor=url.searchParams.get('afterTask');assert.ok(cursor===null||cursor===pageCursor);assert.deepEqual([...url.searchParams.keys()].sort(),cursor?['afterTask','projectId','scope']:['projectId','scope']);const kind=cursor&&explicitCursorPending?'EXPLICIT_CURSOR':cursor?'RETAINED_CURSOR':'BASE';if(kind==='EXPLICIT_CURSOR')explicitCursorPending=false;pageReadLedger.push({phase:pageReadPhase,kind,query:url.search});body={scope,project,roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:cursor?[savedTask||target]:initialPage,totalTasks:101,nextCursor:cursor?null:pageCursor};}
    await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){pageErrors.push({mode:'schedule-conflict-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
+ const closeScenario=async()=>{writeFileSync(path.join(evidence,'workspace-conflict-page-ledger-'+mode+'-'+width+'.json'),JSON.stringify({mode,width,pageReadLedger,directedReads,receiptReads,posts:posts.length},null,2));await context.close();};
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,project.name);await click(page,project.name+'Abrir obra');
- await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,target.title);await showWorkspaceSection(page,'schedule-title');await fill(page,target.id);
+ await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});pageReadPhase='EXPLICIT_APPEND';explicitCursorPending=true;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,target.title);await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(explicitCursorPending,false);assert.equal(pageReadLedger.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);pageReadPhase='DIRECTED_REVIEW';await showWorkspaceSection(page,'schedule-title');await fill(page,target.id);
  const marker={operationId:'22222222-2222-4222-8222-222222222222',projectId:project.id,scope,title:'Histórico sintético que no debe borrarse',startsOn:'',endsOn:''};
  await page.evaluate(body=>window.__prepareWorkspaceReference(body),marker);
  const references=()=>page.evaluate(value=>window.__workspaceReferences(value),scope),history=await references();assert.equal(history.length,1);assert.equal(history[0].operationId,marker.operationId);
@@ -261,7 +263,7 @@ async function scheduleConflictScenario(mode,width=390){
  }else await waitText(page,'La tarea cambió antes de guardar');
  const rejectedPosts=posts.length;assert.equal(applications,0);await preserved();assert.deepEqual(await references(),history);assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);assert.equal(directedReads.length,0);
  if(mode==='unmount-token'){
-  await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Consultar revisión actual');await page.waitForFunction(()=>typeof window.__resolveToken==='function');await click(page,'Desmontar ensayo');await waitText(page,'Ensayo desmontado');await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});await page.waitForFunction(()=>window.__guideObservation===null);assert.equal(directedReads.length,0);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-unmounted-token-cannot-query-or-restore-draft-'+width);await context.close();return;
+  await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Consultar revisión actual');await page.waitForFunction(()=>typeof window.__resolveToken==='function');await click(page,'Desmontar ensayo');await waitText(page,'Ensayo desmontado');await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});await page.waitForFunction(()=>window.__guideObservation===null);assert.equal(directedReads.length,0);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-unmounted-token-cannot-query-or-restore-draft-'+width);await closeScenario();return;
  }
  async function consult(expectedStatus=200,expectedRevision=firstRevision){
   const pending=page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/workspace'&&response.request().method()==='GET'&&url.searchParams.get('projectId')===project.id&&url.searchParams.get('scope')===scope&&url.searchParams.get('taskId')===target.id&&url.searchParams.size===3;},{timeout:15000});
@@ -273,12 +275,12 @@ async function scheduleConflictScenario(mode,width=390){
  }
  const status=mode==='get-failed'?503:mode==='missing'?404:mode==='denied-401'?401:mode==='denied-403'?403:200;
  await consult(status);
- if(mode==='denied-401'||mode==='denied-403'){assert.ok(!(await text(page)).includes(target.title));assert.ok(!(await text(page)).includes('Reprogramación revisada en reunión de obra.'));assert.equal(applications,0);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-hides-private-draft-without-clearing-history-'+width);await context.close();return;}
+ if(mode==='denied-401'||mode==='denied-403'){assert.ok(!(await text(page)).includes(target.title));assert.ok(!(await text(page)).includes('Reprogramación revisada en reunión de obra.'));assert.equal(applications,0);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-hides-private-draft-without-clearing-history-'+width);await closeScenario();return;}
  await preserved();
  if(mode==='missing'||mode.startsWith('foreign-')||mode==='read-only'){
   assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);assert.equal(await page.$(editor+' input[type="checkbox"]'),null);assert.equal(applications,0);
   if(mode.startsWith('foreign-'))assert.ok(!(await text(page)).includes('Título vigente de la tarea consultada'));
-  await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector),{},editor);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-keeps-draft-blocks-post-and-allows-explicit-cancel-'+width);await context.close();return;
+  await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector),{},editor);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-keeps-draft-blocks-post-and-allows-explicit-cancel-'+width);await closeScenario();return;
  }
  if(mode==='get-failed'){assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);await consult();await preserved();}
  assert.equal(await page.$eval(editor+' input[type="checkbox"]',node=>node.checked),false);assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);assert.ok((await page.$eval('[data-schedule-conflict]',node=>node.innerText)).includes('2026-10-02 → 2026-10-06'));
@@ -290,18 +292,18 @@ async function scheduleConflictScenario(mode,width=390){
   await page.click(editor+' input[type="checkbox"]');await page.waitForFunction(selector=>!document.querySelector(selector+' button[type="submit"]').disabled,{},editor);await click(page,'Confirmar planificación');
  }
  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(applications,1);assert.equal(posts.length,mode==='changed-again'||mode==='retry-conflict'?3:2);assert.equal(posts.at(-1).expectedRevision,mode==='changed-again'?secondRevision:firstRevision);assert.notEqual(posts.at(-1).operationId,posts[0].operationId);assert.deepEqual(await references(),history);assert.equal(await page.$(editor),null);const targetProgress=await page.$eval('[data-task-id="task-z"]',node=>({text:node.innerText,bars:[...node.querySelectorAll('[role="progressbar"]')].map(bar=>Number(bar.getAttribute('aria-valuenow')))}));if(mode==='get-failed'){assert.deepEqual(targetProgress.bars,[]);assert.ok(targetProgress.text.includes('Requiere revisión'));}else assert.deepEqual(targetProgress.bars,[currentTask.progress]);assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',node=>Number(node.getAttribute('aria-valuenow'))),37);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- checks.push('schedule-conflict-'+mode+'-later-page-directed-get-preserves-draft-requires-new-review-and-keeps-history-'+width);await context.close();
+ checks.push('schedule-conflict-'+mode+'-later-page-directed-get-preserves-draft-requires-new-review-and-keeps-history-'+width);await closeScenario();
 }
 async function navigationScenario(role,width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'navigation-'+role,width,message:error.message}));
- const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0;
+ const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0,phase='INITIAL';
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
    if(!url.pathname.startsWith('/api/'))return request.continue();
-   requests.push({method:request.method(),path:url.pathname,query:url.search});
+   requests.push({method:request.method(),path:url.pathname,query:url.search,phase});
    if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Navigation must not mutate a business record');}
    assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
    if(await respondClosedCompanySubscription(request,{origin,scope,authorization:'Bearer synthetic-active-tab-A',allowed:administrator,reads:subscriptionReads}))return;
@@ -318,7 +320,7 @@ async function navigationScenario(role,width){
    if(url.pathname==='/api/identity/participants'){assert.equal(++participantReads,1);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify({scope,projectId:'p-a',canManage:administrator,canInvite:administrator,canManageOfficeRoles:administrator,existingAccounts:[],records:[],privacyNotice:{version:'synthetic-navigation-notice',text:'Ensayo sin documentos ni permisos reales'}})});return;}
    assert.equal(url.pathname,'/api/identity/workspace');
    const tasks=Array.from({length:25},(_,index)=>index===0?baseTask():{...baseTask(),id:'task-nav-'+index,title:'Tarea de ensayo '+index});
-   const body=!url.search?{scope,organizationName:'Empresa de ensayo de navegación',role,roleLabel:administrator?'Administrador':'Auditor',canManageIntegrations:administrator,canPlanSchedule:administrator,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false}:{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:administrator,tasks,totalTasks:tasks.length,nextCursor:null};
+   const body=!url.search?{scope,organizationName:'Empresa de ensayo de navegación',role,roleLabel:administrator?'Administrador':'Auditor',canManageIntegrations:administrator,canPlanSchedule:administrator,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false}:{scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:administrator?'Administrador':'Auditor',canPlanSchedule:administrator,tasks,totalTasks:tasks.length,nextCursor:null};
    await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){pageErrors.push({mode:'navigation-'+role,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
@@ -328,16 +330,17 @@ async function navigationScenario(role,width){
  await page.waitForSelector(workspaceNav);
  const nav=workspaceNav;
  if(administrator){await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false');assert.equal(preparationReads,1);}else{assert.equal(preparationReads,0);assert.equal(await page.$('section[aria-labelledby="project-preparation-title"]'),null);}
- await showGuide(page);assert.ok(await page.$('#onboarding-guide-title'));
+ await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});await showGuide(page);assert.ok(await page.$('#onboarding-guide-title'));
  const expected=['workspace-home-title','schedule-title','field-title','inventory-title','participant-title','worker-channel-title','workspace-recovery-title',...(administrator?['project-preparation-title','project-creation-title','site-register-title','purchase-title','own-company-number-title','own-company-templates-title','company-channel-title','customer-whatsapp-title','customer-meta-title','customer-inbox-title','template-send-title','constructor-crm-title','demo-pilot-title','operation-status-title','office-review-admin-title','company-subscription-title']:[])];
  const anchors=await page.$$eval(nav+' a[href^="#"]',elements=>elements.map(element=>element.hash.slice(1)));
  assert.deepEqual([...new Set(anchors)].sort(),expected.sort());
  assert.equal(await page.$eval(nav,element=>[...element.querySelectorAll('a[href^="#"]')].every(link=>document.getElementById(link.hash.slice(1)))),true);
  await narrowToolsBeforeOriginalTraversal(page,width,requests,posts);
  const groups=await page.$$(nav+' details');if(width>=1100){for(const group of groups){assert.ok(await group.$eval('summary',element=>element.getBoundingClientRect().height>=44));if(!await group.evaluate(element=>element.open))await page.locator(nav+' details summary').click();}}else assert.ok(await page.$eval(nav+' select',element=>element.getBoundingClientRect().height>=44));
- const initialRequestCount=requests.length,initialFormCount=await page.$$eval('form',elements=>elements.length);
- for(const id of expected){await showWorkspaceSection(page,id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}
- await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);
+ const projectRead=row=>{if(row.path!=='/api/identity/workspace'||!row.query)return false;const url=new URL(origin+row.path+row.query);assert.equal(row.method,'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');return true;};const nonProjectReads=()=>requests.filter(row=>!projectRead(row));
+ const initialRequestCount=nonProjectReads().length,initialFormCount=await page.$$eval('form',elements=>elements.length);
+ phase='NAVIGATION_TRAVERSAL';for(const id of expected){await showWorkspaceSection(page,id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}
+ await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(nonProjectReads().length,initialRequestCount+participantReads);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);
  if(width<1100){await showWorkspaceSection(page,'workspace-home-title');await page.focus(nav+' select');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');}else{const keyboard=await page.$(nav+' a[href="#schedule-title"]');await keyboard.focus();await page.keyboard.press('Enter');}await page.waitForFunction(()=>document.activeElement.id==='schedule-title');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  checks.push('navigation-authorized-canonical-destinations-keyboard-no-requests-'+role+'-'+width);
@@ -353,7 +356,7 @@ async function navigationScenario(role,width){
   await page.locator(nav+' a[href="#schedule-edit-title"]').click();await page.waitForFunction(()=>document.activeElement.id==='schedule-edit-title',{timeout:15000});
   assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-edit-title');
   assert.equal(await page.$eval('textarea',element=>element.value),'Planificación de ensayo que debe conservarse.');
-  assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);
+  assert.equal(nonProjectReads().length,initialRequestCount+participantReads);assert.equal(posts.length,0);
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(button=>button.textContent==='Actualizar'||button.textContent.includes('Obra de prueba B')).every(button=>button.disabled)));
   await assertClosedPendingNavigation(page,width,'schedule-edit-title',requests,posts);
   checks.push('long-schedule-editor-focus-and-pending-navigation-preserve-draft-'+width);
@@ -363,7 +366,7 @@ async function navigationScenario(role,width){
   assert.equal(await page.$(nav+' a[href="#schedule-edit-title"]'),null);
   assert.equal(posts.length,0);checks.push('cancel-clears-pending-navigation-without-mutation-'+width);
  }
- await context.close();
+ writeFileSync(path.join(evidence,'workspace-navigation-request-ledger-'+role+'-'+width+'.json'),JSON.stringify({role,width,requests,posts:posts.length,participantReads,preparationReads},null,2));await context.close();
 }
 const workbenchControl={search:'input[aria-label="Buscar tareas"]',status:'select[aria-label="Estado de las tareas"]',planning:'select[aria-label="Planificación de las tareas"]',order:'select[aria-label="Orden de las tareas"]'};
 const workbenchTasks=()=>[
@@ -386,7 +389,7 @@ async function workbenchScenario(width){
   try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
    if(!url.pathname.startsWith('/api/'))return request.continue();
-   requests.push({method:request.method(),path:url.pathname,query:url.search});
+   requests.push({method:request.method(),path:url.pathname,query:url.search,phase});
    if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Schedule filters must not mutate a business record');}
    assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
    let body;
@@ -401,7 +404,7 @@ async function workbenchScenario(width){
      assert.equal(cursor,'controlled-page-2');
      tasks=[{...workbenchTasks()[0],progress:41,revision:'2026-10-02T10:00:00.654321'},{...baseTask(),id:'wb-page-two-match',title:'Mampostería acceso',progress:15,startsOn:'2026-09-28',endsOn:'2026-10-02'},{...baseTask(),id:'wb-page-two-other',title:'Zanjeo del perímetro',status:'BACKLOG',progress:0,startsOn:'2026-10-15',endsOn:'2026-10-20'}];totalTasks=8;nextCursor=null;
     }else{tasks=workbenchTasks();totalTasks=8;nextCursor='controlled-page-2';}
-    body={scope,project:{id:projectId,name:projectId==='p-a'?'Obra de prueba A':'Obra de prueba B'},canPlanSchedule:true,tasks,totalTasks,nextCursor};
+    body={scope,project:{id:projectId,name:projectId==='p-a'?'Obra de prueba A':'Obra de prueba B',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks,totalTasks,nextCursor};
    }
    await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){pageErrors.push({mode,width,phase,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
@@ -411,8 +414,11 @@ async function workbenchScenario(width){
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
   await showWorkspaceSection(page,'schedule-title');
   await page.waitForSelector('[data-schedule-workbench]');await waitWorkbenchTasks(page,workbenchTasks().map(task=>task.id));
+  await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});
   const initialRequests=requests.length;
-  const assertLocalControls=()=>{assert.equal(requests.length,initialRequests);assert.equal(posts.length,0);};
+  // These six deliberately malformed/legacy rows test defensive rendering.
+  // Their background read is rejected; it must not silently sanitize the UI.
+  const assertLocalControls=()=>{assert.equal(posts.length,0);assert.equal(requests.filter(row=>new URL(origin+row.path+row.query).searchParams.has('afterTask')).length,0);assert.ok(requests.slice(initialRequests).every(row=>{const url=new URL(origin+row.path+row.query);return row.method==='GET'&&url.searchParams.get('projectId')==='p-a'&&url.searchParams.get('scope')===scope&&[...url.searchParams.keys()].sort().join('|')==='projectId|scope';}),'Only the unchanged-context background base GET may overlap local controls');};
   assert.equal(await page.$eval(workbenchControl.search,element=>element.type),'search');
   for(const [control,values] of [['status',['ALL','BACKLOG','IN_PROGRESS','DONE','BLOCKED','UNRECOGNIZED']],['planning',['ALL','VALID','MISSING','INVALID']],['order',['REGISTERED','START_ASC','TITLE_ASC']]])assert.deepEqual((await page.$$eval(workbenchControl[control]+' option',elements=>elements.map(element=>element.value))).sort(),values.sort());
   await waitText(page,'Mostrando 6 de 6 tareas cargadas');
@@ -469,7 +475,7 @@ async function workbenchScenario(width){
   await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await waitWorkbenchTasks(page,['wb-mamp-a']);
    assert.deepEqual(await page.$$eval('[data-gantt-task-id]',elements=>elements.map(element=>element.dataset.ganttTaskId)),['wb-mamp-a']);
   await page.select(workbenchControl.order,'START_ASC');assertLocalControls();await waitText(page,'Mostrando 1 de 6 tareas cargadas');
-  checks.push('workbench-accent-insensitive-search-combined-filters-no-requests-'+width);
+  checks.push('workbench-accent-insensitive-search-combined-filters-no-business-write-'+width);
 
   phase='no-matches-and-keyboard-clear';await searchWorkbench(page,'tarea que no existe');await waitWorkbenchTasks(page,[]);await waitText(page,'Mostrando 0 de 6 tareas cargadas');
   await page.evaluate(()=>[...document.querySelectorAll('[data-schedule-workbench] button')].find(button=>button.textContent.trim()==='Limpiar filtros').focus());await page.keyboard.press('Enter');
@@ -503,16 +509,16 @@ async function workbenchScenario(width){
 
   phase='pagination-with-filters';await click(page,'Limpiar filtros');await searchWorkbench(page,'mamposteria');await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await page.select(workbenchControl.order,'START_ASC');await waitWorkbenchTasks(page,['wb-mamp-a']);assertLocalControls();
   await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitWorkbenchTasks(page,['wb-page-two-match','wb-mamp-a']);
-  assert.equal(requests.length,initialRequests+1);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('afterTask'),'controlled-page-2');assert.equal(posts.length,0);
+  const cursorReads=requests.filter(row=>new URL(origin+row.path+row.query).searchParams.has('afterTask'));assert.equal(cursorReads.length,1);assert.equal(cursorReads[0].phase,'pagination-with-filters');assert.equal(new URL(origin+cursorReads[0].path+cursorReads[0].query).searchParams.get('afterTask'),'controlled-page-2');assert.equal(posts.length,0);
   assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'mamposteria');for(const [control,value] of [['status','IN_PROGRESS'],['planning','VALID'],['order','START_ASC']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);
   await waitText(page,'Mostrando 2 de 8 tareas cargadas');assert.equal(await page.$$eval('[data-task-id="wb-mamp-a"]',elements=>elements.length),1);assert.match(await page.$eval('[data-task-id="wb-mamp-a"]',element=>element.innerText),/41 %/);
    assert.match(await page.$eval('[data-gantt-task-id="wb-mamp-a"]',element=>element.innerText),/41 % registrado/);
-  await click(page,'Limpiar filtros');assert.equal((await workbenchTaskIds(page)).length,8);assert.equal(new Set(await workbenchTaskIds(page)).size,8);assert.equal(requests.length,initialRequests+1);
+  await click(page,'Limpiar filtros');assert.equal((await workbenchTaskIds(page)).length,8);assert.equal(new Set(await workbenchTaskIds(page)).size,8);assert.equal(requests.filter(row=>new URL(origin+row.path+row.query).searchParams.has('afterTask')).length,1);
   checks.push('workbench-pagination-keeps-filters-and-merges-canonical-task-id-'+width);
 
   phase='project-reset';await searchWorkbench(page,'mamposteria');await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await page.select(workbenchControl.order,'TITLE_ASC');
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba B')).click());await waitWorkbenchTasks(page,['wb-project-b']);
-  assert.equal(requests.length,initialRequests+2);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('projectId'),'p-b');assert.equal(posts.length,0);assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'');
+  await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});const projectBReads=requests.filter(row=>new URL(origin+row.path+row.query).searchParams.get('projectId')==='p-b');assert.equal(projectBReads.length,2,'Explicit project reset and its confirmed background read');assert.ok(projectBReads.every(row=>row.phase==='project-reset'&&new URL(origin+row.path+row.query).searchParams.get('scope')===scope&&!new URL(origin+row.path+row.query).searchParams.has('afterTask')));assert.equal(posts.length,0);assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'');
   for(const [control,value] of [['status','ALL'],['planning','ALL'],['order','REGISTERED']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);
   await waitText(page,'Mostrando 1 de 1 tareas cargadas');assert.match(await page.$eval('#schedule-overview-title',element=>element.parentElement.innerText),/parcial/i);
    assert.equal(await page.$eval('[data-gantt-scroll]',element=>element.dataset.ganttScale),'WEEKS');assert.match(await page.$eval('[data-schedule-gantt]',element=>element.innerText),/Vista parcial/);
@@ -527,43 +533,74 @@ async function workbenchScenario(width){
   writeFileSync(path.join(evidence,'workspace-workbench-failure-'+width+'.json'),JSON.stringify({status:'FAILED',phase,width,message:error.message,requests,postCount:posts.length,body:await text(page).catch(()=>null)},null,2));throw error;
  }finally{await context.close();}
 }
+async function workbenchCanonicalPaginationScenario(width){
+ const mode='workbench-canonical-pagination',context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000,hasTouch:width<768});
+ const tasks=Array.from({length:102},(_,index)=>({...baseTask(),id:'canonical-'+String(index).padStart(3,'0'),title:index===10||index===100?'Mampostería canónica '+index:'Otra partida '+index,progress:index%100,startsOn:'2026-10-01',endsOn:'2026-10-05'}));
+ const cursor=tasks[99].id,requests=[],posts=[];let phase='INITIAL',manualCursorPending=false;
+ page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));await page.setRequestInterception(true);
+ page.on('request',async request=>{try{
+  const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}if(!url.pathname.startsWith('/api/'))return request.continue();
+  assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');if(request.method()!=='GET')posts.push(request.postData());assert.equal(request.method(),'GET','Canonical pagination and filters never write');
+  let body,kind='ACCOUNT';if(!url.search)body={scope,organizationName:'Empresa de paginación canónica',role:'AUDITOR',roleLabel:'Auditor',canPlanSchedule:false,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};
+  else{
+   assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterTask')?['afterTask','projectId','scope']:['projectId','scope']);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);
+   const after=url.searchParams.get('afterTask');assert.ok(after===null||after===cursor);kind=after===null?'BASE':manualCursorPending?'EXPLICIT_CURSOR':'RETAINED_CURSOR';if(kind==='EXPLICIT_CURSOR')manualCursorPending=false;
+   body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Auditor',canPlanSchedule:false,tasks:after?tasks.slice(100):tasks.slice(0,100),totalTasks:102,nextCursor:after?null:cursor};
+  }
+  requests.push({method:request.method(),path:url.pathname,query:url.search,phase,kind});await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+ }catch(error){pageErrors.push({mode,width,phase,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de paginación canónica');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});
+  assert.equal(requests.filter(row=>row.kind==='ACCOUNT').length,1);assert.equal(requests.filter(row=>row.kind==='BASE').length,2,'Explicit project selection plus its confirmed initial background read');assert.equal(requests.filter(row=>row.kind.includes('CURSOR')).length,0);assert.equal(posts.length,0);
+  phase='LOCAL_FILTER';await searchWorkbench(page,'mamposteria');await waitWorkbenchTasks(page,['canonical-010']);await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await page.select(workbenchControl.order,'START_ASC');assert.equal(requests.filter(row=>row.kind.includes('CURSOR')).length,0);assert.equal(posts.length,0);
+  phase='EXPLICIT_APPEND';manualCursorPending=true;await click(page,'Cargar más tareas');await waitWorkbenchTasks(page,['canonical-010','canonical-100']);await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});
+  assert.equal(manualCursorPending,false);assert.equal(requests.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);const append=requests.filter(row=>row.phase==='EXPLICIT_APPEND').map(row=>row.kind);assert.equal(append[0],'EXPLICIT_CURSOR');assert.ok(append.slice(1).every((kind,index)=>kind===(index%2===0?'BASE':'RETAINED_CURSOR')),'Every later cursor must follow a same-scope retained-page base read, never a second explicit append');assert.equal(append.length%2,1);
+  assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'mamposteria');for(const [control,value]of [['status','IN_PROGRESS'],['planning','VALID'],['order','START_ASC']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);await waitText(page,'Mostrando 2 de 102 tareas cargadas');assert.equal(posts.length,0);
+  phase='CLEAR_FILTERS';await click(page,'Limpiar filtros');await waitWorkbenchTasks(page,tasks.map(task=>task.id));assert.equal(new Set(await workbenchTaskIds(page)).size,102);assert.equal(await page.$$eval('[data-gantt-task-id]',elements=>elements.length),102);assert.equal(await page.$('#schedule-load-more'),null);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  checks.push({mode,width,firstPage:100,loaded:102,canonicalCursor:cursor,nativeCurrentBeforeAppend:true,nativeCurrentAfterAppend:true,requests,posts:posts.length});
+ }catch(error){writeFileSync(path.join(evidence,'workspace-canonical-pagination-failure-'+width+'.json'),JSON.stringify({mode,width,phase,requests,posts:posts.length,message:error.message},null,2));throw error;}finally{await context.close();}
+}
+
 async function ganttVolumeScenario(width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000,hasTouch:width<768});
- const mode='gantt-volume',requests=[],posts=[];page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const mode='gantt-volume',requests=[],posts=[];let phase='INITIAL',manualCursorPending=null;page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const tasks=Array.from({length:240},(_,index)=>({...baseTask(),id:'volume-'+String(index).padStart(3,'0'),title:'Partida revisada '+(index+1),progress:index%101,startsOn:'2000-01-01',endsOn:'2100-12-31'}));
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
    if(!url.pathname.startsWith('/api/'))return request.continue();
-   requests.push({method:request.method(),path:url.pathname,query:url.search});
+   const after=url.searchParams.get('afterTask'),kind=!url.search?'ACCOUNT':after===null?'BASE':manualCursorPending===after?'EXPLICIT_CURSOR':'RETAINED_CURSOR';if(kind==='EXPLICIT_CURSOR')manualCursorPending=null;requests.push({method:request.method(),path:url.pathname,query:url.search,phase,kind});
    if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Gantt volume navigation must not mutate a business record');}
    assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
    let body;
    if(!url.search)body={scope,organizationName:'Empresa de volumen sintético',role:'AUDITOR',roleLabel:'Auditor',canPlanSchedule:false,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};
    else{
     assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);
-    const cursor=url.searchParams.get('afterTask');assert.ok([null,'volume-page-2','volume-page-3'].includes(cursor));
-    const start=cursor==='volume-page-2'?100:cursor==='volume-page-3'?200:0;
-    body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:false,tasks:tasks.slice(start,start+100),totalTasks:300,nextCursor:start===0?'volume-page-2':start===100?'volume-page-3':null};
+    const cursor=url.searchParams.get('afterTask');assert.ok([null,tasks[99].id,tasks[199].id].includes(cursor));
+    const start=cursor===tasks[99].id?100:cursor===tasks[199].id?200:0;
+    // Deliberate partial-count case: a previously counted300 has240 rows left.
+    // Page shape/cursors remain canonical; the UI must keep its partial warning.
+    body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Auditor',canPlanSchedule:false,tasks:tasks.slice(start,start+100),totalTasks:300,nextCursor:start===0?tasks[99].id:start===100?tasks[199].id:null};
    }
    await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){pageErrors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
+ const assertVolumeReads=()=>{assert.equal(posts.length,0);assert.ok(requests.every(row=>row.method==='GET'&&row.path==='/api/identity/workspace'));assert.equal(requests.filter(row=>row.kind==='ACCOUNT').length,1);for(const [name,explicit,cycle]of [['INITIAL',null,['BASE','BASE']],['APPEND_100',tasks[99].id,['BASE','RETAINED_CURSOR']],['APPEND_200',tasks[199].id,['BASE','RETAINED_CURSOR','RETAINED_CURSOR']],['LOCAL_CONTROLS',null,['BASE','RETAINED_CURSOR','RETAINED_CURSOR']]]){const rows=requests.filter(row=>row.phase===name&&row.kind!=='ACCOUNT');if(name==='INITIAL'){assert.deepEqual(rows.map(row=>row.kind),cycle);continue;}if(explicit){assert.equal(rows[0]?.kind,'EXPLICIT_CURSOR');assert.equal(new URL(origin+rows[0].path+rows[0].query).searchParams.get('afterTask'),explicit);assert.equal(rows.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);}const background=explicit?rows.slice(1):rows;assert.equal(background.length%cycle.length,0,'Complete retained-page read cycles for '+name);assert.ok(background.every((row,index)=>row.kind===cycle[index%cycle.length]));for(const row of rows){const url=new URL(origin+row.path+row.query);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),row.kind==='BASE'?['projectId','scope']:['afterTask','projectId','scope']);}}};
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de volumen sintético');
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
-  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');
-  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');
-  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');
-  assert.equal(requests.length,4);assert.equal(posts.length,0);
+  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});
+  phase='APPEND_100';manualCursorPending=tasks[99].id;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(manualCursorPending,null);
+  phase='APPEND_200';manualCursorPending=tasks[199].id;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(manualCursorPending,null);
+  assertVolumeReads();assert.equal(posts.length,0);
   assert.equal(await page.$$eval('[data-gantt-task-id]',elements=>elements.length),240);
   assert.equal(await page.$$eval('[data-task-id]',elements=>elements.length),240);
   assert.match(await page.$eval('[data-schedule-gantt]',element=>element.innerText),/Vista parcial: sólo tareas cargadas/);
   assert.match(await page.$eval('#schedule-overview-title',element=>element.parentElement.innerText),/Resumen parcial/);
   assert.match(await page.$eval('[data-schedule-workbench]',element=>element.innerText),/240 de 300 tareas cargadas/);
   assert.equal(await page.$$eval('button',elements=>elements.filter(element=>element.textContent==='Planificar fechas').length),0);
-  for(const [label,scale,maxCells] of [['Días','DAYS',28],['Semanas','WEEKS',12],['Meses','MONTHS',12]]){
+  phase='LOCAL_CONTROLS';for(const [label,scale,maxCells] of [['Días','DAYS',28],['Semanas','WEEKS',12],['Meses','MONTHS',12]]){
    await click(page,label);await page.waitForFunction(expected=>document.querySelector('[data-gantt-scroll]').dataset.ganttScale===expected,{},scale);
    assert.equal(await page.$$eval('[data-gantt-axis] time',elements=>elements.length),maxCells);
    assert.equal(await page.$$eval('[data-gantt-planned]',elements=>elements.length),240);
@@ -579,41 +616,41 @@ async function ganttVolumeScenario(width){
   const last=await page.$eval('[data-gantt-task-id="volume-239"]',element=>({bottom:element.getBoundingClientRect().bottom,top:element.closest('[data-gantt-scroll]').getBoundingClientRect().top,height:element.closest('[data-gantt-scroll]').clientHeight}));
   assert.ok(last.bottom<=last.top+last.height+2);
   await (await page.$('[data-schedule-gantt]')).screenshot({path:path.join(evidence,'workspace-gantt-volume-'+width+'.png')});
-  assert.equal(requests.length,4);assert.equal(posts.length,0);
+  assertVolumeReads();assert.equal(posts.length,0);
   checks.push('gantt-240-paginated-rows-century-bounded-axis-all-zooms-contained-scroll-partial-readonly-'+width);
  }catch(error){await page.screenshot({path:path.join(evidence,'workspace-gantt-volume-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
  finally{await context.close();}
 }
 async function taskCreateScenario(mode){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});page.on('pageerror',error=>pageErrors.push({mode:'taskcreate-'+mode,width:390,message:error.message}));
- const posts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0;await page.setRequestInterception(true);
+ const posts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0,manualReadbackPending=false,phase='INITIAL';const scheduleReadLedger=[];await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
    if(!['/api/identity/workspace','/api/identity/task-creation'].includes(url.pathname))return request.continue();assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');let status=200,body;
    if(url.pathname==='/api/identity/workspace'){
     if(!url.search)body={scope,organizationName:'Organización de prueba sintética',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false};
-    else {assert.equal(url.searchParams.get('projectId'),'p-a');if(record)scheduleReadsAfterCommit++;body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:record?[baseTask(),record.task]:[baseTask()],totalTasks:record?2:1,nextCursor:null};}
+    else {assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);const kind=record&&manualReadbackPending?'CONFIRMED_CREATION_READBACK':'BACKGROUND_BASE';if(kind==='CONFIRMED_CREATION_READBACK'){scheduleReadsAfterCommit++;manualReadbackPending=false;}scheduleReadLedger.push({phase,kind,query:url.search});body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:record?[baseTask(),record.task]:[baseTask()],totalTasks:record?2:1,nextCursor:null};}
    }else if(request.method()==='POST'){
     const input=JSON.parse(request.postData());posts.push(input);assert.deepEqual(Object.keys(input).sort(),['operationId','projectId','scope','title','startsOn','endsOn'].sort());assert.equal(input.projectId,'p-a');assert.equal(input.scope,scope);assert.equal(input.title,'Tarea de ensayo recuperable');assert.equal(input.startsOn,'');assert.equal(input.endsOn,'');
     if(mode==='not-arrived'&&posts.length===1){await request.abort('failed');return;}
     else if(mode==='rollback'&&posts.length===1){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED'};}
-    else {applications++;record={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:{id:'new-task',title:input.title,status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:'2026-10-01T12:00:00.111111'}};body=record;if(mode==='uncertain'){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED'};}}
+    else {applications++;record={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:{id:'new-task',title:input.title,status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:'2026-10-01T12:00:00.111111'}};manualReadbackPending=true;body=record;if(mode==='uncertain'){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED'};}}
    }else {statusChecks++;assert.equal(url.searchParams.get('operationId'),posts[0].operationId);body=record?{...record,state:'RECORDED'}:{scope,state:'NOT_OBSERVED',definitive:false};}
    await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'no-store'}});
   }catch(error){pageErrors.push({mode:'taskcreate-'+mode,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
- await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('form input:not([type="date"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));
- if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled));assert.equal(posts.length,0);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');await context.close();return;}
- await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(posts.length,1);
+ await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});phase='CREATION_DRAFT';await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('form input:not([type="date"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));
+ if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled));assert.equal(posts.length,0);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');writeFileSync(path.join(evidence,'workspace-task-create-read-ledger-'+mode+'.json'),JSON.stringify({mode,scheduleReadLedger,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit},null,2));await context.close();return;}
+ phase='CREATION_COMMAND_AND_RECOVERY';await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(posts.length,1);
  assert.ok(!(await text(page)).includes('Reintentar la misma creación'));
  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));
  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>e.disabled)));await click(page,'Comprobar tarea');
  if(mode==='uncertain'){await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,1);checks.push('taskcreate-uncertain-commit-recovers-without-second-post');}
  else {await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(await page.$eval('form input',e=>e.value),'Tarea de ensayo recuperable');assert.ok(await page.$eval('form input',e=>e.disabled));await click(page,'Reintentar la misma creación');await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);checks.push('taskcreate-'+mode+'-checked-then-exact-retry-once');}
- await page.waitForSelector('[data-task-id="new-task"]');assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(scheduleReadsAfterCommit,1);assert.equal(await page.$$eval('[data-task-id="new-task"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));
+ await page.waitForSelector('[data-task-id="new-task"]');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(manualReadbackPending,false);assert.equal(scheduleReadLedger.filter(row=>row.kind==='CONFIRMED_CREATION_READBACK').length,1);assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(scheduleReadsAfterCommit,1);assert.equal(await page.$$eval('[data-task-id="new-task"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));
  const createdProgress=await page.$eval('[data-task-id="new-task"]',element=>({text:element.innerText.replace(/\s+/g,' '),bars:[...element.querySelectorAll('[role="progressbar"]')].map(bar=>bar.getAttribute('aria-valuenow'))}));assert.ok(createdProgress.text.includes('Avance registrado: 0 %'));assert.deepEqual(createdProgress.bars,['0']);
- assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));writeFileSync(path.join(evidence,'workspace-task-create-read-ledger-'+mode+'.json'),JSON.stringify({mode,scheduleReadLedger,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit},null,2));await context.close();
 }
 async function confirmedProgressScenario(mode,width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
@@ -622,7 +659,15 @@ async function confirmedProgressScenario(mode,width){
  const original={...baseTask(),revision:beforeRevision},created={id:'new-task',title:'Tarea de ensayo concurrente',status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:beforeRevision};
  const proposal={id:'proposal-a',taskId:original.id,workerId:'worker-a',summary:'Avance medido sintético',status:'PENDING',revision:planningMode?'2026-10-02T09:00:00.000011':'2026-10-02T09:00:00.000005',progress:50,quantity:null,baseline:null,unit:null,reason:'Medición sintética revisada.',evidenceIds:['evidence-a']};
  const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:planningMode?[]:[proposal],evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente sintética de la medición.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
- const posts=[];let creation=null,heldReadback=null,heldDecision=null,heldPlanning=null,readbackCount=0,preparationReads=0;
+ const padding=Array.from({length:98},(_,index)=>({...original,id:'task-b-'+String(index+1).padStart(3,'0'),title:'Tarea de paginación '+(index+1)})),tail={...created,id:'z-tail-task',title:'Última tarea autorizada'};
+ const posts=[],projectReads=[];let creation=null,heldReadback=null,heldDecision=null,heldPlanning=null,readbackCount=0,preparationReads=0,canonicalTask=original,phase='INITIAL',manualReadbackPending=false,manualCursorPending=false;
+ const markPhase=async value=>{phase=value;await page.evaluate(next=>{window.__confirmedProgressPhase=next;},value);};
+ const ordered=rows=>[...rows].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0),currentTasks=()=>planningMode?[canonicalTask]:ordered([canonicalTask,...padding,tail,...(creation?[created]:[])]);
+ const taskPage=(all,cursor=null)=>{const remaining=cursor?all.filter(task=>task.id>cursor):all,rows=remaining.slice(0,100);return {scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Director de obra',canPlanSchedule:true,tasks:rows,totalTasks:all.length,nextCursor:remaining.length>100?rows.at(-1).id:null};};
+ const noteRead=(url,kind,body)=>{projectReads.push({phase,kind,query:url.search,scope:url.searchParams.get('scope'),projectId:url.searchParams.get('projectId'),afterTask:url.searchParams.get('afterTask'),rows:body?.tasks.length??null,total:body?.totalTasks??null,nextCursor:body?.nextCursor??null,taskRevision:body?.tasks.find(task=>task.id===original.id)?.revision??null});};
+ const assertProjectReads=()=>{assert.equal(projectReads.filter(row=>row.kind==='MANUAL_READBACK').length,planningMode?0:1);assert.equal(projectReads.filter(row=>row.kind==='EXPLICIT_CURSOR').length,planningMode?0:1);let previous=null;for(const row of projectReads){assert.equal(row.scope,scope);assert.equal(row.projectId,'p-a');if(row.kind==='RETAINED_CURSOR'){assert.ok(previous&&['BASE','RETAINED_CURSOR'].includes(previous.kind));assert.equal(row.afterTask,previous.nextCursor);}previous=row;}assert.ok(projectReads.every(row=>row.afterTask===null||row.afterTask===ordered([original,created,...padding]).at(-1).id));};
+ const assertProgressTrace=async()=>{const trace=await page.evaluate(()=>window.__confirmedProgressTrace);assert.ok(trace.length>0);if(planningMode){assert.ok(trace.filter(row=>row.phase==='PLANNING_REPLY_RELEASED').every(row=>row.progress===50&&JSON.stringify(row.dates)===JSON.stringify(['2026-10-07','2026-10-15'])),'A late planning receipt cannot transiently roll back current progress or dates');}else{const expected=mode==='readback'?50:70,phases=mode==='readback'?['MANUAL_READBACK_RELEASED','EXPLICIT_CURSOR']:['LATE_DECISION_CALLBACK','EXPLICIT_CURSOR'];assert.ok(trace.filter(row=>phases.includes(row.phase)).every(row=>row.progress===expected&&JSON.stringify(row.dates)===JSON.stringify([original.startsOn,original.endsOn])),'Late responses cannot transiently overwrite the current task');if(mode==='callback')assert.ok(trace.some(row=>row.phase==='MANUAL_READBACK_RELEASED'&&row.progress===70));}return trace;};
+ const waitCurrentSchedule=()=>page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});
  let readbackStarted,decisionStarted,planningStarted;const readbackReady=new Promise(resolve=>{readbackStarted=resolve;}),decisionReady=new Promise(resolve=>{decisionStarted=resolve;}),planningReady=new Promise(resolve=>{planningStarted=resolve;});
  const respond=(request,body)=>request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
  await page.setRequestInterception(true);
@@ -638,7 +683,7 @@ async function confirmedProgressScenario(mode,width){
    if(url.pathname==='/api/identity/workspace'){
     if(request.method()==='POST'){
      assert.ok(planningMode);const input=JSON.parse(request.postData());posts.push({path:url.pathname,input});assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');assert.equal(input.taskId,original.id);assert.equal(input.expectedRevision,beforeRevision);assert.equal(input.startsOn,'2026-10-07');assert.equal(input.endsOn,'2026-10-15');
-     const task={...original,startsOn:input.startsOn,endsOn:input.endsOn,revision:afterRevision};
+     const task={...original,startsOn:input.startsOn,endsOn:input.endsOn,revision:afterRevision};canonicalTask=task;
      heldPlanning={request,outcome:{scope,saved:true,replayed:false,task,receipt:{id:'workspace_schedule_'+ 'd'.repeat(64),taskId:original.id,recordedAt:afterRevision,before:{startsOn:original.startsOn,endsOn:original.endsOn},after:{startsOn:task.startsOn,endsOn:task.endsOn}}}};
      // The worker creates this proposal after the planning transaction committed,
      // using the current r1 task even though the director's r1 reply is retained.
@@ -646,18 +691,18 @@ async function confirmedProgressScenario(mode,width){
     }
     if(!url.search)return respond(request,{scope,organizationName:'Empresa de ensayo concurrente',role:'DIRECTOR',roleLabel:'Director de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false});
     assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');
-    if(creation&&!url.searchParams.has('afterTask')){heldReadback=request;readbackCount++;readbackStarted();return;}
-    const tasks=url.searchParams.has('afterTask')?[{...created,id:'tail-task',title:'Última tarea autorizada'}]:[original];
-    return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks,totalTasks:creation?3:1,nextCursor:null});
+    const cursor=url.searchParams.get('afterTask');assert.deepEqual([...url.searchParams.keys()].sort(),cursor?['afterTask','projectId','scope']:['projectId','scope']);
+    if(creation&&!cursor&&manualReadbackPending){manualReadbackPending=false;heldReadback=request;readbackCount++;noteRead(url,'MANUAL_READBACK',null);readbackStarted();return;}
+    const body=taskPage(currentTasks(),cursor),kind=cursor?(manualCursorPending?'EXPLICIT_CURSOR':'RETAINED_CURSOR'):'BASE';if(kind==='EXPLICIT_CURSOR')manualCursorPending=false;noteRead(url,kind,body);return respond(request,body);
    }
    if(request.method()==='GET')return respond(request,field);
    const input=JSON.parse(request.postData());posts.push({path:url.pathname,input});assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');
    if(url.pathname==='/api/identity/task-creation'){
-    assert.equal(input.title,created.title);creation={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:created};return respond(request,creation);
+    assert.equal(input.title,created.title);creation={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:created};manualReadbackPending=true;return respond(request,creation);
    }
    assert.equal(input.action,'DECIDE_PROGRESS');assert.equal(input.payload.proposalId,proposal.id);assert.equal(input.payload.revision,proposal.revision);assert.equal(input.payload.decision,'APPROVE');
    field.proposals=[{...proposal,status:'APPLIED',revision:planningMode?latestRevision:afterRevision}];
-   const task={...(planningMode?heldPlanning.outcome.task:original),status:'IN_PROGRESS',progress:50,revision:planningMode?latestRevision:afterRevision};
+   const task={...(planningMode?heldPlanning.outcome.task:original),status:'IN_PROGRESS',progress:50,revision:planningMode?latestRevision:afterRevision};canonicalTask=task;
    const outcome={scope,saved:true,replayed:false,receiptId:'field_'+ 'c'.repeat(64),kind:'PROGRESS_DECISION',proposal:field.proposals[0],task};
    heldDecision={request,outcome};decisionStarted();if(mode!=='callback')return respond(request,outcome);
   }catch(error){pageErrors.push({mode:'confirmed-progress-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
@@ -665,45 +710,53 @@ async function confirmedProgressScenario(mode,width){
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo concurrente');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');
   await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false',{timeout:15000});assert.equal(preparationReads,1);
-  if(planningMode){await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await planningReady;}
+  await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();await page.evaluate(()=>{window.__confirmedProgressTrace=[];window.__confirmedProgressPhase='INITIAL';window.__confirmedProgressObserver=new MutationObserver(()=>{const row=document.querySelector('[data-task-id="task-a"]');if(row)window.__confirmedProgressTrace.push({phase:window.__confirmedProgressPhase,progress:Number(row.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')),dates:[...row.querySelectorAll('time')].map(time=>time.dateTime)});});window.__confirmedProgressObserver.observe(document.querySelector('section[aria-labelledby="schedule-title"]'),{subtree:true,childList:true,attributes:true});});
+  if(planningMode){await markPhase('PLANNING_PENDING');await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await planningReady;}
   await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');
-  if(!planningMode){await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('section[aria-label="Crear tarea de la obra"] form input:not([type="date"])',created.title);await click(page,'Crear tarea');await readbackReady;}
-  await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.type('section[aria-labelledby="field-title"] form textarea','Aprobación sintética independiente.');await click(page,'Guardar con recibo');await decisionReady;
+  if(!planningMode){await markPhase('CREATION_READBACK_PENDING');await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('section[aria-label="Crear tarea de la obra"] form input:not([type="date"])',created.title);await click(page,'Crear tarea');await readbackReady;}
+  await markPhase('PROGRESS_DECISION');await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.type('section[aria-labelledby="field-title"] form textarea','Aprobación sintética independiente.');await click(page,'Guardar con recibo');await decisionReady;
   if(planningMode){
    await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]').getAttribute('aria-valuenow')==='50');
-   await respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');
+   await markPhase('PLANNING_REPLY_RELEASED');await respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');await waitCurrentSchedule();
    assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),50);
    assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),['2026-10-07','2026-10-15']);
    assert.equal(posts.length,2);assert.equal(readbackCount,0);assert.ok((await text(page)).includes('1 de 1 tareas cargadas'));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-planning-${width}.png`)});
-   checks.push('schedule-delayed-planning-reply-keeps-current-dates-and-progress-'+width);return;
+   assertProjectReads();await assertProgressTrace();checks.push('schedule-delayed-planning-reply-keeps-current-dates-and-progress-'+width);return;
   }
   const readbackTask=mode==='readback'?original:{...original,revision:latestRevision,progress:70};
   if(mode==='readback')await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]').getAttribute('aria-valuenow')==='50');
-  await respond(heldReadback,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[readbackTask,created],totalTasks:3,nextCursor:created.id});
+  canonicalTask=mode==='callback'?readbackTask:heldDecision.outcome.task;await markPhase('MANUAL_READBACK_RELEASED');
+  // This one retained readback carries its captured task revision. Every later
+  // ordinary GET reflects canonicalTask, never this intentionally old reply.
+  const capturedPage=taskPage(ordered([readbackTask,created,...padding,tail]));assert.equal(capturedPage.tasks.length,100);assert.equal(capturedPage.nextCursor,capturedPage.tasks.at(-1).id);Object.assign(projectReads.find(row=>row.kind==='MANUAL_READBACK'),{rows:capturedPage.tasks.length,total:capturedPage.totalTasks,nextCursor:capturedPage.nextCursor,taskRevision:readbackTask.revision});await respond(heldReadback,capturedPage);
   await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cronograma actualizado desde los registros de la obra.');
-  if(mode==='callback'){await respond(heldDecision.request,heldDecision.outcome);await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');await showWorkspaceSection(page,'schedule-title');}
+  if(mode==='callback'){await markPhase('LATE_DECISION_CALLBACK');await respond(heldDecision.request,heldDecision.outcome);await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');await showWorkspaceSection(page,'schedule-title');}
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Cargar más tareas'&&!button.disabled));
   const expected=mode==='readback'?50:70;
   assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),expected);
   assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);
-  assert.ok((await text(page)).includes('2 de 3 tareas cargadas'));assert.equal(readbackCount,1);assert.equal(posts.length,2);
-  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id="tail-task"]');assert.ok((await text(page)).includes('3 de 3 tareas cargadas'));
+  await waitCurrentSchedule();assert.ok((await text(page)).includes('100 de 101 tareas cargadas'));assert.equal(readbackCount,1);assert.equal(posts.length,2);assert.equal(await page.$('[data-task-id="z-tail-task"]'),null);
+  await markPhase('EXPLICIT_CURSOR');manualCursorPending=true;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id="z-tail-task"]');await waitCurrentSchedule();assert.ok((await text(page)).includes('101 de 101 tareas cargadas'));assert.equal(manualCursorPending,false);assertProjectReads();await assertProgressTrace();
   assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),expected);assert.equal(posts.length,2);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-${width}.png`)});
   checks.push((mode==='readback'?'schedule-delayed-readback-keeps-confirmed-progress-':'schedule-delayed-decision-callback-keeps-newer-get-')+width);
  }catch(error){await page.screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-failure-${width}.png`),fullPage:false}).catch(()=>{});throw error;}
- finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();}
+ finally{const trace=await page.evaluate(()=>window.__confirmedProgressTrace||[]).catch(()=>[]);await page.evaluate(()=>window.__confirmedProgressObserver?.disconnect()).catch(()=>{});writeFileSync(path.join(evidence,`workspace-confirmed-progress-${mode}-${width}-request-ledger.json`),JSON.stringify({mode,width,phase,projectReads,posts,readbackCount,trace},null,2)+'\n');for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();}
 }
 async function unloadedConfirmedProgressScenario(width,decision){
  const mode='confirmed-progress-unloaded-'+decision.toLowerCase(),context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
- const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000010',currentRevision='2026-10-02T09:00:00.000020',cursor='unloaded-progress-cursor';
+ const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000010',currentRevision='2026-10-02T09:00:00.000020';
  const original={...baseTask(),revision:beforeRevision},outside={id:'task-outside',title:'Demolición de portería',status:'BACKLOG',progress:0,startsOn:'2026-10-06',endsOn:'2026-10-12',revision:beforeRevision};
+ const padding=Array.from({length:99},(_,index)=>({...original,id:'task-b-'+String(index+1).padStart(3,'0'),title:'Tarea cargada de paginación '+(index+1)})),firstPage=[original,...padding],cursor=firstPage.at(-1).id;
  const proposal={id:'proposal-outside',taskId:outside.id,workerId:'worker-a',summary:'Medición de la tarea de otra página',status:'PENDING',revision:'2026-10-02T09:00:00.000005',progress:25,quantity:null,baseline:null,unit:null,reason:'Medición sintética de otro participante.',evidenceIds:['evidence-outside']};
  const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:[proposal],evidence:[{id:'evidence-outside',taskId:outside.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente revisada de otro participante.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
- const posts=[],scheduleReads=[],receiptQueries=[];let recorded=null,currentTask=null,preparationReads=0;
+ const posts=[],scheduleReads=[],receiptQueries=[],projectReadLedger=[];let recorded=null,currentTask=null,preparationReads=0,phase='INITIAL',manualCursorPending=false;
+ const markPhase=async value=>{phase=value;await page.evaluate(next=>{window.__unloadedReceiptPhase=next;},value);};
+ const taskPage=(tasks,nextCursor)=>({scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Director de obra',canPlanSchedule:true,tasks,totalTasks:101,nextCursor});
+ const waitCurrentSchedule=()=>page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});
  const respond=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
  await page.setRequestInterception(true);
  page.on('request',async request=>{
@@ -719,8 +772,9 @@ async function unloadedConfirmedProgressScenario(width,decision){
     assert.equal(request.method(),'GET','A progress decision does not replan or create a task');
     if(!url.search)return respond(request,{scope,organizationName:'Empresa de ensayo paginada',role:'DIRECTOR',roleLabel:'Director de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false});
     assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');scheduleReads.push([...url.searchParams]);
-    if(url.searchParams.has('afterTask')){assert.equal(decision,'APPROVE');assert.equal(url.searchParams.get('afterTask'),cursor);assert.ok(currentTask);return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[currentTask],totalTasks:2,nextCursor:null});}
-    assert.equal(scheduleReads.length,1,'The approval and navigation never fetch the schedule automatically');return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original],totalTasks:2,nextCursor:cursor});
+    const after=url.searchParams.get('afterTask');assert.deepEqual([...url.searchParams.keys()].sort(),after?['afterTask','projectId','scope']:['projectId','scope']);
+    if(after){assert.equal(decision,'APPROVE');assert.equal(url.searchParams.get('afterTask'),cursor);assert.ok(currentTask);const kind=manualCursorPending?'EXPLICIT_CURSOR':'RETAINED_CURSOR';if(manualCursorPending)manualCursorPending=false;projectReadLedger.push({phase,kind,afterTask:after,scope,projectId:'p-a',rows:1,nextCursor:null});return respond(request,taskPage([currentTask],null));}
+    projectReadLedger.push({phase,kind:'BASE',afterTask:null,scope,projectId:'p-a',rows:firstPage.length,nextCursor:cursor});return respond(request,taskPage(firstPage,cursor));
    }
    assert.equal(url.pathname,'/api/identity/field-operations','No task-creation command may be issued');
    if(request.method()==='GET'){
@@ -743,25 +797,30 @@ async function unloadedConfirmedProgressScenario(width,decision){
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo paginada');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');
   await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false',{timeout:15000});assert.equal(preparationReads,1);
   assert.equal((await page.$$('[data-task-id="task-outside"]')).length,0);assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),original.progress);
-  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');assert.equal(posts.length,0);assert.equal(scheduleReads.length,1);
-  await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.waitForSelector('section[aria-labelledby="field-title"] form');await page.select('section[aria-labelledby="field-title"] form select',decision);await page.type('section[aria-labelledby="field-title"] form textarea','Decisión sintética de otra cuenta responsable.');assert.equal(posts.length,0);await click(page,'Guardar con recibo');
-  if(decision==='APPROVE'){await waitText(page,'El resultado quedó sin confirmar.');assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(posts.length,1);await click(page,'Comprobar guardado');await waitText(page,'Avance aprobado con recibo.');assert.deepEqual(receiptQueries,[posts[0].operationId]);}
+  await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();
+  await page.evaluate(()=>{window.__unloadedReceiptTrace=[];window.__unloadedReceiptPhase='INITIAL';window.__unloadedReceiptObserver=new MutationObserver(()=>{const receipt=document.querySelector('[data-confirmed-progress="task-outside"]'),task=document.querySelector('[data-task-id="task-outside"]');window.__unloadedReceiptTrace.push({phase:window.__unloadedReceiptPhase,receipt:receipt?.textContent||null,loadedProgress:task?Number(task.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')):null});});window.__unloadedReceiptObserver.observe(document.querySelector('main'),{subtree:true,childList:true,attributes:true});});
+  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');assert.equal(posts.length,0);assert.ok(projectReadLedger.length>0,'The current schedule must have accepted a canonical base page before any decision');assert.ok(projectReadLedger.every(row=>row.phase==='INITIAL'&&row.kind==='BASE'&&row.afterTask===null&&row.scope===scope&&row.projectId==='p-a'&&row.rows===100&&row.nextCursor===cursor),'Before any decision only current-context canonical base reads are allowed; no cursor GET is initiated');
+  await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.waitForSelector('section[aria-labelledby="field-title"] form');await page.select('section[aria-labelledby="field-title"] form select',decision);await page.type('section[aria-labelledby="field-title"] form textarea','Decisión sintética de otra cuenta responsable.');assert.equal(posts.length,0);await markPhase('DECISION');await click(page,'Guardar con recibo');
+  if(decision==='APPROVE'){await waitText(page,'El resultado quedó sin confirmar.');assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(posts.length,1);await markPhase('RECEIPT_RECOVERY');await click(page,'Comprobar guardado');await waitText(page,'Avance aprobado con recibo.');assert.deepEqual(receiptQueries,[posts[0].operationId]);}
   else await waitText(page,'La propuesta fue rechazada.');
-  await showWorkspaceSection(page,'schedule-title');assert.equal(posts.length,1);assert.equal(scheduleReads.length,1);assert.equal((await page.$$('[data-task-id="task-outside"]')).length,0);assert.ok((await text(page)).includes('1 de 2 tareas cargadas'));
+  await markPhase('BEFORE_EXPLICIT_CURSOR');await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();assert.equal(posts.length,1);assert.equal(projectReadLedger.filter(row=>row.afterTask!==null).length,0);assert.equal((await page.$$('[data-task-id="task-outside"]')).length,0);assert.ok((await text(page)).includes('100 de 101 tareas cargadas'));
   assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),original.progress);assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);
   await showWorkspaceSection(page,'field-title');assert.equal(await page.$eval('section[aria-labelledby="field-title"] details code',element=>element.textContent),recorded.receiptId);
   if(decision==='APPROVE'){
    const resultText=await page.$eval('[data-confirmed-progress="task-outside"]',element=>element.textContent);assert.ok(resultText.includes('Demolición de portería')&&resultText.includes('25% de avance aprobado en este recibo')&&resultText.includes('Falta cargar esta tarea'));assert.ok(!resultText.includes('50%'));assert.equal(recorded.proposal.status,'APPLIED');assert.equal(recorded.proposal.progress,25);
    await showWorkspaceSection(page,'field-title');await (await page.$('section[aria-labelledby="field-title"]')).screenshot({path:path.join(evidence,'workspace-unloaded-progress-receipt-'+width+'.png')});
-   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Ver en el cronograma'&&!button.disabled)&&document.getElementById('schedule-load-more')?.disabled===false);assert.ok(await page.$eval('[data-confirmed-progress="task-outside"] button',element=>element.getBoundingClientRect().height>=44));await page.focus('[data-confirmed-progress="task-outside"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(scheduleReads.length,1);
-   await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id="task-outside"]');assert.equal(scheduleReads.length,2);assert.ok((await text(page)).includes('2 de 2 tareas cargadas'));
+   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Ver en el cronograma'&&!button.disabled)&&document.getElementById('schedule-load-more')?.disabled===false);assert.ok(await page.$eval('[data-confirmed-progress="task-outside"] button',element=>element.getBoundingClientRect().height>=44));await page.focus('[data-confirmed-progress="task-outside"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(projectReadLedger.filter(row=>row.afterTask!==null).length,0);
+   await markPhase('EXPLICIT_CURSOR');manualCursorPending=true;await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id="task-outside"]');assert.equal(manualCursorPending,false);await waitCurrentSchedule();assert.equal(projectReadLedger.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);assert.ok((await text(page)).includes('101 de 101 tareas cargadas'));await markPhase('CURRENT_LOADED');
    assert.equal(await page.$eval('[data-task-id="task-outside"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),50);assert.deepEqual(await page.$$eval('[data-task-id="task-outside"] time',elements=>elements.map(element=>element.dateTime)),[currentTask.startsOn,currentTask.endsOn]);assert.equal(await page.$eval('[data-task-id="task-outside"] [data-status]',element=>element.dataset.status),'BLOCKED');assert.deepEqual([recorded.task.startsOn,recorded.task.endsOn],[outside.startsOn,outside.endsOn]);assert.notDeepEqual([currentTask.startsOn,currentTask.endsOn],[recorded.task.startsOn,recorded.task.endsOn]);assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);assert.ok((await page.$eval('[data-confirmed-progress="task-outside"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));assert.ok(!(await page.$eval('[data-confirmed-progress="task-outside"]',element=>element.textContent)).includes('50%'));
-   await showWorkspaceSection(page,'field-title');await waitText(page,'Esta tarea está cargada en el cronograma.');await page.focus('[data-confirmed-progress="task-outside"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(scheduleReads.length,2);assert.equal(posts.length,1);
+   await showWorkspaceSection(page,'field-title');await waitText(page,'Esta tarea está cargada en el cronograma.');await page.focus('[data-confirmed-progress="task-outside"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(projectReadLedger.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);assert.equal(posts.length,1);
   }else{assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(await page.$$eval('button',buttons=>buttons.filter(button=>button.textContent==='Ver en el cronograma').length),0);const fieldText=await page.$eval('section[aria-labelledby="field-title"]',element=>element.innerText);assert.ok(!fieldText.includes('avance aprobado en este recibo')&&!fieldText.includes('Avance aprobado con recibo.'));assert.deepEqual(receiptQueries,[]);}
+  const trace=await page.evaluate(()=>window.__unloadedReceiptTrace);assert.ok(trace.every(row=>!row.receipt||!row.receipt.includes('50%')),'Current50 must never replace historical25 in the receipt');
+  if(decision==='APPROVE'){assert.ok(trace.some(row=>row.receipt?.includes('25% de avance aprobado en este recibo')));assert.ok(trace.every(row=>row.loadedProgress===null||['EXPLICIT_CURSOR','CURRENT_LOADED'].includes(row.phase)));}else assert.ok(trace.every(row=>row.receipt===null));
+  let previous=null;for(const row of projectReadLedger){if(row.kind==='RETAINED_CURSOR'){assert.ok(previous&&previous.kind==='BASE');assert.equal(row.afterTask,previous.nextCursor);}previous=row;}assert.ok(projectReadLedger.every(row=>row.scope===scope&&row.projectId==='p-a'));
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});
   checks.push((decision==='APPROVE'?'schedule-unloaded-progress-recovers-same-uuid-historical-25-current-50-and-loads-explicit-cursor-':'schedule-rejected-progress-with-task-does-not-claim-approval-')+width);
  }catch(error){await page.screenshot({path:path.join(evidence,mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
- finally{await context.close();}
+ finally{const trace=await page.evaluate(()=>window.__unloadedReceiptTrace||[]).catch(()=>[]);writeFileSync(path.join(evidence,`workspace-unloaded-progress-${decision}-${width}-request-ledger.json`),JSON.stringify({width,decision,phase,projectReadLedger,posts,receiptQueries,trace},null,2)+'\n');await page.evaluate(()=>window.__unloadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}
 }
 async function receiptSnapshotCoverageScenario(width,mode){
  const cases=mode==='invalid-snapshot'?['explicit-null','malformed-progress']:['historical-snapshot'];
@@ -777,7 +836,9 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
  const cases=[snapshotCase];
  const proposals=cases.map((kind,index)=>({id:'proposal-snapshot-'+index,taskId:original.id,workerId:'worker-a',summary:'Medición sintética '+kind,status:'PENDING',revision:'2026-10-02T09:00:00.00000'+(index+5),progress:25,quantity:null,baseline:null,unit:null,reason:'Fuente sintética revisada por otra cuenta.',evidenceIds:['evidence-a']}));
  const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals,evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Evidencia para contrastar el recibo histórico.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
- const posts=[],receiptQueries=[],scheduleReads=[];let recorded=null,heldRefresh=null,holdNextRefresh=false,preparationReads=0;
+ const posts=[],receiptQueries=[],scheduleReads=[],projectReadLedger=[];let recorded=null,heldRefresh=null,holdNextRefresh=false,preparationReads=0,phase='INITIAL',readsBeforeRecovery=null;
+ const markPhase=async value=>{phase=value;await page.evaluate(next=>{window.__loadedReceiptPhase=next;},value);};
+ const waitCurrentSchedule=()=>page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});
  const respond=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
  await page.setRequestInterception(true);
  page.on('request',async request=>{
@@ -792,8 +853,10 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
    if(url.pathname==='/api/identity/workspace'){
     assert.equal(request.method(),'GET','Recovery must not write dates or create schedule rows');
     if(!url.search)return respond(request,{scope,organizationName:'Empresa de ensayo de snapshots',role:'DIRECTOR',roleLabel:'Director de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false});
-    assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');scheduleReads.push([...url.searchParams]);assert.equal(scheduleReads.length,1,'The loaded task changes only through the confirmed callback, without a schedule GET');
-    return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original,untouched],totalTasks:2,nextCursor:null});
+    assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');scheduleReads.push([...url.searchParams]);projectReadLedger.push({phase,kind:'BASE',scope,projectId:'p-a',afterTask:null,taskRevision:recorded?currentTask.revision:original.revision});
+    // A later native read reports current50. Only decisionTaskSnapshot below
+    // carries historical25; explicit null and malformed progress stay adversarial.
+    return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Director de obra',canPlanSchedule:true,tasks:[recorded?currentTask:original,untouched],totalTasks:2,nextCursor:null});
    }
    assert.equal(url.pathname,'/api/identity/field-operations','No task creation command may be issued');
    if(request.method()==='GET'){
@@ -814,22 +877,22 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
   }catch(error){pageErrors.push({mode:'confirmed-progress-snapshots-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
  const assertCurrentSchedule=async()=>{
-  await showWorkspaceSection(page,'schedule-title');
+  await markPhase('CURRENT_SCHEDULE');await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();
   assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),50);assert.equal(await page.$eval('[data-task-id="task-a"] [data-status]',element=>element.dataset.status),'BLOCKED');assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[currentTask.startsOn,currentTask.endsOn]);
   assert.equal(await page.$eval('[data-task-id="task-untouched"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),untouched.progress);assert.deepEqual(await page.$$eval('[data-task-id="task-untouched"] time',elements=>elements.map(element=>element.dateTime)),[untouched.startsOn,untouched.endsOn]);assert.equal(await page.$$eval('[data-task-id]',elements=>elements.length),2);
   const gantt=await page.$eval('[data-gantt-task-id="task-a"]',(element,dates)=>{const format=new Intl.DateTimeFormat('es-AR',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});return {text:element.innerText,planned:element.querySelector('[data-gantt-planned]')?.getAttribute('aria-label'),dates:dates.map(value=>format.format(new Date(value+'T00:00:00Z')))};},[currentTask.startsOn,currentTask.endsOn]);
-  assert.ok(gantt.text.includes('50 % registrado')&&gantt.text.includes('Bloqueada'));assert.ok(gantt.dates.every(value=>gantt.planned?.includes(value)));assert.equal(scheduleReads.length,1);assert.ok((await text(page)).includes('2 de 2 tareas cargadas'));
+  assert.ok(gantt.text.includes('50 % registrado')&&gantt.text.includes('Bloqueada'));assert.ok(gantt.dates.every(value=>gantt.planned?.includes(value)));assert.ok(projectReadLedger.every(row=>row.kind==='BASE'&&row.afterTask===null));assert.ok((await text(page)).includes('2 de 2 tareas cargadas'));
   const trace=await page.evaluate(()=>window.__loadedReceiptTrace);assert.ok(trace.length>0);assert.ok(trace.some(row=>row.progress===50));assert.ok(trace.every(row=>row.progress!==25),'The receipt snapshot must never be written to the already loaded schedule');await showWorkspaceSection(page,'field-title');
  };
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de snapshots');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false',{timeout:15000});assert.equal(preparationReads,1);
   assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),0);assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);
-  await page.evaluate(()=>{window.__loadedReceiptTrace=[];window.__loadedReceiptObserver=new MutationObserver(()=>{const row=document.querySelector('[data-task-id="task-a"]');if(row)window.__loadedReceiptTrace.push({progress:Number(row.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')),dates:[...row.querySelectorAll('time')].map(time=>time.dateTime)});});window.__loadedReceiptObserver.observe(document.querySelector('section[aria-labelledby="schedule-title"]'),{subtree:true,childList:true,attributes:true});});
+  await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();await page.evaluate(()=>{window.__loadedReceiptTrace=[];window.__loadedReceiptPhase='INITIAL';window.__loadedReceiptObserver=new MutationObserver(()=>{const row=document.querySelector('[data-task-id="task-a"]');if(row)window.__loadedReceiptTrace.push({phase:window.__loadedReceiptPhase,progress:Number(row.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')),dates:[...row.querySelectorAll('time')].map(time=>time.dateTime)});});window.__loadedReceiptObserver.observe(document.querySelector('section[aria-labelledby="schedule-title"]'),{subtree:true,childList:true,attributes:true});});
   await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');
   for(const [index,kind] of cases.entries()){
-   await page.waitForSelector('[data-field-proposal="proposal-snapshot-'+index+'"] button');await page.$eval('[data-field-proposal="proposal-snapshot-'+index+'"] button',element=>element.click());await page.waitForSelector('section[aria-labelledby="field-title"] form');await page.select('section[aria-labelledby="field-title"] form select','APPROVE');await page.type('section[aria-labelledby="field-title"] form textarea','Decisión sintética '+kind+'.');await click(page,'Guardar con recibo');
-   await waitText(page,'El resultado quedó sin confirmar.');assert.equal(posts.length,index+1);assert.equal((await page.$$('[data-confirmed-progress]')).length,0);await click(page,'Comprobar guardado');await waitText(page,mode==='invalid-snapshot'?'Decisión guardada con recibo. Consultá el estado de la propuesta.':'Avance aprobado con recibo.');
-   await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]')?.getAttribute('aria-valuenow')==='50');for(let i=0;i<80&&!heldRefresh;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(heldRefresh,'Hold the field refresh to observe the schedule callback separately');await assertCurrentSchedule();assert.deepEqual(receiptQueries,posts.map(input=>input.operationId));assert.equal(posts.length,index+1);assert.equal(new Set(posts.map(input=>input.operationId)).size,posts.length);
+   await page.waitForSelector('[data-field-proposal="proposal-snapshot-'+index+'"] button');await page.$eval('[data-field-proposal="proposal-snapshot-'+index+'"] button',element=>element.click());await page.waitForSelector('section[aria-labelledby="field-title"] form');await page.select('section[aria-labelledby="field-title"] form select','APPROVE');await page.type('section[aria-labelledby="field-title"] form textarea','Decisión sintética '+kind+'.');await markPhase('DECISION_UNCERTAIN');await click(page,'Guardar con recibo');
+   await waitText(page,'El resultado quedó sin confirmar.');assert.equal(posts.length,index+1);assert.equal((await page.$$('[data-confirmed-progress]')).length,0);readsBeforeRecovery=scheduleReads.length;await markPhase('RECOVERY_CALLBACK');await click(page,'Comprobar guardado');await waitText(page,mode==='invalid-snapshot'?'Decisión guardada con recibo. Consultá el estado de la propuesta.':'Avance aprobado con recibo.');
+   await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]')?.getAttribute('aria-valuenow')==='50');for(let i=0;i<80&&!heldRefresh;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(heldRefresh,'Hold the field refresh to observe the schedule callback separately');assert.equal(scheduleReads.length,readsBeforeRecovery,'The current50 callback is observed before returning to the schedule or any background schedule GET');const callbackTrace=await page.evaluate(()=>window.__loadedReceiptTrace);assert.ok(callbackTrace.some(row=>row.phase==='RECOVERY_CALLBACK'&&row.progress===50),'Current50 must reach the loaded schedule through the receipt callback before native refresh');assert.ok(callbackTrace.every(row=>row.progress!==25));await assertCurrentSchedule();assert.deepEqual(receiptQueries,posts.map(input=>input.operationId));assert.equal(posts.length,index+1);assert.equal(new Set(posts.map(input=>input.operationId)).size,posts.length);
    assert.equal(await page.$eval('section[aria-labelledby="field-title"] details code',element=>element.textContent),recorded.outcome.receiptId);
    if(mode==='invalid-snapshot'){
     assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(await page.$$eval('button',elements=>elements.filter(element=>element.textContent==='Ver en el cronograma').length),0);const fieldText=await page.$eval('section[aria-labelledby="field-title"]',element=>element.innerText);assert.ok(!fieldText.includes('avance aprobado en este recibo')&&!fieldText.includes('Avance aprobado con recibo.'));
@@ -837,45 +900,51 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
     const receiptText=await page.$eval('[data-confirmed-progress="task-a"]',element=>element.textContent);assert.ok(receiptText.includes('25% de avance aprobado en este recibo')&&!receiptText.includes('50%')&&receiptText.includes('Esta tarea está cargada en el cronograma.'));assert.ok(await page.$eval('[data-confirmed-progress="task-a"] button',element=>element.disabled));
    }
    const refresh=heldRefresh;heldRefresh=null;await respond(refresh,field);await page.waitForFunction(()=>document.querySelector('nav[aria-label="Operaciones de campo"] button')?.disabled===false);await assertCurrentSchedule();assert.equal(posts.length,index+1);
-   if(mode==='loaded-current'){await page.focus('[data-confirmed-progress="task-a"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.equal(scheduleReads.length,1);assert.equal(posts.length,1);assert.ok((await page.$eval('[data-confirmed-progress="task-a"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));}
+   if(mode==='loaded-current'){await markPhase('FOCUS_LOADED_TASK');await page.focus('[data-confirmed-progress="task-a"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.ok(projectReadLedger.every(row=>row.kind==='BASE'&&row.afterTask===null));assert.equal(posts.length,1);assert.ok((await page.$eval('[data-confirmed-progress="task-a"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));}
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await showWorkspaceSection(page,'field-title');await (await page.$('section[aria-labelledby="field-title"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+kind+'-'+width+'.png')});
   }
   await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});
  }catch(error){await page.screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
- finally{if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}
+ finally{const trace=await page.evaluate(()=>window.__loadedReceiptTrace||[]).catch(()=>[]);writeFileSync(path.join(evidence,`workspace-loaded-receipt-${mode}-${snapshotCase}-${width}-request-ledger.json`),JSON.stringify({width,mode,snapshotCase,phase,projectReadLedger,posts,receiptQueries,trace},null,2)+'\n');if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}
 }
 async function stalePaginationScenario(){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'stale-pagination',width:390,message:error.message}));
  const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000002',original={...baseTask(),revision:beforeRevision},posts=[],requests=[];
+ const padding=Array.from({length:99},(_,index)=>({...original,id:'task-b-'+String(index+1).padStart(3,'0'),title:'Tarea de página inicial '+(index+1)})),cursor=padding.at(-1).id,late={...original,id:'z-late-page-task',title:'Tarea añadida por la página tardía'};let canonicalTask=original,phase='INITIAL',manualCursorPending=false;
+ const taskPage=(cursorRequest=false)=>({scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:cursorRequest?[late]:[canonicalTask,...padding],totalTasks:101,nextCursor:cursorRequest?null:cursor});
+ const waitCurrentSchedule=()=>page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});
  let heldPage;const paginationStarted=new Promise(resolve=>{heldPage={resolve,request:null};});
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
-   if(!url.pathname.startsWith('/api/'))return request.continue();assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');requests.push({method:request.method(),query:url.search});let body;
+   if(!url.pathname.startsWith('/api/'))return request.continue();assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');const kind=request.method()==='POST'?'POST':!url.search?'ACCOUNT':url.searchParams.has('afterTask')?(manualCursorPending?'EXPLICIT_CURSOR':'RETAINED_CURSOR'):'BASE';requests.push({phase,kind,method:request.method(),query:url.search});let body;
    if(request.method()==='POST'){
     const payload=JSON.parse(request.postData());posts.push(payload);assert.equal(posts.length,1);assert.equal(payload.scope,scope);assert.equal(payload.projectId,'p-a');assert.equal(payload.taskId,original.id);assert.equal(payload.expectedRevision,beforeRevision);assert.equal(payload.startsOn,'2026-10-07');assert.equal(payload.endsOn,'2026-10-15');
-    body={scope,saved:true,replayed:false,task:{...original,startsOn:payload.startsOn,endsOn:payload.endsOn,revision:afterRevision},receipt:{id:'workspace_schedule_'+ 'c'.repeat(64),taskId:original.id,recordedAt:afterRevision,before:{startsOn:original.startsOn,endsOn:original.endsOn},after:{startsOn:payload.startsOn,endsOn:payload.endsOn}}};
+    canonicalTask={...original,startsOn:payload.startsOn,endsOn:payload.endsOn,revision:afterRevision};body={scope,saved:true,replayed:false,task:canonicalTask,receipt:{id:'workspace_schedule_'+ 'c'.repeat(64),taskId:original.id,recordedAt:afterRevision,before:{startsOn:original.startsOn,endsOn:original.endsOn},after:{startsOn:payload.startsOn,endsOn:payload.endsOn}}};
    }else if(!url.search)body={scope,organizationName:'Empresa de ensayo de página tardía',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};
    else{
     assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');
-    if(url.searchParams.has('afterTask')){assert.equal(url.searchParams.get('afterTask'),'held-page');heldPage.request=request;heldPage.resolve();return;}
-    body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original],totalTasks:2,nextCursor:'held-page'};
+    const after=url.searchParams.get('afterTask');assert.deepEqual([...url.searchParams.keys()].sort(),after?['afterTask','projectId','scope']:['projectId','scope']);
+    if(after){assert.equal(after,cursor);if(manualCursorPending){manualCursorPending=false;assert.equal(heldPage.request,null);heldPage.request=request;heldPage.resolve();return;}body=taskPage(true);}else body=taskPage();
    }
    await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){pageErrors.push({mode:'stale-pagination',width:390,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de página tardía');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await page.waitForSelector('[data-task-id="task-a"]');
-  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);
-  await heldPage.request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify({scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original,{...original,id:'late-page-task',title:'Tarea añadida por la página tardía'}],totalTasks:2,nextCursor:null})});
-  await page.waitForSelector('[data-task-id="late-page-task"]');assert.equal(await page.$$eval('[data-task-id="task-a"]',elements=>elements.length),1);
+  await waitCurrentSchedule();phase='HELD_EXPLICIT_CURSOR';manualCursorPending=true;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;phase='PLANNING_WITH_PAGE_PENDING';await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);
+  // Deliberately adversarial: this single retained cursor response repeats
+  // original below the cursor with its old revision. Keep that overlap to prove
+  // mergeLoadedTasks cannot roll back the later confirmed planning receipt.
+  phase='LATE_PAGE_RELEASED';await heldPage.request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify({...taskPage(true),tasks:[original,late]})});
+  await page.waitForSelector('[data-task-id="z-late-page-task"]');await waitCurrentSchedule();phase='CURRENT_AFTER_LATE_PAGE';assert.equal(manualCursorPending,false);assert.equal(await page.$$eval('[data-task-id="task-a"]',elements=>elements.length),1);
   assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),['2026-10-07','2026-10-15']);
-  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>element.getAttribute('aria-valuenow')),'37');assert.ok((await text(page)).includes('2026-10-07 → 2026-10-15'));assert.ok((await text(page)).includes('Cambio confirmado'));assert.equal(posts.length,1);assert.equal(requests.filter(request=>request.method==='GET').length,3);
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>element.getAttribute('aria-valuenow')),'37');assert.ok((await text(page)).includes('2026-10-07 → 2026-10-15'));assert.ok((await text(page)).includes('Cambio confirmado'));assert.equal(posts.length,1);assert.equal(requests.filter(request=>request.kind==='ACCOUNT').length,1);assert.equal(requests.filter(request=>request.kind==='EXPLICIT_CURSOR').length,1);const retained=requests.filter(request=>['LATE_PAGE_RELEASED','CURRENT_AFTER_LATE_PAGE'].includes(request.phase)&&request.method==='GET');assert.equal(retained.length%2,0);assert.ok(retained.every((request,index)=>request.kind===(index%2===0?'BASE':'RETAINED_CURSOR')),'Post-append native reads must be complete canonical base/cursor cycles, not a repeated held page');assert.ok((await text(page)).includes('101 de 101 tareas cargadas'));
   await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,'workspace-workbench-stale-page-390.png')});checks.push('workbench-late-cursor-page-preserves-confirmed-newer-schedule-and-receipt-390');
  }catch(error){await page.screenshot({path:path.join(evidence,'workspace-workbench-stale-page-failure-390.png'),fullPage:false}).catch(()=>{});throw error;}
- finally{if(heldPage.request&&!heldPage.request.isInterceptResolutionHandled())await heldPage.request.abort().catch(()=>{});await context.close();}
+ finally{writeFileSync(path.join(evidence,'workspace-stale-pagination-request-ledger.json'),JSON.stringify({phase,requests,posts},null,2)+'\n');if(heldPage.request&&!heldPage.request.isInterceptResolutionHandled())await heldPage.request.abort().catch(()=>{});await context.close();}
 }
 
 async function onboardingEpochScenario(width){
@@ -1059,7 +1128,7 @@ try{
  if([undefined,'guide-http-denial'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const action of ['append','readback'])for(const denial of [401,403])await guideHttpDenialScenario(width,action,denial);
  if([undefined,'portfolio-access-race'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const denial of [401,403,409]){for(const format of ['html','json'])await portfolioAccessRaceScenario(width,denial,format);for(const action of ['schedule','token'])await portfolioAccessRaceScenario(width,denial,'json',action);}
   if([undefined,'workbench'].includes(process.env.WORKSPACE_UI_SCENARIO)){
-   for(const width of [320,390,768,1280])await workbenchScenario(width);
+   for(const width of [320,390,768,1280]){await workbenchScenario(width);await workbenchCanonicalPaginationScenario(width);}
    await stalePaginationScenario();
    if(process.env.WORKSPACE_UI_SCENARIO==='workbench')for(const width of [320,390])await scenario('readonly',width);
   }
