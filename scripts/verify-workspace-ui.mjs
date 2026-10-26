@@ -974,11 +974,22 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
  await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[];let workspaceReads=0,projectReads=0,portfolioRequest=null,projectRequest=null,scheduleRequest=null;
  const refreshedScope='b'.repeat(64);
+ // Diagnostic observer only: no counters, product state, assertions or timing defaults are changed.
+ const diagnosticStarted=Date.now(),diagnosticEvents=[],diagnosticRequests=new WeakMap();let diagnosticSeq=0,diagnosticPhase='setup',diagnosticFailure=null,lastNativeObservationSeq=null;
+ const diagnosticRecord=(kind,details={})=>{const row={seq:++diagnosticSeq,elapsedMs:Date.now()-diagnosticStarted,kind,phase:diagnosticPhase,workspaceReads,projectReads,posts:posts.length,...details};diagnosticEvents.push(row);console.log('WORKSPACE-RACE-TRACE '+JSON.stringify(row));return row.seq;};
+ const diagnosticPhaseAt=value=>{diagnosticPhase=value;diagnosticRecord('phase');};
+ const diagnosticObserve=async label=>{try{const observed=await page.evaluate(()=>{const guide=window.__guideObservation;return {guide:guide?{state:guide.state,scope:guide.scope,projectId:guide.projectId,generation:guide.generation}:null,visibilityState:document.visibilityState,hasFocus:document.hasFocus(),online:navigator.onLine,locationHash:location.hash,activeScreens:[...document.querySelectorAll('[data-workspace-screen]')].filter(node=>!node.hidden&&node.getClientRects().length).map(node=>node.dataset.workspaceScreen),liveRefresh:[...document.querySelectorAll('[data-worksite-live-refresh]')].map(node=>({state:node.dataset.worksiteLiveRefresh,screen:node.closest('[data-workspace-screen]')?.dataset.workspaceScreen||null,visible:Boolean(node.getClientRects().length)}))};});lastNativeObservationSeq=diagnosticRecord('native-observation',{label,observed});}catch(error){diagnosticRecord('observer-error',{label,name:error.name,message:error.message});}};
+ const diagnosticUrl=request=>{const url=new URL(request.url());return {origin:url.origin,pathname:url.pathname,query:[...url.searchParams.entries()],projectId:url.searchParams.get('projectId'),scope:url.searchParams.get('scope'),scopeRole:url.searchParams.get('scope')===scope?'INITIAL':url.searchParams.get('scope')===refreshedScope?'REFRESHED':url.searchParams.has('scope')?'OTHER':'ABSENT'};};
+ const diagnosticIdentityRequest=request=>new URL(request.url()).origin===origin&&new URL(request.url()).pathname.startsWith('/api/identity/');
+ page.on('response',response=>{const request=response.request();if(diagnosticIdentityRequest(request))diagnosticRecord('response',{requestSeq:diagnosticRequests.get(request)||null,status:response.status(),...diagnosticUrl(request)});});
+ page.on('requestfinished',request=>{if(diagnosticIdentityRequest(request))diagnosticRecord('request-finished',{requestSeq:diagnosticRequests.get(request)||null,...diagnosticUrl(request)});});
+ page.on('requestfailed',request=>{if(diagnosticIdentityRequest(request))diagnosticRecord('request-failed',{requestSeq:diagnosticRequests.get(request)||null,failure:request.failure(),...diagnosticUrl(request)});});
  const references=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const open=indexedDB.open('obrasaas-pending-receipts-v1');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction('references','readonly'),read=tx.objectStore('references').getAll();let rows;read.onsuccess=()=>{rows=read.result;};tx.oncomplete=()=>{db.close();resolve(JSON.stringify(rows));};tx.onerror=()=>{db.close();reject(tx.error);};};}));
  await page.setRequestInterception(true);page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}
   if(!url.pathname.startsWith('/api/identity/'))return request.continue();
   requests.push({path:url.pathname,method:request.method(),query:url.search});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+  diagnosticRequests.set(request,diagnosticRecord('request',{method:request.method(),resourceType:request.resourceType(),authorizationMatched:true,lastNativeObservationSeq,...diagnosticUrl(request),initiator:request.initiator()||null}));
   if(request.method()!=='GET'){
    assert.equal(action,'schedule');assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.method(),'POST');
    const payload=JSON.parse(request.postData());assert.equal(payload.scope,scope);assert.equal(payload.taskId,'task-a');assert.equal(payload.projectId,'p-a');assert.equal(payload.expectedRevision,revision);assert.equal(payload.startsOn,'2026-10-07');assert.equal(payload.endsOn,'2026-10-15');posts.push(payload);scheduleRequest=request;return;
@@ -993,24 +1004,36 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
   await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
  }catch(error){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}});
  try{
+  diagnosticPhaseAt('before-navigation');
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de acceso sintético');
+  await diagnosticObserve('account-ready');diagnosticPhaseAt('before-initial-project');
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await showGuide(page);
+  await diagnosticObserve('initial-project-loaded');diagnosticPhaseAt('before-worker-channel');
   await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);
+  await diagnosticObserve('worker-channel-ready');diagnosticPhaseAt('before-recovery-reference');
   await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'22222222-2222-4222-8222-222222222222'});await showWorkspaceSection(page,'workspace-recovery-title');await waitText(page,'Operaciones por comprobar');
+  await diagnosticObserve('recovery-visible');diagnosticPhaseAt('before-portfolio-navigation');
   const retainedReferences=await references(),observedGeneration=await page.evaluate(()=>window.__guideObservation.generation);assert.ok(retainedReferences.includes('22222222-2222-4222-8222-222222222222'));
-  await showWorkspaceSection(page,'workspace-home-title');await click(page,'Consultar resumen');await page.waitForFunction(()=>document.querySelector('#portfolio-overview-title')?.closest('section').getAttribute('aria-busy')==='true');
+  await showWorkspaceSection(page,'workspace-home-title');
+  await diagnosticObserve('portfolio-section-visible');diagnosticPhaseAt('before-portfolio-read');await click(page,'Consultar resumen');await page.waitForFunction(()=>document.querySelector('#portfolio-overview-title')?.closest('section').getAttribute('aria-busy')==='true');
   for(let i=0;i<80&&!portfolioRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(portfolioRequest,'The portfolio read must be dispatched before the concurrent action');
+  await diagnosticObserve('portfolio-request-held');diagnosticPhaseAt('before-concurrent-action');
   if(action==='project'){
    await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba B')).click());await page.waitForSelector('[data-guide-observation="CONSULTING"]');
    for(let i=0;i<40&&!projectRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(projectRequest,'The project read must be dispatched before access denial');
+  await diagnosticObserve('project-b-request-held');
   }else{
-   await showWorkspaceSection(page,'schedule-title');await fill(page);if(action==='token')await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Confirmar planificación');
+   await showWorkspaceSection(page,'schedule-title');
+  await diagnosticObserve('schedule-section-visible');diagnosticPhaseAt('before-schedule-draft');await fill(page);if(action==='token')await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Confirmar planificación');
+  diagnosticPhaseAt('schedule-action-submitted');
    if(action==='token')await page.waitForFunction(()=>typeof window.__resolveToken==='function');
    else{for(let i=0;i<80&&!scheduleRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(scheduleRequest,'The schedule command must be dispatched before access denial');}
   }
   const pendingReferences=await references();if(action==='schedule')assert.ok(pendingReferences.includes(posts[0].operationId));
+  await diagnosticObserve('concurrent-action-pending');diagnosticPhaseAt('before-portfolio-denial');
   await portfolioRequest.respond({status:denial,contentType:format==='html'?'text/html':'application/json',headers:{'Cache-Control':'no-store'},body:format==='html'?'<html><body>private gateway diagnostic</body></html>':JSON.stringify({code:'WORKSPACE_CONTEXT_CHANGED'})});
   await page.waitForSelector('[data-guide-observation="UNAVAILABLE"]',{timeout:6000});
+  await diagnosticObserve('access-unavailable');diagnosticPhaseAt('before-late-response');
   assert.ok(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Actualizar')?.disabled===false),'An access denial must allow explicit account refresh');
   assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#portfolio-overview-title'),null);
   assert.ok(!(await text(page)).includes('Empresa de acceso sintético'));assert.ok(!(await text(page)).includes('private gateway diagnostic'));assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));
@@ -1022,12 +1045,18 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
   else if(action==='token')await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});
   else{const payload=posts[0];await scheduleRequest.respond({status:200,contentType:'application/json',body:JSON.stringify({scope,saved:true,replayed:false,task:{...baseTask(),startsOn:payload.startsOn,endsOn:payload.endsOn,revision:'2026-10-01T12:00:00.111111'},receipt:{id:'workspace_schedule_'+ 'b'.repeat(64),taskId:'task-a',recordedAt:'2026-10-01T12:00:00.111111',before:{startsOn:'2026-10-01',endsOn:'2026-10-05'},after:{startsOn:payload.startsOn,endsOn:payload.endsOn}}})}).catch(()=>{});}
   await new Promise(resolve=>setTimeout(resolve,180));assert.equal(await page.$eval('[data-guide-observation]',node=>node.dataset.guideObservation),'UNAVAILABLE');assert.ok(!(await text(page)).includes('respuesta anterior'));assert.ok(!(await text(page)).includes('Cambio confirmado'));assert.equal(posts.length,action==='schedule'?1:0);
-  const survivingReferences=await references();assert.ok(survivingReferences.includes('22222222-2222-4222-8222-222222222222'));if(action==='schedule')assert.equal(survivingReferences,pendingReferences);else if(action==='project')assert.equal(survivingReferences,retainedReferences);
+  const survivingReferences=await references();
+  await diagnosticObserve('late-response-settled');diagnosticPhaseAt('before-explicit-refresh');assert.ok(survivingReferences.includes('22222222-2222-4222-8222-222222222222'));if(action==='schedule')assert.equal(survivingReferences,pendingReferences);else if(action==='project')assert.equal(survivingReferences,retainedReferences);
   await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);
+  await diagnosticObserve('fresh-scope-visible');diagnosticPhaseAt('before-original-final-assertions');
   assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});
- }catch(error){await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
- finally{await context.close();}
+ }catch(error){diagnosticFailure={name:error.name,message:error.message,stack:error.stack};diagnosticRecord('scenario-failure',{failure:diagnosticFailure});await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
+ finally{
+  diagnosticPhaseAt('finally');await diagnosticObserve('finally-before-context-close');
+  const diagnosticProof={schema:'workspace-race-native-readtrace.v1',classification:'DIAGNOSTIC_ONLY_NOT_PUBLIC_AUTHORITY',baseSourceSha:'73c810d211f4e0540a130f2e989f77257bc86410',declaredDiagnosticSourceSha:process.env.SOURCE_SHA||null,sourceContractValidated:false,sourceContractUnchanged:true,mode,width,denial,format,action,harnessSha256,fullSuite:false,originalAssertionsUnchanged:true,failure:diagnosticFailure,workspaceReads,projectReads,posts:posts.length,events:diagnosticEvents};
+  try{writeFileSync(path.join(evidence,`workspace-${mode}-${width}-readtrace.json`),JSON.stringify(diagnosticProof,null,2));}catch(error){console.error('WORKSPACE-RACE-TRACE-WRITE-FAILED '+JSON.stringify({name:error.name,message:error.message}));if(!diagnosticFailure)throw error;}finally{await context.close();}
+ }
 }
 
 try{
