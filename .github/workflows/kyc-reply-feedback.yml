@@ -6,7 +6,67 @@ on:
 permissions:
   contents: read
 jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: "postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Exact event source
+        run: node --input-type=module -e "import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.GITHUB_SHA);assert.equal(execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim(),'');"
+      - name: Declare exact exhaustive contract shard
+        env:
+          CONTRACT_SHARD: ${{ matrix.shard }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {globSync,mkdirSync,writeFileSync} from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          const patterns=["tests/production-participant-kyc-attempt*.test.mjs","tests/production-participant-kyc-code*.test.mjs","tests/production-meta-kyc-rejection.test.mjs","tests/production-meta-customer-processing.test.mjs","tests/production-meta-customer-outbound-diagnostic.test.mjs","tests/production-company-channel-kyc.test.mjs","tests/company-kyc-outbound-compact.test.mjs","tests/production-company-kyc-outbound-compact-ci.test.mjs","tests/production-company-kyc-rejection-feedback-postgres-target.test.mjs","tests/production-kyc-reply-feedback*.test.mjs"];
+          const expected=["tests/company-kyc-outbound-compact.test.mjs","tests/production-company-channel-kyc.test.mjs","tests/production-company-kyc-outbound-compact-ci.test.mjs","tests/production-company-kyc-rejection-feedback-postgres-target.test.mjs","tests/production-kyc-reply-feedback-ci.test.mjs","tests/production-kyc-reply-feedback-current-lineage.test.mjs","tests/production-kyc-reply-feedback-ui-harness.test.mjs","tests/production-meta-customer-outbound-diagnostic.test.mjs","tests/production-meta-customer-processing.test.mjs","tests/production-meta-kyc-rejection.test.mjs","tests/production-participant-kyc-attempt-view.test.mjs","tests/production-participant-kyc-attempt.test.mjs","tests/production-participant-kyc-code-context.test.mjs","tests/production-participant-kyc-code-receipt.test.mjs"];
+          const files=[...new Set(patterns.flatMap(pattern=>globSync(pattern)).map(file=>file.split(path.sep).join('/')))].sort();
+          assert.deepEqual(files,expected);
+          assert.equal(files.length,14);
+          assert.equal(createHash('sha256').update(JSON.stringify(files)).digest('hex'),'020526e3c74efd1e485da45f6e6b2cf275da69488cce4bef7a4611c598bd70fe');
+          assert.equal(process.versions.node.split('.')[0],'24');
+          assert.match(process.env.CONTRACT_SHARD||'',/^[1-4]$/);
+          assert.match(process.env.GITHUB_SHA||'',/^[a-f0-9]{40}$/);
+          const shard=Number(process.env.CONTRACT_SHARD),partitions=Array.from({length:4},(_,i)=>files.filter((_,index)=>index%4===i));
+          assert.equal(new Set(partitions.flat()).size,files.length);assert.deepEqual(partitions.flat().sort(),files);
+          mkdirSync('.vercel/private/contracts-shard-output',{recursive:true});
+          writeFileSync('.vercel/private/contracts-shard-output/partition-'+shard+'.json',JSON.stringify({version:1,sourceRevision:process.env.GITHUB_SHA,node:process.version,shard,total:4,allFiles:files,selectedFiles:partitions[shard-1],sourceFilesSha256:'020526e3c74efd1e485da45f6e6b2cf275da69488cce4bef7a4611c598bd70fe',selection:'Node24 sorted file index modulo4',testsExecutedByThisPreflight:false},null,2)+'\n',{flag:'wx'});
+          NODE
+      - name: Canonical private identity, signed reply and finite delivery contracts
+        run: |
+          set -o pipefail
+          node --test --test-shard=${{ matrix.shard }}/4 tests/production-participant-kyc-attempt*.test.mjs tests/production-participant-kyc-code*.test.mjs tests/production-meta-kyc-rejection.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-meta-customer-outbound-diagnostic.test.mjs tests/production-company-channel-kyc.test.mjs tests/company-kyc-outbound-compact.test.mjs tests/production-company-kyc-outbound-compact-ci.test.mjs tests/production-company-kyc-rejection-feedback-postgres-target.test.mjs tests/production-kyc-reply-feedback*.test.mjs 2>&1 | tee .vercel/private/contracts-shard-output/contracts-${{ matrix.shard }}.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: kyc-contract-shard-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: .vercel/private/contracts-shard-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
   verify:
+    needs: contracts
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -25,6 +85,10 @@ jobs:
       CUTOVER_TEST_DISPOSABLE: '1'
       CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
     steps:
+      - name: RequireEveryShard
+        env:
+          UNIT_RESULT: ${{ needs.contracts.result }}
+        run: test "$UNIT_RESULT" = "success"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -36,8 +100,6 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Exact event source
         run: node --input-type=module -e "import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.GITHUB_SHA);assert.equal(execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim(),'');"
-      - name: Canonical private identity, signed reply and finite delivery contracts
-        run: node --test tests/production-participant-kyc-attempt*.test.mjs tests/production-participant-kyc-code*.test.mjs tests/production-meta-kyc-rejection.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-meta-customer-outbound-diagnostic.test.mjs tests/production-company-channel-kyc.test.mjs tests/company-kyc-outbound-compact.test.mjs tests/production-company-kyc-outbound-compact-ci.test.mjs tests/production-company-kyc-rejection-feedback-postgres-target.test.mjs tests/production-kyc-reply-feedback*.test.mjs
       - name: Private identity source and additive harness lint
         run: npx eslint src/lib/participant-kyc-chat-attempt.mjs src/lib/company-channel-kyc.mjs src/lib/meta-kyc-outbound.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-customer-processing.mjs 'src/app/(identity)/cuenta/participant-kyc-chat-attempt-panel.js' 'src/app/(identity)/cuenta/participant-kyc-chat-attempt-view.mjs' scripts/verify-company-kyc-rejection-feedback-postgres.mjs scripts/verify-company-kyc-outbound-compact-*.mjs scripts/verify-kyc-reply-feedback*.mjs tests/production-participant-kyc-attempt*.test.mjs tests/production-company-channel-kyc.test.mjs tests/production-meta-customer-outbound-diagnostic.test.mjs tests/company-kyc-outbound-compact.test.mjs tests/production-company-kyc-outbound-compact-ci.test.mjs tests/production-company-kyc-rejection-feedback-postgres-target.test.mjs tests/production-kyc-reply-feedback*.test.mjs --max-warnings 0
       - name: Disposable native signed callback, guarded reply and delivery observation
