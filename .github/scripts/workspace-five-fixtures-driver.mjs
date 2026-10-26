@@ -16,7 +16,7 @@ const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const git=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8',maxBuffer:16*1024*1024});
 const clean=cwd=>assert.equal(git(cwd,'status','--porcelain'),'',`Tracked source must remain clean: ${cwd}`);
 const actualHead=cwd=>git(cwd,'rev-parse','HEAD').trim();
-const rawSnapshot=(cwd,files)=>files.map(file=>{assert.equal(typeof file,'string');assert.ok(!file.includes('..')&&!path.isAbsolute(file));const target=path.join(cwd,file),stat=lstatSync(target);assert.ok(stat.isFile()&&!stat.isSymbolicLink(),'Only actual tracked regular source files');return{path:file,bytes:stat.size,sha256:hash(readFileSync(target))};});
+const rawSnapshot=(cwd,files)=>files.map(file=>{assert.equal(typeof file,'string');assert.ok(!file.split('/').includes('..')&&!path.isAbsolute(file));const target=path.join(cwd,file),stat=lstatSync(target);assert.ok(stat.isFile()&&!stat.isSymbolicLink(),'Only actual tracked regular source files');return{path:file,bytes:stat.size,sha256:hash(readFileSync(target))};});
 const sourceSnapshot=()=>rawSnapshot(root,git(root,'ls-files','-z').split('\0').filter(Boolean));
 const opsFiles=['.github/workflows/pilot-workspace-five-fixtures.yml','.github/scripts/workspace-five-fixtures-driver.mjs','.github/probes/workspace-five-fixtures-bindings.json'];
 const fixture=binding.fixtures.find(row=>row.id===caseId);
