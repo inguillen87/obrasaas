@@ -99,7 +99,13 @@ function currentBudgetSourceCounts(contract){
  checkedBudgetSource(()=>restorePlanBudgetPreviousContract(contract));
  const deltas=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas,native=deltas.find(row=>row.family==='PLAN_MEASUREMENT'),runtime=deltas.find(row=>row.family==='MEASUREMENT_UI_RUNTIME');
  guard(native&&runtime&&Number.isSafeInteger(native.currentCount)&&Number.isSafeInteger(runtime.currentCount),'Exact compiled Budget measurement source deltas required');
- return {nativeCount:native.currentCount,runtimeCount:runtime.currentCount};
+ const families=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies,nativeFamily=families.find(row=>row.family==='PLAN_MEASUREMENT'),runtimeFamily=families.find(row=>row.family==='MEASUREMENT_UI_RUNTIME');
+ guard(nativeFamily&&runtimeFamily&&Array.isArray(nativeFamily.currentFiles)&&Array.isArray(runtimeFamily.currentFiles),'Exact authenticated current measurement families required');
+ for(const [family,delta,currentFiles]of [['PLAN_MEASUREMENT',native,nativeFamily.currentFiles],['MEASUREMENT_UI_RUNTIME',runtime,runtimeFamily.currentFiles]]){
+  const previous=checkedBudgetSource(()=>restorePlanBudgetSourceSet(contract,family,currentFiles)),budgetFiles=[...previous,...delta.additions].sort();
+  guard(budgetFiles.length===delta.currentCount&&sha(JSON.stringify(budgetFiles))===delta.currentPathsSha256,'The exact pre-Own Budget measurement set must restore before binding current counts');
+ }
+ return {nativeCount:nativeFamily.currentFiles.length,runtimeCount:runtimeFamily.currentFiles.length};
 }
 function pinnedClosure(closure,count,pathsSha,label,readSource,authenticatedCurrentContract=undefined){
  // The optional object is private to this validation call. Re-read the captured

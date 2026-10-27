@@ -32,11 +32,24 @@ test('diagnostic observes the exact runtime tuple after setup expiry without dur
  assert.equal(result.sendReply,undefined);assert.equal(result.inspect,undefined);assert.equal(result.ownOperationalAuthority,undefined);
 });
 
-for(const [name,value,expected] of [['absent',undefined,'MISSING'],['expired literal','EXPIRED','EXPIRED'],['not verified','NOT_VERIFIED','NOT_VERIFIED'],['hostile unknown','provider-private-name-and-token','OTHER']])test('diagnostic safely observes '+name+' while strict runtime remains rejected with zero POST',async t=>{
+for(const [name,value,expected] of [['absent',undefined,'MISSING'],['not verified','NOT_VERIFIED','NOT_VERIFIED'],['hostile unknown','provider-private-name-and-token','OTHER']])test('diagnostic safely observes '+name+' while strict runtime remains rejected with zero POST',async t=>{
  t.mock.method(console,'warn',()=>{});
  const f=await ownRuntimeDiagnosticFixture();if(value===undefined)delete f.phone.code_verification_status;else f.phone.code_verification_status=value;
  const result=await f.diagnose();assertClosed(result,f);assert.equal(result.codeVerificationState,expected);assert.equal(result.codeVerificationPresent,value!==undefined);assert.equal(result.operationalCheck,'REJECTED');assert.equal(result.denialStage,'VERIFICATION_STATUS');assert.equal(result.registered,true);
  await assert.rejects(f.provider.forConnection(await f.runtimeInput()),{code:'META_OWN_COMPANY_PHONE_REJECTED'});assertDiagnosticNoEffects(f);
+});
+
+test('diagnostic reports expired ownership code independently from a fully checked registered transport without granting acceptance or setup',async()=>{
+ const f=await ownRuntimeDiagnosticFixture(),before=structuredClone({connection:f.connection,receipt:f.receipt,controls:f.controls});f.phone.code_verification_status='EXPIRED';
+ const result=await f.diagnose();assertClosed(result,f);assert.equal(result.codeVerificationState,'EXPIRED');assert.equal(result.operationalCheck,'PASSED');assert.equal(result.denialStage,'NONE');assert.equal(result.registered,true);assert.equal(result.platformState,'CLOUD_API');assert.equal(result.displayMatchesExpected,true);
+ assert.ok(f.calls.some(call=>call.path===f.policy.wabaId+'/subscribed_apps'));assert.deepEqual({connection:f.connection,receipt:f.receipt,controls:f.controls},before);
+ assert.equal(result.inspect,undefined);assert.equal(result.sendReply,undefined);assert.equal(result.ownOperationalAuthority,undefined);assert.equal(result.accepted,false);assert.equal(result.roundTrip,'NOT_VERIFIED');
+});
+
+test('expired diagnostic cannot pass without the current subscription or with a foreign display',async t=>{
+ t.mock.method(console,'warn',()=>{});
+ const unsubscribed=await ownRuntimeDiagnosticFixture();unsubscribed.phone.code_verification_status='EXPIRED';unsubscribed.state.subscribed=false;await assert.rejects(unsubscribed.diagnose(),{code:'META_OWN_COMPANY_OWNER_UNVERIFIED'});assertDiagnosticNoEffects(unsubscribed);
+ const foreign=await ownRuntimeDiagnosticFixture();foreign.phone.code_verification_status='EXPIRED';foreign.phone.display_phone_number='+5491100000001';const result=await foreign.diagnose();assertClosed(result,foreign);assert.equal(result.operationalCheck,'REJECTED');assert.equal(result.codeVerificationState,'EXPIRED');assert.equal(result.denialStage,'DISPLAY_PHONE_MATCH');assert.equal(result.displayMatchesExpected,false);
 });
 
 test('display equality uses the current exact normalizer without returning the foreign display',async t=>{

@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,readFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,readFileSync,lstatSync,realpathSync} from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
@@ -24,6 +24,14 @@ const phoneFormatPath='src/lib/company-phone-format.mjs';copyFileSync(path.join(
 for(const file of ['voice-progress-draft.mjs','progress-measurement-quantity.js','task-progress-measurement.js']){const source='src/lib/'+file;copyFileSync(path.join(root,source),path.join(fixture,source));if(!sourcePaths.includes(source))sourcePaths.push(source);copiedSourcePaths.add(source);}
 const entitlementPath='src/lib/company-entitlement.mjs';copyFileSync(path.join(root,entitlementPath),path.join(fixture,entitlementPath));sourcePaths.push(entitlementPath);copiedSourcePaths.add(entitlementPath);
 const officeIdentityPath='src/lib/identity-return-path.mjs';copyFileSync(path.join(root,officeIdentityPath),path.join(fixture,officeIdentityPath));sourcePaths.push(officeIdentityPath);copiedSourcePaths.add(officeIdentityPath);
+
+// Complete only the two independently observed imports; no broad copy adapter.
+const kycFixtureRoot=realpathSync(fixture),kycInside=file=>{const relative=path.relative(kycFixtureRoot,file);return relative!==''&&!path.isAbsolute(relative)&&relative!=='..'&&!relative.startsWith('..'+path.sep);};
+for(const file of ['src/lib/procurement-quantity.js','src/lib/capture-quality-policy.mjs']){
+ const target=path.join(fixture,file),original=readFileSync(path.join(root,file));assert.ok(kycInside(target));mkdirSync(path.dirname(target),{recursive:true});assert.ok(kycInside(realpathSync(path.dirname(target))));try{assert.equal(lstatSync(target).isSymbolicLink(),false);}catch(error){if(error.code!=='ENOENT')throw error;}
+ copyFileSync(path.join(root,file),target);assert.deepEqual(readFileSync(target),original,'Exact observed workspace dependency copy');if(!sourcePaths.includes(file))sourcePaths.push(file);copiedSourcePaths.add(file);
+}
+
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||file.startsWith('src/app/(identity)/cuenta/'))assert.deepEqual(bytes,readFileSync(path.join(fixture,file)));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');

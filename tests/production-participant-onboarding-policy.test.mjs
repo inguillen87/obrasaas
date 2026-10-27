@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {participantCommand} from '../src/lib/participant-policy.mjs';
 import {digest} from '../src/lib/workspace-policy.mjs';
-import {PARTICIPANT_ONBOARDING_NOTICE,PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256,validateParticipantOnboardingChoice,participantOnboardingCapabilities,publicParticipantOnboarding} from '../src/lib/participant-onboarding-policy.mjs';
+import {PARTICIPANT_ONBOARDING_NOTICE,PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256,validateParticipantOnboardingChoice,participantOnboardingCapabilities,publicParticipantOnboarding,participantOnboardingIntent,participantOnboardingOutboundId,participantOnboardingPhaseOutboundId,participantOnboardingPhase,participantOnboardingPhaseState,createParticipantOnboardingPhases,queueParticipantOnboardingIdentity,revokeParticipantOnboardingPhases,updateParticipantOnboardingPhase} from '../src/lib/participant-onboarding-policy.mjs';
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
 import {createParticipantHandlers} from '../src/lib/participant-http.mjs';
 const now=new Date('2026-10-07T07:00:00Z'),member={role:'ADMIN',actorId:'actor-one'},scope='a'.repeat(64),revision='2026-10-07T07:00:00.000000';
@@ -61,4 +61,47 @@ test('immediate wake-up follows a committed contact request and only carries its
  for(const change of [{replayed:true},{saved:false},{participant:{...saved.participant,id:'different-worker'}},{participant:{...saved.participant,invitation:{state:'UNCERTAIN'}}},{participant:{...saved.participant,onboardingDelivery:{contactAuthorized:false}}}]){
   let calls=0;const h=createParticipantHandlers({verify:async()=>session,store:{save:async()=>({...saved,...change})},scheduleOnboarding:()=>{calls++;}});await h.POST(request());assert.equal(calls,0);
  }
+});
+
+function phaseParticipant(){
+ const invitationId='invite_'+'a'.repeat(32),intent={version:1,state:'WAITING_CONFIGURATION',organizationId:'company-a',targetProjectId:'project-a',workerId:'worker-a',invitationId,issuerActorId:'issuer-a',issuerMembershipId:'member-issuer-a',consentReceiptId:'onboarding_contact_'+'b'.repeat(64),requestedAt:now.toISOString(),nextCheckAt:null,outboundId:null,code:null};
+ const p={version:1,status:'INVITED',clerkUserId:null,invitation:{id:invitationId,state:'SENT'},kyc:{status:'NOT_SUBMITTED'},permissions:{attendance:false,report:false},onboardingConsent:{version:1,status:'GRANTED',purpose:'PARTICIPANT_ONBOARDING',invitationId,issuerActorId:intent.issuerActorId,issuerMembershipId:intent.issuerMembershipId,receiptId:intent.consentReceiptId,noticeVersion:PARTICIPANT_ONBOARDING_NOTICE_VERSION,noticeSha256:PARTICIPANT_ONBOARDING_NOTICE_SHA256}};
+ p.onboardingDelivery=createParticipantOnboardingPhases(intent,p,now.toISOString());return p;
+}
+const acceptPhaseParticipant=p=>{p.status='ACTIVE';p.clerkUserId='user_Accepted';p.invitation.state='ACCEPTED';p.acceptanceReceiptId='acceptance-a';};
+
+test('two durable phase IDs cannot replace the immutable legacy v1 outbox identity',()=>{
+ const p=phaseParticipant(),intent=participantOnboardingIntent(p.onboardingDelivery),legacy=participantOnboardingOutboundId(intent);
+ assert.equal(legacy,'customer_outbound_'+digest(['participant-onboarding-delivery-v1',intent.organizationId,intent.targetProjectId,intent.workerId,intent.invitationId,intent.consentReceiptId]));
+ const invitation=participantOnboardingPhaseOutboundId(intent,'ACCOUNT_INVITATION'),identity=participantOnboardingPhaseOutboundId(intent,'IDENTITY_START');assert.notEqual(invitation,identity);assert.notEqual(invitation,legacy);assert.notEqual(identity,legacy);assert.equal(participantOnboardingOutboundId(intent),legacy);
+ for(const phase of [undefined,null,'INVITED','identity_start',{},'IDENTITY_START/ACCOUNT_INVITATION'])assert.throws(()=>participantOnboardingPhaseOutboundId(intent,phase),{code:'PARTICIPANT_ONBOARDING_CONTEXT_CHANGED'});
+ for(const phase of ['ACCOUNT_INVITATION','IDENTITY_START'])assert.throws(()=>participantCommand(command('SEND_ONBOARDING_WHATSAPP',{workerId:'worker-one',revision,whatsAppConsent:consent,phase})),{code:'PARTICIPANT_INPUT_INVALID'});
+});
+
+test('the identity queue requires accepted account and exact original consent without granting field access',()=>{
+ const p=phaseParticipant(),before=JSON.stringify(p);assert.equal(queueParticipantOnboardingIdentity(p,now.toISOString()),false);assert.equal(JSON.stringify(p),before);
+ acceptPhaseParticipant(p);assert.equal(queueParticipantOnboardingIdentity(p,now.toISOString()),true);assert.equal(p.onboardingDelivery.phase,'IDENTITY_START');assert.equal(p.onboardingDelivery.state,'WAITING_CONFIGURATION');assert.equal(p.onboardingDelivery.phases.ACCOUNT_INVITATION.state,'CANCELED');assert.equal(p.onboardingDelivery.phases.IDENTITY_START.acceptanceReceiptId,'acceptance-a');assert.equal(p.onboardingDelivery.phases.IDENTITY_START.participantClerkUserId,'user_Accepted');assert.deepEqual(p.permissions,{attendance:false,report:false});assert.equal(p.kycChatChallenge,undefined);
+ const queued=JSON.stringify(p);assert.equal(queueParticipantOnboardingIdentity(p,now.toISOString()),false);assert.equal(JSON.stringify(p),queued);
+});
+
+test('submitted legacy capture revocation or foreign consent cannot enqueue a fresh current challenge',()=>{
+ const changes=[p=>{p.clerkUserId=null;},p=>{p.acceptanceReceiptId=null;},p=>{p.invitation.state='SENT';},p=>{p.onboardingConsent.status='REVOKED';},p=>{p.onboardingConsent.receiptId='foreign';},p=>{p.onboardingConsent.issuerActorId='foreign';},p=>{p.onboardingConsent.noticeSha256='f'.repeat(64);},...['PENDING_ACCOUNT_CLAIM','PENDING_REVIEW','APPROVED'].map(status=>p=>{p.kyc.status=status;}),...['PENDING','CLAIMED'].map(status=>p=>{p.kycChatChallenge={status};})];
+ for(const change of changes){const p=phaseParticipant();acceptPhaseParticipant(p);change(p);const before=JSON.stringify(p);assert.equal(queueParticipantOnboardingIdentity(p,now.toISOString()),false);assert.equal(JSON.stringify(p),before);}
+});
+
+test('phase merges and revocation preserve an old uncertain marker while identity remains separately pending',()=>{
+ const p=phaseParticipant();p.onboardingDelivery=updateParticipantOnboardingPhase(p.onboardingDelivery,'ACCOUNT_INVITATION',{state:'SEND_UNKNOWN',outboundId:participantOnboardingPhaseOutboundId(participantOnboardingIntent(p.onboardingDelivery),'ACCOUNT_INVITATION')});acceptPhaseParticipant(p);assert.equal(queueParticipantOnboardingIdentity(p,now.toISOString()),true);const pending=structuredClone(p.onboardingDelivery.phases.IDENTITY_START);
+ p.onboardingDelivery=updateParticipantOnboardingPhase(p.onboardingDelivery,'ACCOUNT_INVITATION',{providerStatus:'sent'});assert.equal(p.onboardingDelivery.phase,'IDENTITY_START');assert.equal(p.onboardingDelivery.state,'WAITING_CONFIGURATION');assert.deepEqual(p.onboardingDelivery.phases.IDENTITY_START,pending);assert.equal(participantOnboardingPhaseState(p.onboardingDelivery,'ACCOUNT_INVITATION').state,'SEND_UNKNOWN');
+ p.onboardingConsent.status='REVOKED';p.onboardingDelivery=revokeParticipantOnboardingPhases(p.onboardingDelivery);assert.equal(p.onboardingDelivery.state,'CANCELED');assert.equal(p.onboardingDelivery.phases.ACCOUNT_INVITATION.state,'SEND_UNKNOWN');assert.equal(p.onboardingDelivery.phases.IDENTITY_START.state,'CANCELED');
+ const dto=publicParticipantOnboarding(p);assert.equal(dto.phase,'IDENTITY_START');assert.equal(dto.invitationState,'SEND_UNKNOWN');assert.equal(dto.identityState,'CANCELED');assert.equal(dto.automaticResendAllowed,false);assert.equal(dto.providerAccepted,false);assert.doesNotMatch(JSON.stringify(dto),/IDENTIDAD |cipher|@|\+549|issuer-a|user_Accepted/);
+});
+
+test('malformed cross-phase ledgers fail closed instead of inventing accepted delivery',()=>{
+ for(const change of [d=>{d.phase='foreign';},d=>{d.phases.extra={};},d=>{d.phases.ACCOUNT_INVITATION.challengeId='kyc_chat_'+'f'.repeat(32);},d=>{d.phases.IDENTITY_START.state='WAITING_CONFIGURATION';},d=>{d.state='foreign';}]){const p=phaseParticipant();change(p.onboardingDelivery);assert.throws(()=>participantOnboardingPhase(p.onboardingDelivery),{code:'PARTICIPANT_ONBOARDING_CONTEXT_CHANGED'});}
+});
+
+test('JOIN wake-up carries only its canonical private server reference after commit and never leaks it',async()=>{
+ const order=[],ownSession={authenticated:true,verification:'clerk-production-jwt',userId:'user_Member',organizationId:'org_One',organizationRole:'org:member'},input={invitationId:'invite_'+'c'.repeat(32),operationId:'11111111-1111-4111-a111-111111111111'},saved={saved:true,replayed:false,joined:true,projectId:'project-one',receiptId:'accepted-one',onboardingReference:{projectId:'project-one',workerId:'worker-one'}},request=()=>new Request('https://obrasaas.com/api/identity/participant-join',{method:'POST',headers:{Origin:'https://obrasaas.com','Content-Type':'application/json'},body:JSON.stringify(input)});
+ const handlers=createParticipantHandlers({verify:async()=>ownSession,join:true,store:{join:async()=>{order.push('committed');return saved;}},scheduleOnboarding:ref=>{order.push(ref);throw new Error('controlled wake-up unavailable');}}),response=await handlers.POST(request());assert.equal(response.status,200);assert.deepEqual(order,['committed',{projectId:'project-one',workerId:'worker-one'}]);assert.deepEqual(await response.json(),{saved:true,replayed:false,joined:true,projectId:'project-one',receiptId:'accepted-one'});
+ for(const changed of [{replayed:true},{joined:false},{saved:false},{onboardingReference:{projectId:'foreign-project',workerId:'worker-one'}},{onboardingReference:{projectId:'project-one',workerId:null}}]){let calls=0;const h=createParticipantHandlers({verify:async()=>ownSession,join:true,store:{join:async()=>({...saved,...changed})},scheduleOnboarding:()=>{calls++;}}),r=await h.POST(request());assert.equal(r.status,200);assert.equal(calls,0);assert.equal(Object.hasOwn(await r.json(),'onboardingReference'),false);}
 });

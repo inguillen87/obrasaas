@@ -879,7 +879,8 @@ export function verifyParticipantPreanalysisCurrentSources(contract,readSource){
  for(const row of [{file:'scripts/verify-participant-kyc-preanalysis-postgres.mjs',sourceLfSha256:value.nativeProducerSha256},...value.unitSuites]){
   requireLineage(hash(row.sourceLfSha256),'Frozen native and executed unit producer pins required');
   const bytes=readSource(row.file);requireLineage(Buffer.isBuffer(bytes),'Missing frozen preanalysis producer: '+row.file);
-  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sourceLfSha256,'Frozen native/unit producer changed: '+row.file);
+  const expected=row.file==='scripts/verify-participant-kyc-preanalysis-postgres.mjs'?weeklyCypCurrentSourcePin(contract,{path:row.file,sha256:row.sourceLfSha256}):row.sourceLfSha256;
+  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===expected,'Frozen native/unit producer changed: '+row.file);
  }
  return {version:1,previousContractSha256:value.previousContractSha256,historicalContractRestored:true,historicalPinsPreserved:true,nativeAcceptance:false};
  }catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
 import {participantReceiptId} from '../src/lib/participant-policy.mjs';
+import {facialAttemptId,FACIAL_ACTION} from '../src/lib/participant-facial-policy.mjs';
 import {checkScope,scopeStamp} from '../src/lib/workspace-policy.mjs';
 
 function fixture({role='DIRECTOR',own=false,recorded=true,pending=false,entityType='Worker',kind=null,active=true,status='ACTIVE',assigned=true}={}){
@@ -13,7 +14,8 @@ function fixture({role='DIRECTOR',own=false,recorded=true,pending=false,entityTy
  const receipt={id:participantReceiptId(member.actorId,projectId,operationId),organizationId:member.organizationId,entityType,entityId:entityType==='Worker'?row.id:'target-member',metadata:{version:1,projectId,kind:kind||(own?'KYC_SUBMITTED':'REVIEW_KYC')}};
  const account={membershipId:'target-member',userId:'target-user',name:'Private account name',email:'account@example.invalid',role:'FINANCE',clerkRole:'org:member',status:'ACTIVE',revision:row.revision};
  const client={query:async(sql,args)=>{queries.push({sql,args});assert.ok(sql.startsWith('SELECT'),'Receipt recovery must stay read-only');
-  if(sql.includes('FROM public."AuditLog"')){assert.deepEqual(args,[receipt.id,member.organizationId,member.actorId]);return {rows:recorded?[receipt]:[]};}
+  if(sql===`SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND action='${FACIAL_ACTION}'`){assert.deepEqual(args,[facialAttemptId({context:{organizationId:member.organizationId,actorId:member.actorId,projectId,operationId:operationId.toLowerCase()}}),member.organizationId]);return {rows:[]};}
+  if(sql.includes('FROM public."AuditLog"')){assert.equal(sql,`SELECT id,"organizationId","entityType","entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='participant.operation.recorded'`);assert.deepEqual(args,[receipt.id,member.organizationId,member.actorId]);return {rows:recorded?[receipt]:[]};}
   if(sql.includes('FROM public."Worker"')){if(sql.includes('WHERE id=$1')){assert.deepEqual(args,[row.id,projectId]);return {rows:[row]};}assert.deepEqual(args,[projectId,operationId,member.actorId]);return {rows:pending?[row]:[]};}
   if(sql.includes('SELECT m.id')){assert.deepEqual(args,[member.membershipId,member.organizationId,session.userId,projectId]);return {rows:assigned?[{id:member.membershipId}]:[]};}
   if(sql.includes('FROM public."TenantMembership" tm')){assert.deepEqual(args,[receipt.entityId,member.organizationId]);return {rows:[account]};}

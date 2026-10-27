@@ -1,3 +1,5 @@
+import {syntheticCaptureQuality} from './capture-quality-synthetic.mjs';
+import {createFacialChatAuditPort} from './participant-facial-chat-audit-memory.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {kycMemoryFixture} from './meta-kyc-chat-memory.mjs';
@@ -6,6 +8,7 @@ import {metaCustomerContentDigest} from '../../src/lib/meta-customer-callback.mj
 import {encryptCustomerSecret} from '../../src/lib/meta-customer-credentials.mjs';
 import {COMPANY_CHANNEL_SCHEMA_CONTRACT} from '../../src/lib/company-channel-schema.mjs';
 import {prepareMetaKycChallenge} from '../../src/lib/meta-kyc-challenge.mjs';
+import {prepareMetaKycChallenge as prepareHistoricalV2Challenge} from './meta-kyc-challenge-legacy-v2.mjs';
 import {resolveMetaKycAuthority,readMetaKycConversation} from '../../src/lib/meta-kyc-identity.mjs';
 import {createMetaKycBridge} from '../../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../../src/lib/meta-kyc-outbound.mjs';
@@ -16,7 +19,10 @@ import {participantReceiptId} from '../../src/lib/participant-policy.mjs';
 
 // Synthetic SQL/transaction fixture. It exercises the actual signed resolver,
 // planner, envelopes, deposit and outbound. It does not emulate PG lock races.
-export async function companyKycMemoryFixture({active=false,grantLifetimeMs=null,captureImageSetVersion}={}){
+export async function companyKycMemoryFixture({active=false,grantLifetimeMs=null,captureImageSetVersion,historicalChallengeVersion}={}){
+ // Only explicitly declared pre-v3 scenarios may seed an earlier sealed v2 attempt.
+ assert.ok(historicalChallengeVersion===undefined||historicalChallengeVersion===2);
+ const prepareChallenge=historicalChallengeVersion===2?prepareHistoricalV2Challenge:prepareMetaKycChallenge;
  const f=kycMemoryFixture({active}),anchor={...f.project,id:'project-a'},target=f.project;
  target.id='project-b';f.worker.projectId=target.id;
  f.issuer.clerkUserId='user_ManagerA';f.issuer.clerkRole='org:admin';f.issuer.revision='2026-10-06T00:00:00.000000';f.issuer.userRevision=f.issuer.revision;
@@ -95,22 +101,23 @@ export async function companyKycMemoryFixture({active=false,grantLifetimeMs=null
   }
   return f.query(sql,args);
  };
- const connect=async()=>{let snapshot=null;return {release:()=>{},query:async(sql,args)=>{
+ const baseConnect=async()=>{let snapshot=null;return {release:()=>{},query:async(sql,args)=>{
   if(sql==='BEGIN'||sql.startsWith('BEGIN ISOLATION'))snapshot=structuredClone({worker:f.worker,audits:[...f.audits],events:[...f.events],outbounds:[...f.outbounds]});
   if(sql==='ROLLBACK'&&snapshot){control.rollbacks++;Object.assign(f.worker,snapshot.worker);for(const [map,key] of [[f.audits,'audits'],[f.events,'events'],[f.outbounds,'outbounds']]){map.clear();for(const [id,value]of snapshot[key])map.set(id,value);}}
   const value=await query(sql,args);if(sql==='COMMIT'){snapshot=null;if(control.loseDepositCommit&&[...f.audits.values()].some(a=>a.metadata.kind==='KYC_SUBMITTED')){control.loseDepositCommit=false;throw new Error('SYNTHETIC_DEPOSIT_COMMITTED_ACK_LOST');}if(control.loseJoinCommit&&[...f.audits.values()].some(a=>a.action==='participant.kyc_chat.account_bound')){control.loseJoinCommit=false;throw new Error('SYNTHETIC_ACCEPTANCE_COMMITTED_ACK_LOST');}}return value;
  }};};
+ const facialAudit=createFacialChatAuditPort(f),connect=async()=>facialAudit(await baseConnect());
  let code=null,counter=0,lastReplyId=null;
  const prepareClient={query};
- await prepareMetaKycChallenge.beforeProject(prepareClient,f.issuer,{projectId:target.id});
- const prepareOperationId=randomUUID(),prepared=await prepareMetaKycChallenge(prepareClient,f.issuer,target,{workerId:f.worker.id,revision:f.worker.revision,operationId:prepareOperationId});code=prepared.code;
+ await prepareChallenge.beforeProject(prepareClient,f.issuer,{projectId:target.id});
+ const prepareOperationId=randomUUID(),prepared=await prepareChallenge(prepareClient,f.issuer,target,{workerId:f.worker.id,revision:f.worker.revision,operationId:prepareOperationId});code=prepared.code;
  // Default fixture represents an already-issued legacy capture. New issuance is tested with explicit schema2.
  if(captureImageSetVersion!==2){delete f.worker.metadata.participant.kycChatChallenge.captureImageSetVersion;delete f.audits.get(prepared.receiptId).metadata.captureImageSetVersion;}
  const exteriorId=participantReceiptId(f.issuer.actorId,target.id,prepareOperationId);
  f.audits.set(exteriorId,{id:exteriorId,organizationId:target.organizationId,actorId:f.issuer.actorId,action:'participant.operation.recorded',entityType:'Worker',entityId:f.worker.id,metadata:{version:1,projectId:target.id,kind:'PREPARE_KYC_CHAT',requestDigest:digest(['fixture-PREPARE_KYC_CHAT',prepareOperationId,target.id,f.worker.id]),challengeReceiptId:prepared.receiptId,expiresAt:prepared.expiresAt}});
  const provider={downloadMedia:async({beforeExternal})=>{await beforeExternal();control.graph++;if(control.afterGraph)await control.afterGraph();await beforeExternal();control.cdn++;return {contentType:'image/png',bytes:lifecyclePng};},sendReply:async()=>{f.controls.sends++;if(control.afterSend)await control.afterSend();return {messageId:'wamid.CorporateKycReply_'+f.controls.sends};}};
  const upload=createParticipantChannelKycUploader({put:f.blob.put,get:f.blob.get,environment:()=>f.environment});
- const deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,environment:f.environment});
+ const deposit=createParticipantChannelKycDeposit({assessCaptureQuality:value=>(f.controls.quality||syntheticCaptureQuality)(value),connect,resolveAuthority:resolveMetaKycAuthority,upload,environment:f.environment});
  const bridge=createMetaKycBridge({connect,provider,deposit,environment:f.environment}),outbound=createMetaKycOutbound({connect,provider,environment:f.environment});
  const receive=(message,{sender=f.worker.phone.slice(1),contextId=lastReplyId,company=true}={})=>{
   counter++;const id='customer_webhook_'+digest(['company-kyc-fixture',counter]),value={id:'wamid.CorporateKycMessage_'+counter,from:sender,timestamp:String(Math.floor(f.now.getTime()/1000)+counter),...(typeof message==='string'?{type:'text',text:{body:message}}:message),...(contextId?{context:{id:contextId}}:{})};
@@ -128,6 +135,6 @@ export async function companyKycMemoryFixture({active=false,grantLifetimeMs=null
   findInvitation:async value=>{identityCalls.findInvitation++;assert.deepEqual(value,{organizationId:clerkOrganizationId,invitationId});return {id:'orginv_Synthetic',email,role:'org:member',state:'accepted',expiresAt:f.worker.metadata.participant.invitation.expiresAt,invitationId};},
   verifyMembership:async value=>{identityCalls.verifyMembership++;assert.deepEqual(value,{userId:session.userId,organizationId:clerkOrganizationId,invitationId});return {role:'org:member'};}
  };
- const participant=createParticipantStore({workspace:{},connect,identity,environment:f.environment}),join=(operationId=randomUUID())=>participant.join(session,{invitationId,operationId},{accept:true});
+ const participant=createParticipantStore({assessCaptureQuality:value=>(f.controls.quality||syntheticCaptureQuality)(value),workspace:{},connect,identity,environment:f.environment}),join=(operationId=randomUUID())=>participant.join(session,{invitationId,operationId},{accept:true});
  return {...f,anchor,target,owner,code,control,query,connect,provider,upload,deposit,bridge,outbound,receive,state,execute,choose,image,toConfirmation,participant,join,session,identityCalls};
 }

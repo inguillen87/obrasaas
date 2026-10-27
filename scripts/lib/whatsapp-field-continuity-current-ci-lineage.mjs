@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet} from './plan-budget-current-ci-lineage.mjs';
+import {planBudgetCurrentSourcePin,verifyPlanBudgetCurrentSources,planBudgetValidationFiles,PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet as worksiteSourceSet0} from './worksite-live-hours-current-ci-lineage.mjs';
 import {restoreMaterialReviewPreviousContract as materialOuter0,materialReviewCurrentSourcePin as materialOuter1,verifyMaterialReviewCurrentSources as materialOuter2,materialReviewValidationFiles as materialOuter3,restoreMaterialReviewSourceSet as materialOuter4,materialReviewProofSourceAdditions as materialOuter5} from './material-review-current-ci-lineage.mjs';
 import {existingApiPlanCurrentNativeSourceFiles as planNative0,existingApiPlanNativeSourceFilesFromReader as planNative1} from './meta-existing-api-plan-current-ci-lineage.mjs';
@@ -13023,17 +13023,35 @@ export function whatsappFieldContinuityProofSourceAdditions(spec){
 }
 
 const syntaxShape=value=>Array.isArray(value)?value.map(syntaxShape):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>!['start','end','loc','extra','comments','leadingComments','innerComments','trailingComments'].includes(key)).map(([key,item])=>[key,syntaxShape(item)])):value;
+
+// Authenticate actual outer bytes; never replace the frozen native matrices.
+function companyCurrentProducerFrame(contract,readSource,run){
+ if(!contract?.[PLAN_BUDGET_CURRENT_SECTION]?.ownRuntimeDiagnosticAdvance)return run(false);
+ const family=WHATSAPP_FIELD_CONTINUITY_NATIVE.families.COMPANY,files=[...new Set(['.github/workspace-acceptance-contract.json',family.producer,...planBudgetValidationFiles(contract)])].sort(),beforeMetadata=JSON.stringify(contract),before=new Map();
+ const snapshot=file=>{const bytes=readSource(file);requireLineage(Buffer.isBuffer(bytes),'Actual current COMPANY source required: '+file);return Buffer.from(bytes);};
+ for(const file of files)before.set(file,snapshot(file));
+ requireLineage(same(JSON.parse(before.get('.github/workspace-acceptance-contract.json')),contract),'Actual COMPANY contract must equal caller metadata');
+ const verify=()=>{try{verifyPlanBudgetCurrentSources(contract,readSource);}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}};
+ try{verify();return run(true);}finally{requireLineage(JSON.stringify(contract)===beforeMetadata,'COMPANY caller metadata changed');for(const file of files)requireLineage(snapshot(file).equals(before.get(file)),'Actual COMPANY source changed during call: '+file);verify();}
+}
+function companyCurrentProducerPin(contract,family){
+ try{return planBudgetCurrentSourcePin(contract,{path:family.producer,sha256:family.producerSha256});}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+}
+
 export function whatsappFieldCompanyNativeSourceFiles(readSource,libraryFiles){
+ requireLineage(typeof readSource==='function','Actual current COMPANY source reader required');
+ const contractBytes=readSource('.github/workspace-acceptance-contract.json'),contract=Buffer.isBuffer(contractBytes)?JSON.parse(contractBytes):null;return companyCurrentProducerFrame(contract,readSource,advanced=>{
  const family=WHATSAPP_FIELD_CONTINUITY_NATIVE.families?.COMPANY;requireLineage(WHATSAPP_FIELD_CONTINUITY_NATIVE.status==='REVIEWED_FROZEN_CURRENT_SOURCE'&&family,'Frozen current COMPANY producer required');
  requireLineage(typeof readSource==='function'&&Array.isArray(libraryFiles)&&same(libraryFiles,[...libraryFiles].sort())&&new Set(libraryFiles).size===libraryFiles.length&&libraryFiles.every(file=>safe(file)&&file.startsWith('src/lib/')),'Complete distinct current library paths required');
- const raw=readSource(family.producer);requireLineage(Buffer.isBuffer(raw)&&sha(raw.toString('utf8').replaceAll('\r\n','\n'))===family.producerSha256,'Exact current COMPANY producer source required');
+ const raw=readSource(family.producer);requireLineage(Buffer.isBuffer(raw)&&sha(raw.toString('utf8').replaceAll('\r\n','\n'))===(advanced?companyCurrentProducerPin(contract,family):family.producerSha256),'Exact current COMPANY producer source required');
  const tree=parse(raw.toString('utf8'),{sourceType:'module'}),declarations=tree.program.body.filter(node=>node.type==='VariableDeclaration').flatMap(node=>node.declarations),actual=declarations.find(node=>node.id?.name==='sourceManifest')?.init;
- const roots=['src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs','scripts/lib/kyc-current-image-native.mjs','scripts/lib/kyc-neutral-step-guidance-native.mjs'];
+ const roots=advanced?['scripts/lib/synthetic-capture-quality.mjs','src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs','scripts/lib/kyc-current-image-native.mjs','scripts/lib/kyc-neutral-step-guidance-native.mjs','tests/fixtures/meta-kyc-challenge-legacy-v2.mjs']:['src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs','scripts/lib/kyc-current-image-native.mjs','scripts/lib/kyc-neutral-step-guidance-native.mjs'];
  const expected=parse("const sourceManifest=[...sources('src/lib'),"+roots.map(file=>JSON.stringify(file)).join(',')+"].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))}));",{sourceType:'module'}).program.body[0].declarations[0].init;
  requireLineage(actual&&same(syntaxShape(actual),syntaxShape(expected)),'Exact additive current COMPANY source-manifest AST required');
- const files=[...libraryFiles,...roots].sort(),contractBytes=readSource('.github/workspace-acceptance-contract.json'),contract=Buffer.isBuffer(contractBytes)?JSON.parse(contractBytes):null,expectedFiles=existingApiPlanNativeSourceFilesFromReader(readSource,'COMPANY',family.sourceFiles);
- const previousFiles=contract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',files):files;
+ const files=[...libraryFiles,...roots].sort(),expectedFiles=existingApiPlanNativeSourceFilesFromReader(readSource,'COMPANY',family.sourceFiles);
+ const budgetFiles=advanced?restorePlanBudgetSourceSet(contract,'PG_COMPANY_KYC',files):files,previousFiles=contract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',budgetFiles):budgetFiles;
  requireLineage(same(previousFiles,expectedFiles),'Exact complete current COMPANY path set required');for(const file of files)requireLineage(Buffer.isBuffer(readSource(file)),'Missing actual COMPANY source: '+file);return files;
+ });
 }
 
 // Extend only a complete authenticated API-layer native set. The old matrix
@@ -13054,7 +13072,17 @@ function currentWorksiteNativeSourceFiles(contract,familyName,previous){
    restorePlanBudgetPreviousContract(contract);
    const delta=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family);
    requireLineage(delta&&Array.isArray(delta.additions),'An exact Budget native companion delta is required');
-   const next=[...current,...delta.additions].sort(),restored=restorePlanBudgetSourceSet(contract,family,next);
+   let next;
+   if(delta.contractPointer!==null){
+    const pointer=/^\/extension\/proofs\/(\d+)\/sourceFiles$/.exec(delta.contractPointer),proof=pointer?contract.extension?.proofs?.[Number(pointer[1])]:null;
+    requireLineage(proof&&proof.kind===family&&proof.producer===WHATSAPP_FIELD_CONTINUITY_NATIVE.families[familyName].producer&&contract.extension.proofs.filter(row=>row.kind===family).length===1&&Array.isArray(proof.sourceFiles),'The authenticated complete current native proof is required');
+    next=[...proof.sourceFiles];
+   }else{
+    const currentFamily=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family);
+    requireLineage(currentFamily&&Array.isArray(currentFamily.currentFiles),'The authenticated complete current native family is required');
+    next=[...currentFamily.currentFiles];
+   }
+   const restored=restorePlanBudgetSourceSet(contract,family,next);
    requireLineage(same(restored,current),'The complete pre-Budget native matrix must restore exactly');current=next;
   }catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
  }
@@ -13065,6 +13093,10 @@ function currentWorksiteNativeSourceFiles(contract,familyName,previous){
 // Original13/17/4 matrices, leases and raw proofs remain independently checked
 // by their existing validators; this guard never replaces those checks.
 export function validateWhatsappFieldNeutralStepNative(proof,familyName,contract,readSource){
+ if(familyName==='COMPANY')return companyCurrentProducerFrame(contract,readSource,advanced=>validateWhatsappFieldNeutralStepNativeInner(proof,familyName,contract,readSource,advanced));
+ return validateWhatsappFieldNeutralStepNativeInner(proof,familyName,contract,readSource,false);
+}
+function validateWhatsappFieldNeutralStepNativeInner(proof,familyName,contract,readSource,advanced){
  const value=authenticatedSection(contract);if(!value)return null;
  requireLineage(['COMPANY','OWN'].includes(familyName)&&WHATSAPP_FIELD_CONTINUITY_NATIVE.status==='REVIEWED_FROZEN_CURRENT_SOURCE','Exact current native family required');
  verifyWhatsappFieldContinuityCurrentSources(contract,readSource);
@@ -13095,7 +13127,7 @@ export function validateWhatsappFieldNeutralStepNative(proof,familyName,contract
   return Object.fromEntries(Object.entries(row).filter(([key])=>!omit.includes(key)));
  });
  requireLineage(same(projected,family.caseMatrix),'Every fixed current native observation must equal its reviewed matrix');
- const producer=readSource(family.producer);requireLineage(Buffer.isBuffer(producer)&&sha(producer.toString('utf8').replaceAll('\r\n','\n'))===family.producerSha256&&proof.harnessSha256===sha(producer),'Actual native harness must equal the current source reader');
+ const producer=readSource(family.producer);requireLineage(Buffer.isBuffer(producer)&&sha(producer.toString('utf8').replaceAll('\r\n','\n'))===(advanced?companyCurrentProducerPin(contract,family):family.producerSha256)&&proof.harnessSha256===sha(producer),'Actual native harness must equal the current source reader');
  const currentNativeFiles=currentWorksiteNativeSourceFiles(contract,familyName,existingApiPlanCurrentNativeSourceFiles(contract,familyName,family.sourceFiles));
  requireLineage(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===currentNativeFiles.length&&same(proof.sourceManifest.map(row=>row?.path).sort(),currentNativeFiles),'The complete current native source manifest is required');
  for(const row of proof.sourceManifest){exactKeys(row,['path','sha256'],'native source reference');const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes)&&row.sha256===sha(bytes),'Stale native source bytes: '+row.path);}

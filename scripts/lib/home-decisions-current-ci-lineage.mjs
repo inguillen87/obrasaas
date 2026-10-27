@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_REVISION,PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
@@ -4429,48 +4429,41 @@ function companyNativeRead(readSource,file){let bytes;try{bytes=readSource(file)
 function companyNativeSourceFrame(manifest,readSource,run){
  const n=COMPANY_ONBOARDING_UX_NATIVE_REVIEW,r=companyNativeRequired,k=companyNativeKeys;
  r(typeof readSource==='function','SOURCE_READER');
- const manifestBefore=JSON.stringify(manifest),snapshots=new Map();let contract,contractBefore;
+ const manifestBefore=JSON.stringify(manifest),snapshots=new Map();let contract,contractBefore,verifyOwners=null;
  const remember=(file,bytes)=>snapshots.set(file,Buffer.from(bytes));
- const checkedRead=file=>{
-  r(snapshots.has(file),'SOURCE_READER_OUTSIDE_FRAME');
-  const bytes=companyNativeRead(readSource,file);
-  r(bytes.equals(snapshots.get(file)),'SOURCE_CHANGED_DURING_CALL');return bytes;
- };
- const ownerFailure=error=>{
-  if(['HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED','WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED','PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'].includes(error?.code))r(false,'CURRENT_SOURCE_AUTHORITY');
-  throw error;
- };
+ const checkedRead=file=>{r(snapshots.has(file),'SOURCE_READER_OUTSIDE_FRAME');const bytes=companyNativeRead(readSource,file);r(bytes.equals(snapshots.get(file)),'SOURCE_CHANGED_DURING_CALL');return bytes;};
+ const ownerFailure=error=>{if(['HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED','WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED','PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'].includes(error?.code))r(false,'CURRENT_SOURCE_AUTHORITY');throw error;};
  try{
   const contractPath='.github/workspace-acceptance-contract.json',raw=companyNativeRead(readSource,contractPath);
-  remember(contractPath,raw);r(raw.equals(Buffer.from(raw.toString('utf8'))),'CONTRACT_UTF8');
-  try{contract=JSON.parse(raw);}catch{r(false,'CONTRACT_JSON');}
+  remember(contractPath,raw);r(raw.equals(Buffer.from(raw.toString('utf8'))),'CONTRACT_UTF8');try{contract=JSON.parse(raw);}catch{r(false,'CONTRACT_JSON');}
   r(plain(contract),'CONTRACT_SHAPE');contractBefore=JSON.stringify(contract);
-  const hours=Object.hasOwn(contract,WORKSITE_LIVE_HOURS_CURRENT_SECTION),budget=Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION);
-  r(hours===budget,'PARTIAL_CURRENT_SOURCE_AUTHORITY');
-  const additions=hours?['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']:[];
+  const hours=Object.hasOwn(contract,WORKSITE_LIVE_HOURS_CURRENT_SECTION),budget=Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION);r(hours===budget,'PARTIAL_CURRENT_SOURCE_AUTHORITY');
+  const materialPaths=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'],own=contract[PLAN_BUDGET_CURRENT_SECTION]?.ownRuntimeDiagnosticAdvance;
+  if(own!==undefined)r(plain(own)&&Array.isArray(own.sourceChanges)&&Array.isArray(own.retainedDependencies),'MATERIAL_SOURCE_AUTHORITY');
+  const materialRows=own?.sourceChanges.filter(row=>materialPaths.includes(row?.path))||[],materials=materialRows.length>0;
+  r(materialRows.length===0||materialRows.length===3,'MATERIAL_SOURCE_AUTHORITY');if(materials){const reviewedOwn=PLAN_BUDGET_CURRENT_REVISION.ownRuntimeDiagnosticAdvance;r(hours&&budget&&plain(reviewedOwn)&&same(own.sourceChanges.map(row=>row.path),reviewedOwn.sourceChanges.map(row=>row.path))&&same(own.retainedDependencies,reviewedOwn.retainedDependencies),'MATERIAL_SOURCE_AUTHORITY');}
+  const kycPaths=["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"],kycRows=own?.sourceChanges.filter(row=>kycPaths.includes(row?.path))||[],kyc=kycRows.length>0;r(kycRows.length===0||kycRows.length===kycPaths.length,'MATERIAL_SOURCE_AUTHORITY');
+  const additions=[...(hours?['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']:[]),...(materials?materialPaths:[]),...(kyc?kycPaths:[])];
   r(Array.isArray(manifest)&&manifest.length===n.sourceCount+additions.length,'SOURCE_MANIFEST');
-  const paths=[];
-  for(const ref of manifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);}
+  const paths=[];for(const ref of manifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);}
   const historical=paths.filter(file=>!additions.includes(file));
   r(new Set(paths).size===paths.length&&additions.every(file=>paths.includes(file))&&historical.length===n.sourceCount&&companyNativeSha(JSON.stringify(historical.slice().sort()))===n.sourcePathsSha256,'SOURCE_SET');
-  const snapshot=file=>{
-   const bytes=companyNativeRead(readSource,file);
-   if(snapshots.has(file))r(bytes.equals(snapshots.get(file)),'SOURCE_CHANGED_DURING_CALL');else remember(file,bytes);
-  };
+  const snapshot=file=>{const bytes=companyNativeRead(readSource,file);if(snapshots.has(file))r(bytes.equals(snapshots.get(file)),'SOURCE_CHANGED_DURING_CALL');else remember(file,bytes);};
   for(const file of [...new Set([n.producer,...paths])].sort())snapshot(file);
-  let authorityFiles;
-  try{authorityFiles=[...(hours||progressEvidenceWaitSection(contract)?homeDecisionsValidationFiles(contract):[]),...(hours?worksiteLiveHoursValidationFiles(contract):[]),...(budget?planBudgetValidationFiles(contract):[])];}catch(error){ownerFailure(error);}
+  let authorityFiles;try{authorityFiles=[...(hours||progressEvidenceWaitSection(contract)?homeDecisionsValidationFiles(contract):[]),...(hours?worksiteLiveHoursValidationFiles(contract):[]),...(budget?planBudgetValidationFiles(contract):[])];}catch(error){ownerFailure(error);}
   for(const file of [...new Set(authorityFiles)].sort())snapshot(file);
-  try{
-   if(hours)verifyWorksiteLiveHoursCurrentSources(contract,checkedRead);
-   if(budget)verifyPlanBudgetCurrentSources(contract,checkedRead);
-  }catch(error){ownerFailure(error);}
+  verifyOwners=()=>{try{
+   if(hours)verifyWorksiteLiveHoursCurrentSources(contract,checkedRead);if(budget)verifyPlanBudgetCurrentSources(contract,checkedRead);
+   if(materials)for(const file of materialPaths){const row=own.sourceChanges.find(row=>row.path===file),bytes=checkedRead(file);r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(bytes.toString('utf8').replaceAll('\r\n','\n')),'MATERIAL_SOURCE_AUTHORITY');}
+   if(kyc)for(const file of kycPaths){const row=own.sourceChanges.find(row=>row.path===file),bytes=checkedRead(file);r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(bytes.toString('utf8').replaceAll('\r\n','\n')),'MATERIAL_SOURCE_AUTHORITY');}
+  }catch(error){ownerFailure(error);}};
+  verifyOwners();
   for(const ref of manifest)r(companyNativeSha(checkedRead(ref.path))===ref.sha256,'SOURCE_HASH');
   return run({contract,readSource:checkedRead,additions,sourceCount:paths.length});
  }finally{
-  // Visit the whole captured frame even when validation or a prior fence fails.
   let changed;
-  for(const file of snapshots.keys()){try{checkedRead(file);}catch(error){changed??=error;}}
+  if(verifyOwners)try{verifyOwners();}catch(error){changed??=error;}
+  for(const file of snapshots.keys())try{checkedRead(file);}catch(error){changed??=error;}
   if(JSON.stringify(manifest)!==manifestBefore)changed??=Object.assign(new Error('Current company native manifest changed during call'),{code:'COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED',reason:'SOURCE_MANIFEST_CHANGED_DURING_CALL'});
   if(contractBefore!==undefined&&JSON.stringify(contract)!==contractBefore)changed??=Object.assign(new Error('Current company native contract changed during call'),{code:'COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED',reason:'CONTRACT_CHANGED_DURING_CALL'});
   if(changed)throw changed;

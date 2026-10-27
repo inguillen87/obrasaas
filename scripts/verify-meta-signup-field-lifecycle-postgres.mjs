@@ -1,7 +1,9 @@
+import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
+import {CAPTURE_QUALITY_NOTICE_VERSION,CAPTURE_QUALITY_MODEL_MANIFEST_SHA256} from '../src/lib/private-capture-quality.mjs';
 import assert from 'node:assert/strict';
 import {createHash,createHmac,randomUUID} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {lifecycleDisposableUrl,lifecycleEnvironment,lifecycleSchema,lifecycleTenants,lifecyclePng,createControlledLifecycleGraph,createControlledLifecycleClerk,createControlledLifecycleBlob} from './fixtures/meta-signup-field-lifecycle-fixture.mjs';
@@ -23,7 +25,8 @@ import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers,splitMetaCust
 import {createMetaFieldBridge} from '../src/lib/meta-field-bridge.mjs';
 import {createMetaCustomerOutbound,customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {createMetaCustomerProcessor,createMetaCustomerJobHandlers,signMetaCustomerJob} from '../src/lib/meta-customer-processing.mjs';
-import {prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
+// This existing journey is an explicit historical v2 oracle; current v3 has separate KYC consumer coverage.
+import {prepareMetaKycChallenge as prepareHistoricalV2Challenge} from '../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs';
 import {resolveMetaKycAuthority,readMetaKycConversation,META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
@@ -32,6 +35,14 @@ import {participantKycImageSet,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
 
 // Check the explicitly disposable target before constructing a client or engine.
+assert.equal(createHash('sha256').update(readFileSync(new URL('../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs',import.meta.url))).digest('hex'),'b0403d1627eb3fc03fd9a41820b56c1a2dcdc74d14a0578e06f75fbc6571adb8','Exact reviewed historical v2 challenge fixture; no v3 coverage claim');
+const fixtureQualityDigests=Object.fromEntries(['DOCUMENT_FRONT','SELFIE','DOCUMENT_BACK'].map(kind=>[kind,new Set(kind==='DOCUMENT_BACK'?[]:[createHash('sha256').update(lifecyclePng).digest('hex')])]));
+async function assessFixtureCaptureQuality(input){
+ assert.equal(input.consentVersion,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_NOTICE_VERSION,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_MODEL_MANIFEST_SHA256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(input.image?.mimeType,'image/png');assert.ok(Buffer.isBuffer(input.image?.buffer));
+ const imageSha256=createHash('sha256').update(input.image.buffer).digest('hex'),allowed=fixtureQualityDigests;assert.ok(allowed[input.kind]?.has(imageSha256),'Only this verifier owns the exact generated synthetic image for this kind');
+ assert.equal(createHash('sha256').update(readFileSync(new URL('./lib/synthetic-capture-quality.mjs',import.meta.url))).digest('hex'),'ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420','Exact reviewed synthetic adapter source');assert.equal(createHash('sha256').update(readFileSync(new URL('../src/lib/capture-quality-policy.mjs',import.meta.url))).digest('hex'),'94cfd5f24158983a93430158a33716119cb17783f6067053610a788638dd5057','Exact reviewed capture notice/policy source');
+ const result=await syntheticCaptureQuality(input);assert.equal(result.imageSha256,imageSha256);assert.equal(result.modelManifestSha256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(result.identityCertified,false);assert.equal(result.livenessVerified,false);assert.equal(result.documentAuthenticityVerified,false);return result;
+}
 const url=lifecycleDisposableUrl(process.env),database='obrasaas_meta_lifecycle_'+randomUUID().replaceAll('-','');
 assert.match(database,/^obrasaas_meta_lifecycle_[a-f0-9]{32}$/);
 const admin=new Client({connectionString:url.toString()}),environment={...lifecycleEnvironment},checks=[];
@@ -83,7 +94,7 @@ try{
  const identity=createParticipantIdentityProvider({client:clerk.client,environment:()=>environment});
  const upload=createPrivateImageUploader({get:blob.get,put:blob.put,environment:()=>environment});
  const channelUpload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment});
- const participants=createParticipantStore({workspace,connect,identity,upload:upload.uploadImageToBlob,get:blob.get,prepareKycChat:prepareMetaKycChallenge});
+ const participants=createParticipantStore({assessCaptureQuality:assessFixtureCaptureQuality,workspace,connect,identity,upload:upload.uploadImageToBlob,get:blob.get,prepareKycChat:prepareHistoricalV2Challenge});
  const channel=createWorkerChannelStore({workspace}),operations=createFieldOperations({workspace});
  const analyzer={analyzePhoto:async()=>{analyses++;return {success:true,status:'ANALYZED_UNREVIEWED',aiAnalysis:'Controlled synthetic analysis; human review required.',requiresHumanReview:true};},transcribeAudio:async()=>({success:false,code:'SYNTHETIC_AUDIO_NOT_REQUESTED'})};
  const media=createFieldMedia({operations,get:blob.get,put:blob.put,analyzer,environment:()=>environment});
@@ -91,7 +102,7 @@ try{
  const runtime=()=>{
   const bridge=createMetaFieldBridge({connect,environment,provider,get:blob.get,put:blob.put,analyzer});
   const outbound=createMetaCustomerOutbound({connect,resolveIdentity:resolveWorkerChannelIdentity,provider,environment});
-  const deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload:channelUpload,environment});
+  const deposit=createParticipantChannelKycDeposit({assessCaptureQuality:assessFixtureCaptureQuality,connect,resolveAuthority:resolveMetaKycAuthority,upload:channelUpload,environment});
   const kycBridge=createMetaKycBridge({connect,provider,deposit,environment}),kycOutbound=createMetaKycOutbound({connect,provider,environment});
   const processor=createMetaCustomerProcessor({connect,dispatch:async context=>(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:META_KYC_AUTHORIZATION_CODES,outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):outbound.send(context,reply),observeStatus:(...args)=>outbound.observeStatus(...args)},environment});
   return {bridge,outbound,processor};
@@ -234,7 +245,8 @@ try{
  const preparedReplay=await participants.save(b.owner,prepareCommand);assert.equal(preparedReplay.codeUnavailable,true);assert.equal(preparedReplay.code,undefined);assert.equal(preparedReplay.receiptId,preparedKyc.receiptId);
  await receive(b,preparedKyc.code,{signature:false});const crossedKyc=await execute(a,preparedKyc.code);assert.equal(crossedKyc.result.code,'META_KYC_CHALLENGE_REJECTED');assert.equal(crossedKyc.result.businessApplied,false);assert.equal(crossedKyc.result.replySent,false);assert.deepEqual(transportCounts(),beforeKyc);
  const freshFront=capturePng([31,97,157]),freshSelfie=capturePng([191,61,83]),freshBack=capturePng([71,181,113]),freshFrontId='1666666666666611',freshSelfieId='1666666666666612',freshBackId='1666666666666613';
- const imageHash=bytes=>createHash('sha256').update(bytes).digest('hex');assert.notEqual(imageHash(freshFront),imageHash(freshSelfie));assert.equal(new Set([freshFront,freshSelfie,freshBack].map(imageHash)).size,3);for(const bytes of [freshFront,freshSelfie,freshBack])assert.notEqual(imageHash(bytes),imageHash(lifecyclePng));
+ for(const [kind,bytes]of [['DOCUMENT_FRONT',freshFront],['SELFIE',freshSelfie],['DOCUMENT_BACK',freshBack]])fixtureQualityDigests[kind].add(createHash('sha256').update(bytes).digest('hex'));
+  const imageHash=bytes=>createHash('sha256').update(bytes).digest('hex');assert.notEqual(imageHash(freshFront),imageHash(freshSelfie));assert.equal(new Set([freshFront,freshSelfie,freshBack].map(imageHash)).size,3);for(const bytes of [freshFront,freshSelfie,freshBack])assert.notEqual(imageHash(bytes),imageHash(lifecyclePng));
  for(const [mediaId,bytes] of [[freshFrontId,freshFront],[freshSelfieId,freshSelfie],[freshBackId,freshBack]]){kycMediaIds.add(mediaId);graph.addMedia(b.key,mediaId,bytes);}
  const assertNoKycMediaIO=()=>{assert.equal(blob.puts(),beforeKyc.puts);assert.equal(graph.assets.get('b').downloads,0);assert.equal(kycMediaLookups,beforeKyc.mediaLookups);assert.equal(analyses,0);};
  let kycStep=await execute(b,preparedKyc.code);assert.equal(kycStep.result.kind,'KYC_CHAT');assert.equal(kycStep.result.identity.status,'LIMITED_KYC_UPLOAD');assert.equal(kycStep.result.businessApplied,false);

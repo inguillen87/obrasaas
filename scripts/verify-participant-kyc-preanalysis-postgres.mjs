@@ -22,7 +22,9 @@ import {createMetaCustomerInbox, createMetaCustomerCallbackHandlers, splitMetaCu
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
-import {prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
+import {prepareMetaKycChallenge as prepareHistoricalV2Challenge} from '../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs';
+import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
+import {CAPTURE_QUALITY_NOTICE_VERSION, CAPTURE_QUALITY_MODEL_MANIFEST_SHA256} from '../src/lib/private-capture-quality.mjs';
 import {resolveMetaKycAuthority, META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
 import {createParticipantChannelKycDeposit, createParticipantChannelKycUploader} from '../src/lib/participant-channel-kyc.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
@@ -109,10 +111,41 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
   assert.match(database, databasePattern);
   const sources = participantPreanalysisSourceManifest(), sourceDigest = digest(sources), startedAt = new Date().toISOString();
   const nativeEnvironment = {...lifecycleEnvironment};
-  const admin = new Client({connectionString: target.href, options: '-c statement_timeout=8000 -c lock_timeout=5000'});
+  const admin = new Client({connectionString: target.href, options: '-c statement_timeout=8000 -c lock_timeout=5000 -c TimeZone=UTC'});
   const checks = [], sqlFailures = [], lockObservations = [], releases = new Set(), inFlight = new Set(), observedPids = new Set();
   const blob = createControlledLifecycleBlob(), webWakeups = [], whatsappWakeups = [];
   const counts = {unexpectedNetwork: 0, privateReads: 0, syntheticOpenAi: 0, syntheticBiometric: 0};
+
+  // Explicit generated-pixel adapter for this SQL/control-flow harness only.
+  // It exercises no vision/model inference, identity, authenticity or liveness.
+  assert.equal(sha(readFileSync(new URL('./lib/synthetic-capture-quality.mjs', import.meta.url))), 'ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420');
+  assert.equal(sha(readFileSync(new URL('../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs', import.meta.url))), 'b0403d1627eb3fc03fd9a41820b56c1a2dcdc74d14a0578e06f75fbc6571adb8');
+  assert.equal(sha(readFileSync(new URL('../src/lib/capture-quality-policy.mjs', import.meta.url))), '94cfd5f24158983a93430158a33716119cb17783f6067053610a788638dd5057');
+  const qualitySources = new Map();
+  const ownQualitySource = (kind, bytes) => {
+    assert.ok(['DOCUMENT_FRONT', 'DOCUMENT_BACK', 'SELFIE'].includes(kind));
+    assert.ok(Buffer.isBuffer(bytes));
+    const owned = Buffer.from(bytes), key = kind + ':' + sha(owned);
+    assert.equal(qualitySources.has(key), false, 'Each generated capture is registered once by this harness');
+    qualitySources.set(key, owned); return Buffer.from(owned);
+  };
+  const assessCaptureQuality = async input => {
+    assert.ok(['DOCUMENT_FRONT', 'DOCUMENT_BACK', 'SELFIE'].includes(input.kind));
+    assert.equal(input.image.mimeType, 'image/png'); assert.ok(Buffer.isBuffer(input.image.buffer));
+    assert.equal(input.consentVersion, 'participant-capture-quality-v1');
+    assert.equal(CAPTURE_QUALITY_NOTICE_VERSION, 'participant-capture-quality-v1');
+    assert.equal(CAPTURE_QUALITY_MODEL_MANIFEST_SHA256, '49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');
+    const digest = sha(input.image.buffer), owned = qualitySources.get(input.kind + ':' + digest);
+    assert.ok(owned, 'Only captures generated and registered by this exact harness may enter its synthetic quality port');
+    assert.deepEqual(input.image.buffer, owned);
+    const result = await syntheticCaptureQuality(input);
+    assert.equal(result.version, 1); assert.equal(result.mode, 'capture-quality-v1'); assert.equal(result.kind, input.kind);
+    assert.equal(result.state, 'QUALITY_PASS'); assert.deepEqual(result.reasonCodes, []);
+    assert.equal(result.imageSha256, digest); assert.equal(result.modelManifestSha256, CAPTURE_QUALITY_MODEL_MANIFEST_SHA256);
+    assert.equal(result.identityCertified, false); assert.equal(result.livenessVerified, false); assert.equal(result.documentAuthenticityVerified, false);
+    return result;
+  };
+
   const originalFetch = globalThis.fetch;
   let pool, created = false, ownedOid = null, engine, ownership, activeCheck = null, failure = null;
   let getHook = null, fetchHook = null, providerMode = 'SUCCESS', readiness = {ocr: true, biometric: true}, webNumber = 0;
@@ -183,7 +216,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
     ownership = (await admin.query(`SELECT d.oid,d.datname,pg_get_userbyid(d.datdba) AS owner FROM pg_database d WHERE d.datname=$1`, [database])).rows[0];
     assert.equal(ownership.datname, database); assert.equal(ownership.owner, 'cutover_test'); ownedOid = ownership.oid;
     const child = new URL(target); child.pathname = '/' + database;
-    pool = trackDisposablePool(new Pool({connectionString: child.href, max: 12, options: '-c statement_timeout=8000 -c lock_timeout=5000'}));
+    pool = trackDisposablePool(new Pool({connectionString: child.href, max: 12, options: '-c statement_timeout=8000 -c lock_timeout=5000 -c TimeZone=UTC'}));
     pool.on('connect', client => observedPids.add(client.processID));
     assert.equal((await query('SELECT current_database() AS database')).rows[0].database, database);
     await query(lifecycleSchema); await query(`ALTER TABLE public."Organization" ADD COLUMN "subscriptionPlan" text DEFAULT 'TRIAL',ADD COLUMN "subscriptionStatus" text DEFAULT 'TRIALING'`);
@@ -195,7 +228,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
     }
     const workspace = createWorkspaceStore({connect}), usage = createOrganizationUsage({workspace, connect});
     const uploader = createPrivateImageUploader({get, put: blob.put, environment: () => nativeEnvironment});
-    const store = createParticipantStore({workspace, connect, upload: uploader.uploadImageToBlob, get, environment: nativeEnvironment});
+    const store = createParticipantStore({workspace, connect, upload: uploader.uploadImageToBlob, get, assessCaptureQuality, environment: nativeEnvironment});
     const analyzer = createPilotMediaAnalyzer({environment: () => ({OPENAI_API_KEY: 'synthetic-preanalysis-no-provider-access'}), fetchImpl: liveFetch});
     const service = createParticipantKycPreanalysis({connect, get, analyzer, assessBiometrics: biometrics, usage, readiness: () => readiness});
     async function submit({ocr = true, biometric = false, legacy = false, back = false} = {}) {
@@ -206,7 +239,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
       const metadata = {siteRegister: {version: 1}, participant: {version: 1, status: 'ACTIVE', clerkUserId: userId, permissions: {attendance: false, report: false}, kyc: {version: 1, status: 'NOT_SUBMITTED'}}};
       await query(`INSERT INTO public."Worker"(id,"projectId",name,phone,role,active,metadata) VALUES($1,'project-a','Synthetic preanalysis participant',$2,'WORKER',true,$3::jsonb)`, [workerId, '+5491101' + String(number).padStart(6, '0'), JSON.stringify(metadata)]);
       const actor = session(userId), scope = (await workspace.list(actor)).scope, initial = await row(workerId), rolesBeforeCapture = await roleSnapshot();
-      const image = kind => Buffer.concat([lifecyclePng, Buffer.from('synthetic-preanalysis-' + number + '-' + kind)]).toString('base64');
+      const image = kind => ownQualitySource({front: 'DOCUMENT_FRONT', back: 'DOCUMENT_BACK', selfie: 'SELFIE'}[kind], Buffer.concat([lifecyclePng, Buffer.from('synthetic-preanalysis-' + number + '-' + kind)])).toString('base64');
       const input = {projectId: 'project-a', scope, workerId, revision: initial.revision, operationId: randomUUID(), noticeVersion: PARTICIPANT_NOTICE_VERSION,
         consent: true, front: image('front'), selfie: image('selfie'), ocrConsent: ocr, ocrNoticeVersion: legacy ? PARTICIPANT_OCR_NOTICE_VERSION : PARTICIPANT_AUTO_OCR_NOTICE_VERSION,
         biometricConsent: biometric, biometricNoticeVersion: legacy ? PARTICIPANT_BIOMETRIC_NOTICE_VERSION : PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION};
@@ -444,17 +477,18 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
       await query(`INSERT INTO public."WhatsAppConnection"(id,"projectId",enabled,"connectionStatus","phoneNumberId","whatsappBusinessId","encryptedAccessToken",metadata) VALUES($1,$2,true,'CONNECTED',$3,$4,$5,$6::jsonb)`, [tenant.channelId, tenant.projectId, tenant.phoneNumberId, tenant.wabaId, token, JSON.stringify(channelMetadata)]);
       const graph = createControlledLifecycleGraph(nativeEnvironment); graph.assets.get('a').registered = true; graph.assets.get('a').subscribed = true;
       const mediaIds = ['150000021', '150000022', '150000023'];
-      const mediaBytes = mediaIds.map((_, index) => Buffer.concat([lifecyclePng, Buffer.from('synthetic-whatsapp-identity-image-' + index)]));
+      const mediaBytes = mediaIds.map((_, index) => ownQualitySource(['DOCUMENT_FRONT', 'DOCUMENT_BACK', 'SELFIE'][index], Buffer.concat([lifecyclePng, Buffer.from('synthetic-whatsapp-identity-image-' + index)])));
       mediaIds.forEach((mediaId, index) => graph.addMedia('a', mediaId, mediaBytes[index]));
       const provider = createMetaCustomerProvider({environment: nativeEnvironment, fetchImpl: graph.fetchImpl});
       const channelUpload = createParticipantChannelKycUploader({get, put: blob.put, environment: () => nativeEnvironment});
-      const deposit = createParticipantChannelKycDeposit({connect, resolveAuthority: resolveMetaKycAuthority, upload: channelUpload, environment: nativeEnvironment});
+      const deposit = createParticipantChannelKycDeposit({connect, resolveAuthority: resolveMetaKycAuthority, upload: channelUpload, assessCaptureQuality, environment: nativeEnvironment});
       const bridge = createMetaKycBridge({connect, provider, deposit, environment: nativeEnvironment, scheduleAnalysis: ref => whatsappWakeups.push(ref)});
       const outbound = createMetaKycOutbound({connect, provider, environment: nativeEnvironment});
       const processor = createMetaCustomerProcessor({connect, environment: nativeEnvironment, authorizationCodes: META_KYC_AUTHORIZATION_CODES,
         dispatch: context => bridge.execute(context), outbound: {send: (context, reply, {purpose}) => outbound.send(context, reply, {purpose})}});
       const callback = createMetaCustomerCallbackHandlers({inbox: createMetaCustomerInbox({connect, environment: nativeEnvironment}), environment: nativeEnvironment, schedule: () => {}});
-      const code = await customerJobTransaction(connect, async client => prepareMetaKycChallenge(client,
+      // The INVITED/PENDING_ACCOUNT_CLAIM oracle is an already-issued historical v2 challenge, not v3 coverage.
+      const code = await customerJobTransaction(connect, async client => prepareHistoricalV2Challenge(client,
         {actorId: tenant.ownerId, membershipId: 'owner-member-a', organizationId: tenant.organizationId, role: 'ADMIN'},
         {id: tenant.projectId, organizationId: tenant.organizationId}, {workerId: tenant.workerId, revision: (await row(tenant.workerId)).revision, operationId: randomUUID()}));
       let sequence = 0;

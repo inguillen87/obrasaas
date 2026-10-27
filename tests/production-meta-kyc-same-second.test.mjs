@@ -13,7 +13,7 @@ function choice(f,title){
 function stable(f){return {worker:structuredClone(f.worker.metadata),audits:structuredClone([...f.audits]),outbounds:structuredClone([...f.outbounds]),puts:f.blob.puts(),sends:f.controls.sends,graph:f.control?.graph||0,cdn:f.control?.cdn||0};}
 
 test('same-second corporate schema2 replies follow their exact confirmed prompts through one private submission',async()=>{
- const f=await companyKycMemoryFixture({captureImageSetVersion:2}),timestamp=Math.floor(f.now.getTime()/1000);
+ const f=await companyKycMemoryFixture({historicalChallengeVersion:2,captureImageSetVersion:2}),timestamp=Math.floor(f.now.getTime()/1000);
  await f.execute(at(text(f.code),timestamp));
  for(const title of ['Autorizar imágenes','Autorizar dorso','Sin lectura asistida','Sin comparación facial'])await f.execute(at(choice(f,title),timestamp));
  for(const expected of ['FRONT','BACK','SELFIE']){
@@ -44,7 +44,7 @@ for(const [name,options,mutate,code] of [
  ['suspended owner',{},f=>{f.owner.mode='SUSPENDED';},'META_KYC_COMPANY_AUTHORITY_CHANGED'],
  ['changed grant',{},f=>{f.connection.metadata.customerVerification.scopes=[];},'META_KYC_COMPANY_AUTHORITY_CHANGED']
 ])test('same-second capture keeps authority closed for '+name,async()=>{
- const f=await companyKycMemoryFixture(),timestamp=Math.floor(f.now.getTime()/1000);
+ const f=await companyKycMemoryFixture({historicalChallengeVersion:2}),timestamp=Math.floor(f.now.getTime()/1000);
  await f.execute(at(text(f.code),timestamp));
  const message=choice(f,'Autorizar imágenes');if(name==='stale choice nonce')message.interactive.list_reply.id='kyc:'+'f'.repeat(20)+':0';
  const context=f.receive(at(message,name==='earlier timestamp'?timestamp-1:timestamp),options);mutate(f);const before=stable(f);
@@ -52,7 +52,7 @@ for(const [name,options,mutate,code] of [
 });
 
 test('an older confirmed prompt cannot advance the current same-second conversation even with its current nonce',async()=>{
- const f=await companyKycMemoryFixture(),timestamp=Math.floor(f.now.getTime()/1000);
+ const f=await companyKycMemoryFixture({historicalChallengeVersion:2}),timestamp=Math.floor(f.now.getTime()/1000);
  await f.execute(at(text(f.code),timestamp));const oldPrompt=[...f.outbounds.values()].at(-1).outcome.messageId;
  await f.execute(at(choice(f,'Autorizar imágenes'),timestamp));assert.equal(f.state().step,'OCR');
  const context=f.receive(at(choice(f,'Sin lectura asistida'),timestamp),{contextId:oldPrompt}),before=stable(f);
@@ -60,7 +60,7 @@ test('an older confirmed prompt cannot advance the current same-second conversat
 });
 
 test('same-second acceptance does not revive an old dispatch after a newer prompt or duplicate a provider send',async()=>{
- const f=await companyKycMemoryFixture(),timestamp=Math.floor(f.now.getTime()/1000);
+ const f=await companyKycMemoryFixture({historicalChallengeVersion:2}),timestamp=Math.floor(f.now.getTime()/1000);
  const first=await f.execute(at(text(f.code),timestamp));await f.execute(at(choice(f,'Autorizar imágenes'),timestamp));const before=stable(f);
  assert.deepEqual(await f.bridge.execute(first.context),first.result);
  await assert.rejects(f.outbound.send(first.context,first.result.reply),{code:'META_KYC_MESSAGE_OUT_OF_ORDER'});assert.deepEqual(stable(f),before);
@@ -68,7 +68,7 @@ test('same-second acceptance does not revive an old dispatch after a newer promp
 
 test('same-second ACTIVE capture still requires its own current membership and project assignment',async()=>{
  for(const revoked of [null,'membership','assignment']){
-  const f=await companyKycMemoryFixture({active:true}),timestamp=Math.floor(f.now.getTime()/1000);
+  const f=await companyKycMemoryFixture({historicalChallengeVersion:2,active:true}),timestamp=Math.floor(f.now.getTime()/1000);
   await f.execute(at(text(f.code),timestamp));
   const context=f.receive(at(choice(f,'Autorizar imágenes'),timestamp));
   if(revoked==='membership')f.controls.workerMembershipActive=false;
