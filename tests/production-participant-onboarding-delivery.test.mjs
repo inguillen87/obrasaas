@@ -1,9 +1,12 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {onboardingDeliveryFixture} from './fixtures/participant-onboarding-delivery-memory.mjs';
-import {decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
+// Original v1 outbox contract cases retain their assertions under an explicitly
+// legacy ACTIVE fixture. Current pre-account/two-phase behavior is tested below.
+import {legacyOnboardingDeliveryFixture as onboardingDeliveryFixture,onboardingDeliveryFixture as currentOnboardingDeliveryFixture} from './fixtures/participant-onboarding-delivery-memory.mjs';
+import {decryptCustomerSecret,encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
+import {digest} from '../src/lib/workspace-policy.mjs';
 import {createMetaCustomerOutbound,customerJobTransaction} from '../src/lib/meta-customer-outbound.mjs';
 import {readParticipantOnboardingStatuses} from '../src/lib/participant-onboarding-delivery.mjs';
-import {publicParticipantOnboarding} from '../src/lib/participant-onboarding-policy.mjs';
+import {publicParticipantOnboarding,participantOnboardingIntent,participantOnboardingOutboundId,participantOnboardingPhaseOutboundId,revokeParticipantOnboardingPhases} from '../src/lib/participant-onboarding-policy.mjs';
 const challengeCode='IDENTIDAD '+'a'.repeat(43);
 
 test('one delivery uses existing encrypted outbox under A, retaining worker B and a safe navigation link',async()=>{
@@ -69,4 +72,65 @@ test('a withdrawn unsent request remains canceled in reads even while its encryp
  const rows=[structuredClone(f.worker)];await customerJobTransaction(f.connect,client=>readParticipantOnboardingStatuses(client,rows,f.intent.organizationId,'project-b'));
  assert.equal(publicParticipantOnboarding(rows[0].metadata.participant).state,'CANCELED');assert.equal(publicParticipantOnboarding(rows[0].metadata.participant).contactAuthorized,false);
  await f.service.process(f.reference);assert.equal(f.calls.length,0);assert.equal(f.prepares,1);
+});
+
+test('current INVITED delivery sends only the owned invitation and creates no identity challenge',async()=>{
+ const f=currentOnboardingDeliveryFixture(),before=structuredClone(f.worker.metadata.participant),result=await f.service.process(f.reference);
+ assert.equal(result.state,'SENT');assert.equal(result.phase,'ACCOUNT_INVITATION');assert.equal(result.invitationState,'SENT');assert.equal(result.identityState,'WAITING_ACCOUNT_ACCEPTANCE');
+ assert.equal(f.prepares,0);assert.equal(f.calls.length,1);assert.equal(f.audits.size,0);assert.equal(f.worker.metadata.participant.status,'INVITED');assert.equal(f.worker.metadata.participant.clerkUserId,null);assert.equal(f.worker.metadata.participant.kycChatChallenge,undefined);assert.deepEqual(f.worker.metadata.participant.kyc,before.kyc);
+ assert.equal(f.calls[0].message.bodyParameters.length,1);assert.match(f.calls[0].message.name,/^obrasaas_participant_invitation_/);assert.deepEqual(f.calls[0].message.bodyParameters,[f.member.organizationName]);
+ const e=[...f.events.values()][0],intent=participantOnboardingIntent(f.worker.metadata.participant.onboardingDelivery);assert.equal(e.id,participantOnboardingPhaseOutboundId(intent,'ACCOUNT_INVITATION'));assert.equal(e.payload.onboardingPhase,'ACCOUNT_INVITATION');assert.equal(Object.hasOwn(e.payload,'challengeId'),false);
+ const request=JSON.parse(decryptCustomerSecret(e.payload.encryptedPayload,{organizationId:intent.organizationId,projectId:e.projectId,purpose:'outbound',resourceId:e.id},f.environment));assert.equal(request.version,2);assert.equal(request.phase,'ACCOUNT_INVITATION');assert.equal(Object.hasOwn(request,'challengeId'),false);assert.equal(JSON.stringify(request).includes('IDENTIDAD '),false);assert.equal(JSON.stringify(result).includes('IDENTIDAD '),false);
+ await f.service.process(f.reference);assert.equal(f.calls.length,1);assert.equal(f.prepares,0);
+});
+
+test('a newly consented invitation preserves closed KYC history while any live or finalizing capture stays blocked',async()=>{
+ for(const status of ['CANCELLED','CLOSED']){const f=currentOnboardingDeliveryFixture();f.worker.metadata.participant.kycChatChallenge={version:1,id:'kyc_chat_'+'7'.repeat(32),status,closureReceiptId:'closure-a',cancelledAt:'2026-10-01T00:00:00.000Z'};f.worker.metadata.participant.kycChatConversation=null;const history=JSON.stringify(f.worker.metadata.participant.kycChatChallenge),result=await f.service.process(f.reference);assert.equal(result.state,'SENT');assert.equal(result.phase,'ACCOUNT_INVITATION');assert.equal(f.prepares,0);assert.equal(f.calls.length,1);assert.equal(f.calls[0].message.bodyParameters.length,1);assert.equal(JSON.stringify(f.worker.metadata.participant.kycChatChallenge),history);assert.equal(f.worker.metadata.participant.kycChatConversation,null);}
+ for(const change of [p=>{p.kycChatChallenge={status:'PENDING'};},p=>{p.kycChatChallenge={status:'CLAIMED'};},p=>{p.kycChatChallenge={status:'CANCELLED'};p.kycChatConversation={step:'FINALIZING',confirmationEventId:'confirmed-a'};},p=>{p.kycChatChallenge={status:'UNKNOWN'};}]){const f=currentOnboardingDeliveryFixture();change(f.worker.metadata.participant);const before=JSON.stringify([f.worker.metadata.participant.kycChatChallenge,f.worker.metadata.participant.kycChatConversation]);assert.equal((await f.service.process(f.reference)).state,'BLOCKED');assert.equal(f.calls.length,0);assert.equal(f.prepares,0);assert.equal(JSON.stringify([f.worker.metadata.participant.kycChatChallenge,f.worker.metadata.participant.kycChatConversation]),before);}
+});
+
+test('a committed account transition leaves a durable distinct identity phase with one POST per phase',async()=>{
+ const f=currentOnboardingDeliveryFixture();await f.service.process(f.reference);const invitation=[...f.events.values()][0],cipher=invitation.payload.encryptedPayload;
+ assert.equal(f.acceptAccountInFixture(),true);const pending=structuredClone(f.worker.metadata.participant.onboardingDelivery);assert.equal(pending.phase,'IDENTITY_START');assert.equal(pending.state,'WAITING_CONFIGURATION');assert.equal(pending.phases.ACCOUNT_INVITATION.state,'SENT');assert.equal(f.prepares,0);assert.equal(f.calls.length,1);
+ const result=await f.service.process(f.reference);assert.equal(result.state,'SENT');assert.equal(result.phase,'IDENTITY_START');assert.equal(result.invitationState,'SENT');assert.equal(result.identityState,'SENT');assert.equal(f.prepares,1);assert.equal(f.calls.length,2);assert.equal(f.events.size,2);
+ const challenge=f.worker.metadata.participant.kycChatChallenge;assert.equal(challenge.analysisConsentVersion,3);assert.equal(challenge.participantClerkUserId,'user_Current');assert.equal(f.worker.metadata.participant.status,'ACTIVE');
+ const identity=[...f.events.values()].find(e=>e.payload.onboardingPhase==='IDENTITY_START');assert.ok(identity);assert.notEqual(identity.id,invitation.id);assert.notEqual(identity.payload.requestDigest,invitation.payload.requestDigest);assert.equal(invitation.payload.encryptedPayload,cipher);assert.equal(f.calls.filter(call=>call.correlationId===invitation.id).length,1);assert.equal(f.calls.filter(call=>call.correlationId===identity.id).length,1);assert.equal(f.calls[1].message.bodyParameters.length,3);
+ assert.throws(()=>decryptCustomerSecret(identity.payload.encryptedPayload,{organizationId:f.intent.organizationId,projectId:identity.projectId,purpose:'outbound',resourceId:invitation.id},f.environment));
+ await f.service.process(f.reference);assert.equal(f.calls.length,2);assert.equal(f.prepares,1);
+});
+
+test('each missing exact template blocks only its own phase before challenge or POST',async()=>{
+ const initial=currentOnboardingDeliveryFixture();delete initial.connection.metadata.customerTemplateDrafts.participant_invitation;const blocked=await initial.service.process(initial.reference);assert.equal(blocked.state,'BLOCKED');assert.equal(blocked.phase,'ACCOUNT_INVITATION');assert.equal(blocked.code,'PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED');assert.equal(initial.prepares,0);assert.equal(initial.calls.length,0);assert.equal(initial.events.size,0);
+ const f=currentOnboardingDeliveryFixture();await f.service.process(f.reference);assert.equal(f.acceptAccountInFixture(),true);f.connection.metadata.customerTemplateDrafts.participant_onboarding_v1.providerStatus='PENDING';const result=await f.service.process(f.reference);assert.equal(result.state,'BLOCKED');assert.equal(result.phase,'IDENTITY_START');assert.equal(result.invitationState,'SENT');assert.equal(result.code,'PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED');assert.equal(f.prepares,0);assert.equal(f.calls.length,1);assert.equal(f.events.size,1);
+});
+
+test('JOIN after the old phase marker cannot restore its selection or overwrite pending identity',async()=>{
+ let f;f=currentOnboardingDeliveryFixture({afterDispatchMarker:async()=>{assert.equal(f.acceptAccountInFixture(),true);}});const result=await f.service.process(f.reference),d=f.worker.metadata.participant.onboardingDelivery,old=[...f.events.values()][0];
+ assert.equal(f.calls.length,0);assert.equal(old.outcome.state,'SEND_STARTED');assert.equal(d.phases.ACCOUNT_INVITATION.state,'SEND_STARTED');assert.equal(d.phase,'IDENTITY_START');assert.equal(d.state,'WAITING_CONFIGURATION');assert.equal(result.phase,'IDENTITY_START');assert.equal(f.prepares,0);
+ f.worker.metadata.participant.onboardingConsent.status='REVOKED';f.worker.metadata.participant.onboardingDelivery=revokeParticipantOnboardingPhases(d);await f.service.process(f.reference);
+ assert.equal(f.worker.metadata.participant.onboardingDelivery.phase,'IDENTITY_START');assert.equal(f.worker.metadata.participant.onboardingDelivery.state,'CANCELED');assert.equal(f.worker.metadata.participant.onboardingDelivery.phases.ACCOUNT_INVITATION.state,'SEND_STARTED');assert.equal(old.outcome.state,'SEND_STARTED');assert.equal(f.calls.length,0);
+});
+
+test('uncertain invitation status remains separate from a pending or canceled identity phase',async()=>{
+ const f=currentOnboardingDeliveryFixture();f.providerMode='timeout';await f.service.process(f.reference);assert.equal(f.calls.length,1);assert.equal(f.worker.metadata.participant.onboardingDelivery.state,'SEND_UNKNOWN');assert.equal(f.acceptAccountInFixture(),true);
+ const rows=[structuredClone(f.worker)];await customerJobTransaction(f.connect,client=>readParticipantOnboardingStatuses(client,rows,f.intent.organizationId,'project-b'));const dto=publicParticipantOnboarding(rows[0].metadata.participant);assert.equal(dto.phase,'IDENTITY_START');assert.equal(dto.state,'WAITING_CONFIGURATION');assert.equal(dto.invitationState,'SEND_UNKNOWN');assert.equal(dto.identityState,'WAITING_CONFIGURATION');assert.equal(dto.providerAccepted,false);assert.equal(dto.automaticResendAllowed,false);
+ f.worker.metadata.participant.onboardingConsent.status='REVOKED';f.worker.metadata.participant.onboardingDelivery=revokeParticipantOnboardingPhases(f.worker.metadata.participant.onboardingDelivery);await f.service.process(f.reference);assert.equal(f.calls.length,1);assert.equal(f.prepares,0);assert.equal([...f.events.values()][0].outcome.state,'SEND_UNKNOWN');
+});
+
+test('an old v1 marker under a previous anchor prevents migration and any new POST',async()=>{
+ const f=currentOnboardingDeliveryFixture(),d=f.worker.metadata.participant.onboardingDelivery;delete d.deliveryVersion;delete d.phase;delete d.phases;const id=participantOnboardingOutboundId(participantOnboardingIntent(d)),old={id,projectId:'former-anchor',payload:{participantOnboarding:true},outcome:{state:'SEND_UNKNOWN'},leaseToken:null};f.events.set(id,structuredClone(old));
+ await f.service.process(f.reference);assert.equal(f.worker.metadata.participant.onboardingDelivery.deliveryVersion,undefined);assert.deepEqual(f.events.get(id),old);assert.equal(f.calls.length,0);assert.equal(f.prepares,0);assert.ok(f.queries.some(q=>q.sql.includes('SELECT id FROM public."WebhookEvent"')&&q.args.length===1&&q.args[0]===id));
+});
+
+test('even a closed historical challenge prevents automatic migration of an old invitation request',async()=>{
+ const f=currentOnboardingDeliveryFixture(),d=f.worker.metadata.participant.onboardingDelivery;delete d.deliveryVersion;delete d.phase;delete d.phases;f.worker.metadata.participant.kycChatChallenge={version:1,id:'kyc_chat_'+'8'.repeat(32),status:'CLOSED',expiresAt:'2020-01-01T00:00:00.000Z'};const before=JSON.stringify(f.worker.metadata.participant.kycChatChallenge);
+ await f.service.process(f.reference);assert.equal(f.worker.metadata.participant.onboardingDelivery.deliveryVersion,undefined);assert.equal(JSON.stringify(f.worker.metadata.participant.kycChatChallenge),before);assert.equal(f.calls.length,0);assert.equal(f.prepares,0);assert.equal(f.events.size,0);
+});
+
+test('changing either phase tag on a sealed pending envelope cannot reclassify its message',async()=>{
+ for(const change of ['payload','request']){
+  const f=currentOnboardingDeliveryFixture({afterPrepare:async()=>{throw new Error('controlled pending phase');}});await f.service.process(f.reference);const e=[...f.events.values()][0];assert.equal(e.outcome.state,'ONBOARDING_PENDING');
+  if(change==='payload')e.payload.onboardingPhase='IDENTITY_START';else{const context={organizationId:f.intent.organizationId,projectId:e.projectId,purpose:'outbound',resourceId:e.id},request=JSON.parse(decryptCustomerSecret(e.payload.encryptedPayload,context,f.environment));request.phase='IDENTITY_START';e.payload.encryptedPayload=encryptCustomerSecret(JSON.stringify(request),context,f.environment);e.payload.requestDigest=digest(request);}
+  await f.service.process(f.reference);assert.equal(f.calls.length,0);assert.equal(f.prepares,0);assert.equal(e.outcome.state,'ONBOARDING_PENDING');
+ }
 });

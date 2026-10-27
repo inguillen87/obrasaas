@@ -52,9 +52,9 @@ test('uncertain invitation requests observation, never a second invitation',()=>
  const input=manager();Object.assign(input.snapshot.records[0],{status:'INVITED',accountLinked:false,invitation:{state:'ATTEMPTED'}});
  assert.equal(action(input),'RECOVER_INVITATION');assert.equal(participantOnboardingNextStep(input).optionalBank,null);
 });
-test('an INVITED person can present by chat before the explicit Clerk acceptance',()=>{
+test('an invited person waits for explicit account acceptance before a new identity presentation',()=>{
  const input=manager();Object.assign(input.snapshot.records[0],{status:'INVITED',accountLinked:false,invitation:{state:'SENT',expired:false,expiresAt:'2026-10-08T00:00:00.000Z'},kyc:{status:'NOT_SUBMITTED'}});
- assert.equal(action(input),'PREPARE_KYC_CHAT');input.snapshot.canInvite=false;assert.equal(action(input),'PREPARE_KYC_CHAT');
+ assert.equal(participantKycChatCapabilities(input.snapshot.records[0],true,now).canPrepare,false);assert.equal(action(input),'CONSULT_PARTICIPANTS');assert.equal(participantOnboardingNextStep(input).state,'WAIT_ACCOUNT');input.snapshot.canInvite=false;assert.equal(participantOnboardingNextStep(input).state,'WAIT_ACCOUNT');
  input.snapshot.records[0].kyc.status='PENDING_ACCOUNT_CLAIM';assert.equal(action(input),'CONSULT_PARTICIPANTS');assert.equal(participantOnboardingNextStep(input).state,'WAIT_ACCOUNT');
 });
 test('the fresh clock expires an invitation despite an old expired:false snapshot',()=>{
@@ -148,4 +148,13 @@ test('observed rejected completed KYC offers a fresh explicit manager preparatio
  row.kyc.status='REJECTED';row.kycChatChallenge={...completed,canPrepare:false,canCancel:true};assert.equal(participantKycChatCapabilities(row,true,now).observed,false);
  for(const status of ['PENDING','CLAIMED']){row.kycChatChallenge={...completed,status,...(status==='CLAIMED'?{conversationExpiresAt:'2026-10-07T01:00:00.000Z'}:{})};assert.equal(participantKycChatCapabilities(row,true,now).observed,false,status);}
  row.kycChatChallenge={...completed};row.active=false;assert.equal(participantKycChatCapabilities(row,true,now).canPrepare,false);row.active=true;row.status='REVOKED';assert.equal(participantKycChatCapabilities(row,true,now).canPrepare,false);
+});
+
+test('account acceptance changes preparation eligibility without removing legacy draft closure',()=>{
+ const input=manager(),person=input.snapshot.records[0];person.status='INVITED';person.accountLinked=false;person.kyc={status:'NOT_SUBMITTED'};person.invitation={state:'SENT',expired:false,expiresAt:'2026-10-08T00:00:00.000Z'};
+ assert.equal(participantKycChatCapabilities(person,true,now).canPrepare,false);assert.equal(participantOnboardingNextStep(input).state,'WAIT_ACCOUNT');
+ person.kycChatChallenge={id:'challenge-a',status:'PENDING',expiresAt:'2026-10-08T00:00:00.000Z',conversationExpiresAt:null,expired:false,canPrepare:false,canCancel:true,blockedCode:null};
+ assert.equal(action(input),'CANCEL_KYC_CHAT');assert.equal(participantKycChatCapabilities(person,true,now).canCancel,true);
+ person.kycChatChallenge=null;person.status='ACTIVE';person.accountLinked=true;person.invitation.state='ACCEPTED';assert.equal(action(input),'PREPARE_KYC_CHAT');
+ person.accountLinked=false;assert.equal(participantKycChatCapabilities(person,true,now).canPrepare,false);
 });

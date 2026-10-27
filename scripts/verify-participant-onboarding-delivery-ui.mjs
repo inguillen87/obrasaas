@@ -14,7 +14,7 @@ const ci=process.env.CI==='true';
 const args=process.argv.slice(2),option=name=>args.find(value=>value.startsWith(name+'='))?.slice(name.length+1);
 assert.ok(args.every(value=>/^--base-source=[a-f0-9]{40}$/.test(value)||/^--width=(320|390|768|1440)$/.test(value)||/^--case=[a-z-]+$/.test(value)||/^--port=\d{4,5}$/.test(value)));
 const baseSourceRevision=option('--base-source')||null;if(ci)assert.equal(baseSourceRevision,null,'CI must derive source from actual Git HEAD');else assert.match(baseSourceRevision||'',/^[a-f0-9]{40}$/);
-const allWidths=[320,390,768,1440],allModes=['invite-without-whatsapp','invite-with-whatsapp','send-ready','send-lost-ack','revoke-pending','sent-provider','status-delivered','send-unknown','notice-missing','capability-missing','chat-pending','receipt-refresh-failed','template-required','template-other-blocker','template-chat-pending','template-operation-pending'];
+const allWidths=[320,390,768,1440],allModes=['invite-without-whatsapp','invite-with-whatsapp','send-ready','send-lost-ack','revoke-pending','sent-provider','status-delivered','send-unknown','notice-missing','capability-missing','chat-pending','receipt-refresh-failed','template-required','template-other-blocker','template-chat-pending','template-operation-pending','template-invitation','template-identity'];
 const widths=option('--width')?[Number(option('--width'))]:allWidths,modes=option('--case')?[option('--case')]:allModes;
 assert.ok(widths.every(value=>allWidths.includes(value))&&modes.every(value=>allModes.includes(value)));
 const port=Number(option('--port')||3354);assert.ok(Number.isInteger(port)&&port>=1024&&port<=65535);
@@ -100,13 +100,14 @@ async function scenario(mode,width){
  page.on('pageerror',error=>pageErrors.push(error.message));
  const date=offset=>new Date(Date.now()+offset).toISOString();
  const inviteMode=mode.startsWith('invite-');let invited=!inviteMode,receipt=null,failRefresh=false;
- const templateMode=mode.startsWith('template-');
+ const templateMode=mode.startsWith('template-'),phase=mode==='template-invitation'?'ACCOUNT_INVITATION':mode==='template-identity'?'IDENTITY_START':null;
+ const reviewLabel=phase==='ACCOUNT_INVITATION'?'Revisar plantilla de invitación':phase==='IDENTITY_START'?'Revisar plantilla de identidad':'Revisar plantilla de alta';
   let state=templateMode?'BLOCKED':mode==='revoke-pending'?'PENDING':mode==='sent-provider'?'SENT':mode==='status-delivered'?'STATUS_OBSERVED':mode==='send-unknown'?'SEND_UNKNOWN':null;
  let authorized=state!==null;
- const delivery=()=>state===null?undefined:{state,contactAuthorized:authorized,outboundId:'customer_outbound_'+'f'.repeat(64),code:templateMode?(mode==='template-other-blocker'?'PARTICIPANT_ONBOARDING_AUTHORIZATION_REQUIRED':'PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED'):null,providerAccepted:['SENT','STATUS_OBSERVED'].includes(state),deliveryConfirmed:state==='STATUS_OBSERVED',providerStatus:state==='STATUS_OBSERVED'?'delivered':state==='SENT'?'sent':null,automaticResendAllowed:false};
+ const delivery=()=>state===null?undefined:{state,contactAuthorized:authorized,outboundId:'customer_outbound_'+'f'.repeat(64),code:templateMode?(mode==='template-other-blocker'?'PARTICIPANT_ONBOARDING_AUTHORIZATION_REQUIRED':'PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED'):null,providerAccepted:['SENT','STATUS_OBSERVED'].includes(state),deliveryConfirmed:state==='STATUS_OBSERVED',providerStatus:state==='STATUS_OBSERVED'?'delivered':state==='SENT'?'sent':null,automaticResendAllowed:false,...(phase?{phase,invitationState:phase==='ACCOUNT_INVITATION'?state:'SENT',identityState:phase==='IDENTITY_START'?state:'WAITING_ACCOUNT_ACCEPTANCE'}:{})};
  const row=()=>({
-  id:workerId,name:person,job:'ALBANIL',jobLabel:'Albañil',active:true,self:false,status:invited?'INVITED':'NOT_INVITED',accountLinked:false,revision,
-  invitation:invited?{id:'invite_'+'1'.repeat(32),state:'SENT',email,expiresAt:date(3600000),expired:false}:null,
+  id:workerId,name:person,job:'ALBANIL',jobLabel:'Albañil',active:true,self:false,status:phase==='IDENTITY_START'?'ACTIVE':invited?'INVITED':'NOT_INVITED',accountLinked:phase==='IDENTITY_START',revision,
+  invitation:invited?{id:'invite_'+'1'.repeat(32),state:phase==='IDENTITY_START'?'ACCEPTED':'SENT',email,expiresAt:date(3600000),expired:false}:null,
   permissions:{attendance:false,report:false},kyc:{status:'NOT_SUBMITTED',images:[],review:null},
   kycChatChallenge:['chat-pending','template-chat-pending'].includes(mode)?{id:challengeId,status:'PENDING',expiresAt:date(3600000),conversationExpiresAt:null,expired:false,canPrepare:false,canCancel:false,blockedCode:'PARTICIPANT_KYC_CHAT_NOT_CANCELLABLE',step:null,recoveryRequired:false,claimedAt:null,closedAt:null}:null,
   ...(mode==='capability-missing'?{}:{canSendOnboardingWhatsapp:!['PENDING','BLOCKED','SEND_UNKNOWN'].includes(state)&&!['chat-pending','template-chat-pending'].includes(mode),canRevokeOnboardingContact:authorized}),
@@ -172,7 +173,7 @@ async function scenario(mode,width){
    await waitText(page,mode==='invite-with-whatsapp'?'Esperando configuración':'Sin envío solicitado');
    await privateStorage(page,0);
   }else if(['send-ready','send-lost-ack','receipt-refresh-failed'].includes(mode)){
-   mark('human-send-confirmation');await click(page,'Enviar instrucciones por WhatsApp');await waitText(page,'El servidor comprobará el permiso del emisor original');
+   mark('human-send-confirmation');await click(page,'Enviar invitación por WhatsApp');await waitText(page,'El servidor comprobará el permiso del emisor original');
    assert.equal(await page.evaluate(()=>document.activeElement?.textContent),'Solicitar instrucciones por WhatsApp');
    assert.equal((await controls(page,'Guardar solicitud de envío'))[0].disabled,true);
    await confirmContact(page);assert.equal(posts.length,0);await geometry(page,width);await page.screenshot({path:path.join(output,mode+'-form-'+width+'.png'),fullPage:true,timeout:20000});
@@ -204,22 +205,22 @@ async function scenario(mode,width){
    assert.equal(posts.length,1);assert.equal(await page.$eval('[data-onboarding-delivery]',el=>el.dataset.onboardingDelivery),'CANCELED');
    await absent(page,'Retirar autorización de contacto');await privateStorage(page,0);
   }else if(templateMode){
-    mark('template-guidance-without-parallel-code');await absent(page,'Solicitar instrucciones por WhatsApp');await absent(page,'Enviar instrucciones por WhatsApp');await absent(page,'Preparar identidad por WhatsApp');
+    mark('template-guidance-without-parallel-code');await absent(page,'Enviar invitación por WhatsApp');await absent(page,'Solicitar instrucciones por WhatsApp');await absent(page,'Enviar instrucciones por WhatsApp');await absent(page,'Preparar identidad por WhatsApp');
     let navigationCount=0,referenceCount=0;
-    if(mode==='template-required'){
-     await enabled(page,'Revisar plantilla de alta');await waitText(page,'aprobación vigente');assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),'ONBOARDING_TEMPLATE_REVIEW');
+    if(mode==='template-required'||phase!==null){
+     await enabled(page,reviewLabel);await waitText(page,'aprobación vigente');assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),'ONBOARDING_TEMPLATE_REVIEW');
      const primary=await page.$('[data-onboarding-primary]');await primary.focus();await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement?.id),'customer-meta-title');
      assert.equal(await page.$('#customer-template-workbench'),null,'Review reaches the visible panel heading before a workbench is observed');
      const navigations=await page.evaluate(()=>window.onboardingNavigations);assert.deepEqual(navigations,[{scope,projectId,target:'meta-onboarding',destination:'customer-meta-title'}]);navigationCount=1;
      const blocked=await page.evaluate(({scope,projectId})=>[{scope:'b'.repeat(64),projectId,target:'meta-onboarding'},{scope,projectId:'other-project',target:'meta-onboarding'},{scope,projectId,target:'customer-template-workbench'}].map(value=>window.onboardingTryNavigation(value)).concat(window.onboardingTryNavigation({scope,projectId,target:'meta-onboarding'},{scope,projectId,canManageIntegrations:false})),{scope,projectId});assert.deepEqual(blocked,[false,false,false,false]);
-     assert.equal(await page.evaluate(()=>window.onboardingNavigations.length),1);assert.equal(posts.length,0);await click(page,'Consultar instrucciones iniciales');await enabled(page,'Revisar plantilla de alta');assert.equal(posts.length,0,'Template consultation cannot resend');
+     assert.equal(await page.evaluate(()=>window.onboardingNavigations.length),1);assert.equal(posts.length,0);await click(page,'Consultar instrucciones iniciales');await enabled(page,reviewLabel);assert.equal(posts.length,0,'Template consultation cannot resend');
     }else if(mode==='template-operation-pending'){
      await page.evaluate(()=>window.onboardingSeedReference());await waitText(page,'Comprobar el mismo intento');await absent(page,'Revisar plantilla de alta');assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),'OPERATION_UNCERTAIN');referenceCount=1;
      const prior=(await privateStorage(page,1))[0];await page.reload({waitUntil:'domcontentloaded',timeout:20000});await waitText(page,'Comprobar el mismo intento');assert.deepEqual(await references(page),[prior]);await absent(page,'Revisar plantilla de alta');assert.equal(posts.length,0,'Pending reload cannot send or navigate');
     }else{
      await absent(page,'Revisar plantilla de alta');assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),mode==='template-chat-pending'?'KYC_CHAT_PENDING':'ONBOARDING_WHATSAPP_PENDING');await click(page,'Consultar instrucciones iniciales');assert.equal(posts.length,0);
     }
-    await privateStorage(page,referenceCount);assert.equal(posts.length,0);assert.equal(await page.evaluate(()=>window.onboardingNavigations.length),navigationCount);assert.ok((await controls(page,'Preparar identidad por WhatsApp')).every(item=>item.disabled),'A retained reference cannot prepare another code');templateGuidanceChecks.push({mode,width,staticBlocker:mode!=='template-other-blocker',noParallelKycCode:true,posts:0,navigationCount,referenceCount,scopedNavigation:true,keyboardNavigation:mode==='template-required'});
+    await privateStorage(page,referenceCount);assert.equal(posts.length,0);assert.equal(await page.evaluate(()=>window.onboardingNavigations.length),navigationCount);assert.ok((await controls(page,'Preparar identidad por WhatsApp')).every(item=>item.disabled),'A retained reference cannot prepare another code');templateGuidanceChecks.push({mode,width,...(phase?{phase,phaseSpecificReview:true}:{}),staticBlocker:mode!=='template-other-blocker',noParallelKycCode:true,posts:0,navigationCount,referenceCount,scopedNavigation:true,keyboardNavigation:mode==='template-required'||phase!==null});
    }else if(mode==='sent-provider'||mode==='status-delivered'){
    mark('provider-status-is-not-human-acceptance');
    const deliveryText=await page.$eval('[data-onboarding-delivery]',el=>el.innerText);
@@ -229,7 +230,7 @@ async function scenario(mode,width){
    assert.equal(await page.evaluate(()=>document.body.innerText.includes('Aprobado por un responsable')),false,'Provider status cannot approve KYC');
    assert.equal(posts.length,0);await click(page,'Consultar instrucciones iniciales');assert.equal(posts.length,0);await privateStorage(page,0);
   }else{
-   mark('fail-closed');await absent(page,'Solicitar instrucciones por WhatsApp');await absent(page,'Enviar instrucciones por WhatsApp');assert.equal(posts.length,0);
+   mark('fail-closed');await absent(page,'Enviar invitación por WhatsApp');await absent(page,'Solicitar instrucciones por WhatsApp');await absent(page,'Enviar instrucciones por WhatsApp');assert.equal(posts.length,0);
    if(mode==='send-unknown')await waitText(page,'no lo vuelvas a enviar');
    if(mode==='capability-missing')assert.equal(await page.$eval('[data-onboarding-delivery]',el=>el.dataset.onboardingDelivery),'UNKNOWN');
    if(mode==='notice-missing')assert.equal(await page.$('form input[type=checkbox]'),null);
