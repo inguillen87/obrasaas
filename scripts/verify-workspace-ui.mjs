@@ -53,7 +53,7 @@ async function respondClosedHomeDecisions(request,{origin,scope,projectId,allowe
  assert.equal(allowed,true);assert.equal(request.method(),'GET');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
  assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','view']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('view'),'decisions');
  reads.push({phase,method:'GET',projectId,scope,view:'decisions'});
- const body={scope,projectId,view:'decisions',observedAt:'2026-10-28T00:00:00.000Z',proposals:{pending:0},inventory:{canManage:true,pendingCounts:{consumptions:0,adjustments:0}}};
+ const body={scope,projectId,view:'decisions',observedAt:'2026-10-28T00:00:00.000Z',evidence:{pending:0},proposals:{pending:0},inventory:{canManage:true,pendingCounts:{consumptions:0,adjustments:0}}};
  await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});return true;
 }
 const homeDecisionsResponse=page=>page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/operations-status'&&response.request().method()==='GET'&&url.searchParams.get('scope')===scope&&url.searchParams.get('projectId')==='p-a'&&url.searchParams.get('view')==='decisions';},{timeout:15000});
