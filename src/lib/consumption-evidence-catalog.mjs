@@ -20,9 +20,11 @@ function entry(row,context,withProcessing=false){
 // Internal SQL reader. Its caller must establish the current canonical principal,
 // own participant, task and sector. Defaults preserve the verified Meta bridge:
 // selected audio may use persisted processing and retained rows remain locked.
-// The web caller explicitly selects a nonlocking, no-processing, complete mode.
-export async function readConsumptionEvidenceCatalog(client,{organizationId,projectId,workerId,actorId,taskId,sectorId,page=null,direction='FIRST',retainedIds=[]},{lockRetained=true,includeRetainedProcessing=true,requireAllRetained=false}={}){
- if([organizationId,projectId,workerId,actorId,sectorId].some(value=>!workspaceId(value))||taskId!==null&&!workspaceId(taskId)||!['FIRST','REFRESH','NEXT','PREVIOUS'].includes(direction)||!Array.isArray(retainedIds)||retainedIds.length>13||retainedIds.some(value=>!workspaceId(value))||[lockRetained,includeRetainedProcessing,requireAllRetained].some(value=>typeof value!=='boolean'))unavailable();
+// The web caller explicitly selects a nonlocking, no-processing mode that names
+// every selected ID that is no longer visible (rejected, moved or withdrawn), so
+// the person can drop exactly that file. Submission keeps its own strict check.
+export async function readConsumptionEvidenceCatalog(client,{organizationId,projectId,workerId,actorId,taskId,sectorId,page=null,direction='FIRST',retainedIds=[]},{lockRetained=true,includeRetainedProcessing=true,requireAllRetained=false,reportUnavailableRetained=false}={}){
+ if([organizationId,projectId,workerId,actorId,sectorId].some(value=>!workspaceId(value))||taskId!==null&&!workspaceId(taskId)||!['FIRST','REFRESH','NEXT','PREVIOUS'].includes(direction)||!Array.isArray(retainedIds)||retainedIds.length>13||retainedIds.some(value=>!workspaceId(value))||[lockRetained,includeRetainedProcessing,requireAllRetained,reportUnavailableRetained].some(value=>typeof value!=='boolean')||requireAllRetained&&reportUnavailableRetained)unavailable();
  const contextDigest=digest(['consumption-evidence-catalog-v1',organizationId,projectId,workerId,actorId,taskId,sectorId]),size=6;
  if(direction==='FIRST'&&page!==null||direction!=='FIRST'&&page===null)unavailable();
  const field=`i.metadata->'fieldOperations'`,from=`public."Incident" i JOIN public."Project" p ON p.id=i."projectId"`;
@@ -43,13 +45,13 @@ export async function readConsumptionEvidenceCatalog(client,{organizationId,proj
  if(!Array.isArray(found)||found.length>size+1||new Set(found.map(row=>row.id)).size!==found.length)unavailable();
  const rows=found.slice(0,size);if(order==='BEFORE')rows.reverse();let evidencePage={contextDigest,first:null,last:null,hasPrevious:false,hasNext:false};
  if(rows.length){const first=cursor(rows[0]),last=cursor(rows.at(-1));if(!validCursor(first)||!validCursor(last))unavailable();const bounds=(await client.query(`SELECT EXISTS(SELECT 1 FROM ${from} WHERE ${visible} AND (i."createdAt",i.id)>($7::timestamp,$8::text)) AS "hasPrevious",EXISTS(SELECT 1 FROM ${from} WHERE ${visible} AND (i."createdAt",i.id)<($9::timestamp,$10::text)) AS "hasNext"`,[...values,first.createdAt,first.id,last.createdAt,last.id])).rows[0];if(!bounds||typeof bounds.hasPrevious!=='boolean'||typeof bounds.hasNext!=='boolean')unavailable();evidencePage={contextDigest,first,last,...bounds};}
- const context={workerId,taskId,sectorId},entries=rows.map(row=>entry(row,context)),evidence=entries.slice(),retained=[...new Set(retainedIds)].sort();
+ const context={workerId,taskId,sectorId},entries=rows.map(row=>entry(row,context)),evidence=entries.slice(),retained=[...new Set(retainedIds)].sort(),unavailableIds=[];
  if(retained.length){
   const processing=includeRetainedProcessing?`,CASE WHEN ${field}->'media'->>'kind'='audio' THEN ${field}->'processing' ELSE NULL END AS processing`:'';
   const fresh=(await client.query(`SELECT ${columns}${processing} FROM ${from} WHERE ${visible} AND i.id=ANY($7::text[]) ORDER BY i.id${lockRetained?' FOR SHARE OF i':''}`,[...values,retained])).rows;
   if(!Array.isArray(fresh)||fresh.some(row=>!retained.includes(row.id))||new Set(fresh.map(row=>row.id)).size!==fresh.length||requireAllRetained&&fresh.length!==retained.length)unavailable();
   const byId=new Map(fresh.map(row=>[row.id,entry(row,context,includeRetainedProcessing)]));
-  for(const id of retained){const index=evidence.findIndex(value=>value.id===id);if(index!==-1)evidence.splice(index,1);if(byId.has(id))evidence.push(byId.get(id));}
+  for(const id of retained){const index=evidence.findIndex(value=>value.id===id);if(index!==-1)evidence.splice(index,1);if(byId.has(id))evidence.push(byId.get(id));else unavailableIds.push(id);}
  }
- return {entries,evidence,page:evidencePage};
+ return {entries,evidence,page:evidencePage,...(reportUnavailableRetained?{unavailableIds}:{})};
 }

@@ -8,7 +8,7 @@ import {consumptionEvidenceSnapshot} from '../src/app/(identity)/cuenta/consumpt
 const context={projectId:'project-a',scope:'a'.repeat(64),workerId:'worker-a',taskId:'task-a',sectorId:'sector-a'},digest='b'.repeat(64);
 const row=(n,changes={})=>({id:'evidence-'+n,title:'Archivo '+n,taskId:context.taskId,workerId:context.workerId,sectorId:context.sectorId,revision:'2026-10-20T12:00:00.000001',status:'PENDING',media:{kind:n%2?'image':'audio',contentType:n%2?'image/png':'audio/ogg',bytes:100,sha256:'c'.repeat(64)},...changes});
 const page=(entries,{hasPrevious=false,hasNext=false}={})=>({contextDigest:digest,first:entries.length?{id:entries[0].id,createdAt:'2026-10-20T12:00:00.000006'}:null,last:entries.length?{id:entries.at(-1).id,createdAt:'2026-10-20T12:00:00.000001'}:null,hasPrevious,hasNext});
-function snapshot(entries=[row(3),row(2)],selected=[],options={}){return {...context,entries,evidence:[...entries,...selected.filter(r=>!entries.some(e=>e.id===r.id))],page:page(entries,options)};}
+function snapshot(entries=[row(3),row(2)],selected=[],options={},unavailableIds=[]){return {...context,entries,evidence:[...entries,...selected.filter(r=>!entries.some(e=>e.id===r.id))],page:page(entries,options),unavailableIds};}
 
 test('catalog DTO admits six entries and ten retained own attachments beyond that page',()=>{
  const entries=Array.from({length:6},(_,i)=>row(20-i)),selected=Array.from({length:10},(_,i)=>row(i));
@@ -16,7 +16,7 @@ test('catalog DTO admits six entries and ten retained own attachments beyond tha
  assert.equal(value.evidence.length,16);assert.equal(consumptionEvidenceSnapshot(snapshot([]),{...context,selectedIds:[]}).entries.length,0);
 });
 test('catalog DTO rejects private processing paths URLs wrong ownership malformed cursors and repeated rows',()=>{
- const changes=[v=>{v.scope='d'.repeat(64);},v=>{v.workerId='other-worker';},v=>{v.entries[0].workerId='other-worker';},v=>{v.entries[0].taskId=null;},v=>{v.entries[0].sectorId='other-sector';},v=>{v.entries[0].processing={result:{text:'private'}};},v=>{v.evidence[0].pathname='private/path';},v=>{v.entries[0].media.url='https://example.invalid';},v=>{v.entries[0].media.bytes=0;},v=>{v.entries[0].status='REJECTED';},v=>{v.entries[0].revision='2026-02-31T12:00:00.000001';},v=>{v.page.first.createdAt='2026-02-31T12:00:00.000001';},v=>{v.page.last.id='another-evidence';},v=>{v.page.hasNext='true';},v=>{v.page.extra=true;},v=>{v.entries.push(v.entries[0]);},v=>{v.evidence.push(row(9));},v=>{v.entries=Array.from({length:7},(_,i)=>row(20-i));v.evidence=v.entries;v.page=page(v.entries);},v=>{v.evidence=v.evidence.filter(e=>e.id!==v.entries[0].id);}];
+ const changes=[v=>{v.scope='d'.repeat(64);},v=>{v.workerId='other-worker';},v=>{v.entries[0].workerId='other-worker';},v=>{v.entries[0].taskId=null;},v=>{v.entries[0].sectorId='other-sector';},v=>{v.entries[0].processing={result:{text:'private'}};},v=>{v.evidence[0].pathname='private/path';},v=>{v.entries[0].media.url='https://example.invalid';},v=>{v.entries[0].media.bytes=0;},v=>{v.entries[0].status='REJECTED';},v=>{v.entries[0].revision='2026-02-31T12:00:00.000001';},v=>{v.page.first.createdAt='2026-02-31T12:00:00.000001';},v=>{v.page.last.id='another-evidence';},v=>{v.page.hasNext='true';},v=>{v.page.extra=true;},v=>{v.entries.push(v.entries[0]);},v=>{v.evidence.push(row(9));},v=>{v.entries=Array.from({length:7},(_,i)=>row(20-i));v.evidence=v.entries;v.page=page(v.entries);},v=>{v.evidence=v.evidence.filter(e=>e.id!==v.entries[0].id);},v=>{delete v.unavailableIds;},v=>{v.unavailableIds=['evidence-7'];},v=>{v.unavailableIds=[v.entries[0].id];},v=>{v.unavailableIds='evidence-7';}];
  for(const mutate of changes){const value=snapshot();mutate(value);assert.throws(()=>consumptionEvidenceSnapshot(value,{...context,selectedIds:[]}));}
  const value=snapshot();assert.throws(()=>consumptionEvidenceSnapshot(value,{...context,selectedIds:[],page:{contextDigest:'d'.repeat(64)}}));
 });
@@ -59,4 +59,22 @@ test('late response from an unmounted context cannot restore a catalog or alter 
 });
 test('disabled picker issues no request and exposes a named optional attachment fieldset',async()=>{
  const s=setup();s.props.disabled=true;await s.button('Buscar fotos y audios guardados').props.onClick();assert.equal(s.calls.length,0);assert.match(s.html(),/<legend>Fotos y audios guardados/);assert.match(s.html(),/0 de 10 archivos seleccionados/);
+});
+
+test('catalog DTO accounts for every selected ID exactly once as visible or unavailable',()=>{
+ const expected={...context,selectedIds:['evidence-12','evidence-30']};
+ const value=snapshot([row(13),row(12)],[],{},['evidence-30']);assert.equal(consumptionEvidenceSnapshot(value,expected),value);
+ for(const ids of [[],['evidence-30','evidence-30'],['evidence-30','evidence-12'],['evidence-30','evidence-99']])assert.throws(()=>consumptionEvidenceSnapshot(snapshot([row(13),row(12)],[],{},ids),expected));
+});
+
+test('a rejected selection stays listed until removed individually, keeps the other files and blocks confirmation meanwhile',async()=>{
+ const s=setup(),unavailable=[];s.props.onUnavailableChange=value=>unavailable.push(value);
+ await s.button('Buscar fotos y audios guardados').props.onClick();s.choose(13);s.choose(12);assert.deepEqual(s.selected,['evidence-13','evidence-12']);
+ s.reply=snapshot([row(13)],[],{hasNext:true},['evidence-12']);await s.button('Actualizar esta página').props.onClick();s.render();
+ assert.deepEqual(s.selected,['evidence-13','evidence-12']);assert.equal(unavailable.at(-1),true);
+ const html=s.html();assert.match(html,/Archivo 12/);assert.match(html,/Ya no está disponible · fue rechazado o retirado/);assert.match(html,/Un archivo seleccionado ya no está disponible/);assert.match(html,/el resto de tu selección se conserva/);
+ assert.equal(nodes(s.render(),node=>node.props?.['data-evidence-unavailable']==='evidence-12').length,1);
+ s.button('Quitar este archivo').props.onClick();s.render();
+ assert.deepEqual(s.selected,['evidence-13']);assert.equal(unavailable.at(-1),false);assert.match(s.html(),/El resto de tu selección y el borrador se conservan/);assert.equal(nodes(s.render(),node=>node.props?.['data-evidence-unavailable']).length,0);
+ assert.equal(s.calls.length,2);assert.ok(s.calls.every(call=>!call.options.method||call.options.method==='GET'));
 });

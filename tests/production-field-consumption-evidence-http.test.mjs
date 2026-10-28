@@ -35,7 +35,7 @@ test('wire requires explicit nullable task and rejects duplicate extra oversized
  assert.equal(consumptionEvidenceQuery(query({selectedIds:JSON.stringify(Array.from({length:10},(_,i)=>'e-'+i))})).selectedIds.length,10);
 });
 test('canonical participant read authenticates membership assignment KYC and exact task within a read-only transaction',async()=>{
- const f=fixture({taskId:'task-outside-100'}),result=await f.store.read(f.session,{...base,taskId:'task-outside-100'});assert.deepEqual(Object.keys(result).sort(),['projectId','scope','workerId','taskId','sectorId','entries','evidence','page'].sort());assert.equal(result.scope,scope);assert.equal(result.taskId,'task-outside-100');assert.deepEqual(result.entries,[]);assert.deepEqual(result.evidence,[]);
+ const f=fixture({taskId:'task-outside-100'}),result=await f.store.read(f.session,{...base,taskId:'task-outside-100'});assert.deepEqual(Object.keys(result).sort(),['projectId','scope','workerId','taskId','sectorId','entries','evidence','page','unavailableIds'].sort());assert.deepEqual(result.unavailableIds,[]);assert.equal(result.scope,scope);assert.equal(result.taskId,'task-outside-100');assert.deepEqual(result.entries,[]);assert.deepEqual(result.evidence,[]);
  assert.equal(f.queries[0].sql,'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');assert.equal(f.queries.at(-1).sql,'ROLLBACK');assert.equal(f.released(),1);assert.ok(f.queries.some(q=>q.sql.includes('FROM public."ProjectMembership"')));assert.ok(f.queries.some(q=>q.sql.includes("metadata->>'kind'='REVIEW_KYC'")));assert.ok(f.queries.some(q=>q.sql.includes('FROM public."Task"')));
 });
 test('revoked current membership assignment ownership reporting permission KYC sector or task blocks catalogue rows',async()=>{
