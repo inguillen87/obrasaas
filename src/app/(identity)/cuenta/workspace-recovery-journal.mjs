@@ -111,7 +111,7 @@ function documentCurveReceiptOutcome(entry,result){
  return {state:'RECORDED',receiptId:result.receiptId};
 }
 const planUploadCodes=Object.freeze(['PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
-const planCsvUploadRejections=Object.freeze({PLAN_IMPORT_BUDGET_CSV_INVALID:400,PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID:400,PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID:400,PLAN_IMPORT_BUDGET_CSV_DUPLICATE_CODES:400,PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT:413,PLAN_IMPORT_BUDGET_SOURCE_TOO_LARGE:413});
+const planCsvUploadRejections=Object.freeze({PLAN_IMPORT_BUDGET_CSV_INVALID:400,PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID:400,PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID:400,PLAN_IMPORT_BUDGET_CSV_COLUMNS_INVALID:400,PLAN_IMPORT_BUDGET_CSV_QUOTES_INVALID:400,PLAN_IMPORT_BUDGET_CSV_ROW_INCOMPLETE:400,PLAN_IMPORT_BUDGET_CSV_DUPLICATE_CODES:400,PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT:413,PLAN_IMPORT_BUDGET_SOURCE_TOO_LARGE:413});
 const sha256=async bytes=>[...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
 const canonicalPlanCommand=value=>Array.isArray(value)?value.map(canonicalPlanCommand):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonicalPlanCommand(value[key])])):value;
 export async function planImportCommandDigest(body){

@@ -51,7 +51,7 @@ test('invalid CSV structure and record 201 are definitive pre-reservation reject
 });
 
 test('CSV parser rejections bind the live original upload digest for invalid UTF-8, malformed source and record limit',async()=>{
- const cases=[{bytes:Buffer.from([0xc3,0x28]),code:'PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID',status:400},{bytes:Buffer.from(syntheticBudgetCsv().toString().replace('Synthetic','Syn\u0000thetic')),code:'PLAN_IMPORT_BUDGET_CSV_INVALID',status:400},{bytes:Buffer.from('wrong,header\n1,2\n'),code:'PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID',status:400},{bytes:syntheticBudgetCsv({count:201}),code:'PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT',status:413}];
+ const cases=[{bytes:Buffer.from([0x81,0x28]),code:'PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID',status:400},{bytes:Buffer.from(syntheticBudgetCsv().toString().replace('Synthetic','Syn\u0000thetic')),code:'PLAN_IMPORT_BUDGET_CSV_INVALID',status:400},{bytes:Buffer.from('wrong,header\n1,2\n'),code:'PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID',status:400},{bytes:syntheticBudgetCsv({count:201}),code:'PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT',status:413}];
  for(const item of cases){
   const h=budgetStoreHarness(),operationId=randomUUID(),source={bytes:item.bytes,contentType:type},response=await handlers(h).POST(uploadRequest(source,{operationId})),body=await response.json(),sourceSha256=createHash('sha256').update(item.bytes).digest('hex');
   const expected=createHash('sha256').update(JSON.stringify(['plan-import-upload-command-v1',{action:'UPLOAD',consent,operationId,projectId:context.projectId,scope:context.scope,source:{bytes:item.bytes.length,contentType:type,sha256:sourceSha256}}])).digest('hex');

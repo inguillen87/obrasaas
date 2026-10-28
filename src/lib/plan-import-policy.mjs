@@ -28,7 +28,7 @@ const fail=(code='PLAN_IMPORT_INPUT_INVALID',status=400)=>{throw new WorkspaceEr
 // A caller-controlled field or an error from the store cannot forge the marker.
 const sourceRejections=new WeakMap();
 export const planImportSourceRejection=error=>sourceRejections.get(error)||null;
-const csvSourceRejectionCodes=new Set(['PLAN_IMPORT_BUDGET_CSV_INVALID','PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID','PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID','PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT','PLAN_IMPORT_BUDGET_CSV_DUPLICATE_CODES','PLAN_IMPORT_BUDGET_SOURCE_TOO_LARGE']);
+const csvSourceRejectionCodes=new Set(['PLAN_IMPORT_BUDGET_CSV_INVALID','PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID','PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID','PLAN_IMPORT_BUDGET_CSV_COLUMNS_INVALID','PLAN_IMPORT_BUDGET_CSV_QUOTES_INVALID','PLAN_IMPORT_BUDGET_CSV_ROW_INCOMPLETE','PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT','PLAN_IMPORT_BUDGET_CSV_DUPLICATE_CODES','PLAN_IMPORT_BUDGET_SOURCE_TOO_LARGE']);
 function rememberSourceRejection(error,input,source){
  if(!(error instanceof WorkspaceError))return;
  const csv=input.consent===PLAN_BUDGET_CSV_CONSENT&&source?.contentType===PLAN_BUDGET_CSV_TYPE&&csvSourceRejectionCodes.has(error.code);
