@@ -13,10 +13,12 @@ function entry(value,context){
 }
 export function consumptionEvidenceSnapshot(value,expected){
  if(!value||['projectId','scope','workerId','taskId','sectorId'].some(key=>value[key]!==expected[key]))throw Object.assign(new Error('Cambió el contexto de los archivos. Volvé a consultar la obra con tu acceso vigente.'),{code:'WORKSPACE_CONTEXT_CHANGED'});
- if(!exact(value,['projectId','scope','workerId','taskId','sectorId','entries','evidence','page'])||!Array.isArray(value.entries)||value.entries.length>6||!Array.isArray(value.evidence)||value.evidence.length>16||!Array.isArray(expected.selectedIds)||expected.selectedIds.length>10||new Set(expected.selectedIds).size!==expected.selectedIds.length||expected.selectedIds.some(value=>!id(value)))fail();
+ if(!exact(value,['projectId','scope','workerId','taskId','sectorId','entries','evidence','page','unavailableIds'])||!Array.isArray(value.unavailableIds)||value.unavailableIds.length>10||new Set(value.unavailableIds).size!==value.unavailableIds.length||!Array.isArray(value.entries)||value.entries.length>6||!Array.isArray(value.evidence)||value.evidence.length>16||!Array.isArray(expected.selectedIds)||expected.selectedIds.length>10||new Set(expected.selectedIds).size!==expected.selectedIds.length||expected.selectedIds.some(value=>!id(value)))fail();
  for(const rows of [value.entries,value.evidence]){if(new Set(rows.map(row=>row?.id)).size!==rows.length)fail();for(const row of rows)entry(row,expected);}
  const byId=new Map(value.evidence.map(row=>[row.id,row])),listed=new Set(value.entries.map(row=>row.id));
  if(value.entries.some(row=>{const retained=byId.get(row.id);return !retained||['id','title','taskId','workerId','sectorId','revision','status'].some(key=>row[key]!==retained[key])||['kind','contentType','bytes','sha256'].some(key=>row.media[key]!==retained.media[key]);})||value.evidence.some(row=>!listed.has(row.id)&&!expected.selectedIds.includes(row.id)))fail();
+ // Every selected ID is accounted for exactly once: still visible, or named as unavailable.
+ if(value.unavailableIds.some(item=>!id(item)||!expected.selectedIds.includes(item)||byId.has(item))||expected.selectedIds.some(item=>!byId.has(item)&&!value.unavailableIds.includes(item)))fail();
  const page=value.page;
  if(!exact(page,['contextDigest','first','last','hasPrevious','hasNext'])||!hash(page.contextDigest)||typeof page.hasPrevious!=='boolean'||typeof page.hasNext!=='boolean'||(page.first===null)!==(page.last===null))fail();
  if(!value.entries.length){if(page.first!==null||page.last!==null||page.hasPrevious||page.hasNext)fail();}

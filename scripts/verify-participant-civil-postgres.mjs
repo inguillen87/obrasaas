@@ -15,6 +15,7 @@ import {PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
 import {createBindxCivilDataClient,BINDX_CIVIL_CONFIGURATION_VERSION,BINDX_CIVIL_CONSENT_VERSION,BINDX_CIVIL_RESPONSE_SCHEMA} from '../src/lib/bindx-civil-data-client.mjs';
 import {civilSha} from '../src/lib/participant-civil-policy.mjs';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
+import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
 
 export const PARTICIPANT_CIVIL_POSTGRES_PROOF_VERSION='participant-civil-postgres-v1';
 export const PARTICIPANT_CIVIL_POSTGRES_CHECKS=Object.freeze([
@@ -154,7 +155,7 @@ export async function verifyParticipantCivilPostgres(environment=process.env){
    const f={projectId,workerId,holder,configuration:template,response:()=>Response.json(facts),afterQuery:null,settlementGate:null,settlementCommitAckGate:null,settlementCommitApplied:false,settlementAckReleased:false,observerTimeoutMs:6000,crash:false,loginRequests:0,queryRequests:0,factoryCalls:0};
    f.row=async()=>(await pool.query(`SELECT *,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM "Worker" WHERE id=$1 AND "projectId"=$2`,[workerId,projectId])).rows[0];
    f.context=async(actor=manager,operationId=null)=>({projectId,scope:actor.scope,workerId,submissionId:(await f.row()).metadata.participant.kyc.submissionId,...(operationId?{operationId}:{})});
-   f.store=()=>{const store=createParticipantStore({workspace,connect:async()=>{const work=(async()=>{
+   f.store=()=>{const store=createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace,connect:async()=>{const work=(async()=>{
     if(f.settlementGate)await f.settlementGate.promise;const native=await connect(),ackGate=f.settlementCommitAckGate;if(!ackGate)return native;
     return {release:broken=>{native.release(broken);f.settlementAckReleased=true;},query:async(...args)=>{const result=await native.query(...args);if(args[0]==='COMMIT'){f.settlementCommitApplied=true;await ackGate.promise;}return result;}};
    })();pendingSettlements.add(work);work.finally(()=>pendingSettlements.delete(work)).catch(()=>{});return work;},upload:uploader.uploadImageToBlob,get,civilConfiguration:()=>f.configuration,civilClientFactory:options=>{

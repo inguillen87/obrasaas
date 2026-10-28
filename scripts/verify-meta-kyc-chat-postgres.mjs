@@ -11,6 +11,8 @@ import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.m
 import {createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
 import {createMetaCustomerOutbound,customerJobTransaction,customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
+import {prepareMetaKycChallenge as prepareHistoricalV2Challenge} from '../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs';
+import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
 import {resolveMetaKycAuthority,readMetaKycConversation,META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
@@ -36,7 +38,7 @@ let pool,created=false,loseDepositCommit=false,loseDispatchCommit=false,unexpect
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{unexpectedNetworkCalls++;throw new Error('KYC_UNCONTROLLED_NETWORK_REJECTED');};
 const query=(sql,args)=>pool.query(sql,args);
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),root=process.cwd(),sources=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry=>entry.isDirectory()?sources(relative+'/'+entry.name):[relative+'/'+entry.name]);
-const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs','tests/fixtures/meta-kyc-challenge-legacy-v2.mjs','scripts/lib/synthetic-capture-quality.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;
  pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));pool.on('connect',client=>ownedPids.add(client.processID));await query(lifecycleSchema);
@@ -70,7 +72,7 @@ try{
    return result;
   }};
  };
- const provider=createMetaCustomerProvider({environment,fetchImpl:graph.fetchImpl}),upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,environment});
+ const provider=createMetaCustomerProvider({environment,fetchImpl:graph.fetchImpl}),upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,connect,resolveAuthority:resolveMetaKycAuthority,upload,environment});
  const bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment}),fieldOutbound=createMetaCustomerOutbound({connect,provider,resolveIdentity:resolveWorkerChannelIdentity,environment});
  const processor=createMetaCustomerProcessor({connect,environment,authorizationCodes:META_KYC_AUTHORIZATION_CODES,dispatch:async context=>{const result=await bridge.execute(context);if(result)return result;fieldFallbacks++;return null;},outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?outbound.send(context,reply):fieldOutbound.send(context,reply),observeStatus:(...args)=>fieldOutbound.observeStatus(...args)}});
  const inbox=createMetaCustomerInbox({connect,environment}),callback=createMetaCustomerCallbackHandlers({inbox,environment,schedule:()=>{}}),[a,b]=tenants;
@@ -78,7 +80,10 @@ try{
  async function challenge(t,{captureImageSetVersion}={}){return customerJobTransaction(connect,async client=>{
   const project=(await client.query(`SELECT id,"organizationId" FROM "Project" WHERE id=$1 FOR UPDATE`,[t.projectId])).rows[0],row=await worker(t);
   const member={actorId:t.ownerId,membershipId:'owner-member-'+t.key,organizationId:t.organizationId,role:'ADMIN'};
-  const prepared=await prepareMetaKycChallenge(client,member,project,{workerId:t.workerId,revision:row.revision,operationId:randomUUID()});
+  // These original groups exercise already-issued v2 attempts, including the historical three-image consent queue.
+  // Current account-first v3 issuance is asserted independently below; never relabel a legacy receipt as current.
+  const prepare=prepareHistoricalV2Challenge;
+  const prepared=await prepare(client,member,project,{workerId:t.workerId,revision:row.revision,operationId:randomUUID()});
   if(captureImageSetVersion!==2){
    // Reconstruct a coherently issued pre-schema2 challenge for every original
    // two-image group. This fixture mutation is never a production option.
@@ -108,6 +113,10 @@ try{
   // the integrated closure verifier tests real cancellation and archival.
   await mutate(t,m=>{delete m.participant.kycChatChallenge;});
  };
+ // Current issuance must refuse an unaccepted account without changing private data or contacting providers.
+ const invitedBefore=await worker(a),invitedAudits=(await query(`SELECT * FROM "AuditLog" ORDER BY id`)).rows,invitedIo=counts();
+ await assert.rejects(customerJobTransaction(connect,async client=>prepareMetaKycChallenge(client,{actorId:a.ownerId,membershipId:'owner-member-'+a.key,organizationId:a.organizationId,role:'ADMIN'},{id:a.projectId,organizationId:a.organizationId},{workerId:a.workerId,revision:invitedBefore.revision,operationId:randomUUID()})),{code:'PARTICIPANT_FACIAL_ACCOUNT_ACCEPTANCE_REQUIRED'});
+ assert.deepEqual(await worker(a),invitedBefore);assert.deepEqual((await query(`SELECT * FROM "AuditLog" ORDER BY id`)).rows,invitedAudits);assert.deepEqual(counts(),invitedIo);assert.equal(unexpectedNetworkCalls,0);
  const initial=await challenge(a);assert.match(initial.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal(initial.codeUnavailable,false);
  const originalAudit=JSON.stringify((await query(`SELECT metadata FROM "AuditLog"`)).rows);assert.ok(!originalAudit.includes(initial.code));assert.equal((await worker(a)).metadata.participant.permissions.attendance,false);
  const baseline=counts();await receive(a,initial.code,{signature:false});assert.deepEqual(counts(),baseline);
@@ -282,6 +291,14 @@ try{
  }finally{expiryGate?.release?.();expiryClockOffset=0;expiryTracing=false;graph.assets.get(expiryBase.key).sender=originalExpirySender;}
  expiryFeedbackNative=expiryEvidence;
 
+ // Positive current issuance uses a separate accepted account-bound participant.
+ // This only prepares the current access; the historical capture groups above retain their original notice version.
+ const currentWorker='kyc-worker-current-v3',currentIo=counts();
+ await query(`INSERT INTO "Worker"(id,"projectId",name,phone,role,active,metadata) VALUES($1,$2,'Synthetic accepted current person',$3,'WORKER',true,$4::jsonb)`,[currentWorker,b.projectId,'+5491100000098',JSON.stringify({siteRegister:{version:1},participant:{version:1,status:'ACTIVE',clerkUserId:b.workerUserId,permissions:{attendance:false,report:false},kyc:{version:1,status:'NOT_SUBMITTED'}}})]);
+ const currentRow=(await query(`SELECT *,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM "Worker" WHERE id=$1`,[currentWorker])).rows[0];
+ const currentPrepared=await customerJobTransaction(connect,client=>prepareMetaKycChallenge(client,{actorId:b.ownerId,membershipId:'owner-member-'+b.key,organizationId:b.organizationId,role:'ADMIN'},{id:b.projectId,organizationId:b.organizationId},{workerId:currentWorker,revision:currentRow.revision,operationId:randomUUID()}));
+ const currentPart=(await query(`SELECT metadata FROM "Worker" WHERE id=$1`,[currentWorker])).rows[0].metadata.participant,currentReceipts=(await query(`SELECT metadata FROM "AuditLog" WHERE "entityId"=$1 AND action='participant.kyc_chat.prepared'`,[currentWorker])).rows;
+ assert.match(currentPrepared.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal(currentPrepared.captureImageSetVersion,2);assert.equal(currentPart.kycChatChallenge.analysisConsentVersion,3);assert.equal(currentPart.kycChatChallenge.participantClerkUserId,b.workerUserId);assert.equal(currentPart.kycChatChallenge.projectId,b.projectId);assert.equal(currentPart.kycChatChallenge.workerId,currentWorker);assert.equal(currentPart.kyc.status,'NOT_SUBMITTED');assert.deepEqual(currentPart.permissions,{attendance:false,report:false});assert.equal(currentReceipts.length,1);assert.equal(currentReceipts[0].metadata.analysisConsentVersion,3);assert.equal(currentReceipts[0].metadata.identityCertified,false);assert.equal(currentReceipts[0].metadata.permissionsGranted,false);assert.deepEqual(counts(),currentIo);
  const durable=JSON.stringify((await query(`SELECT metadata FROM "AuditLog"`)).rows);for(const t of tenants){assert.ok(!durable.includes(t.token));assert.ok(!durable.includes('data:image'));assert.ok(!durable.includes('IDENTIDAD '));}
  assert.equal(unexpectedNetworkCalls,0);assert.deepEqual(graph.unexpected,[]);assert.equal(blob.puts(),7);for(const source of sourceManifest)assert.equal(sha(readFileSync(path.join(root,source.path))),source.sha256);assert.equal(sha(readFileSync(new URL(import.meta.url))),harnessSha256);
  const report={status:'PASS',expiryFeedbackNative,contextFeedbackNative,environment:'disposable-localhost-postgresql-meta-kyc-chat',checks,sourceManifest,harnessSha256,tenants:2,provider:'strict-controlled-Graph-fetch-only',blob:'controlled-private-byte-store',realProviderCalls:0,unexpectedNetworkCalls,productionDataTouched:false,realMetaAccepted:false,humanAccepted:false};

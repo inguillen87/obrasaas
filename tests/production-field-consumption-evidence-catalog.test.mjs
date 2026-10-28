@@ -39,3 +39,18 @@ test('web cannot accept malformed returned media or duplicate retained SQL rows 
  for(const extra of [{mediaBytes:'0'},{mediaSha256:'bad'},{contentType:'video/mp4'}]){const f=fixture([record(0,extra)]);await assert.rejects(f.read(),{code:'FIELD_EVIDENCE_UNAVAILABLE'});}
  const row=record(0),client={query:async sql=>({rows:sql.includes('ANY')?[row,row]:sql.startsWith('SELECT EXISTS')?[{hasPrevious:false,hasNext:false}]:[row]})};await assert.rejects(readConsumptionEvidenceCatalog(client,{...context,retainedIds:[row.id]},web),{code:'FIELD_EVIDENCE_UNAVAILABLE'});
 });
+
+test('web report mode names each rejected, moved or withdrawn selection and keeps the visible ones without failing',async()=>{
+ const report={lockRetained:false,includeRetainedProcessing:false,reportUnavailableRetained:true};
+ const rows=[record(1),record(2,{status:'REJECTED'}),record(3,{workerId:'other-worker'}),record(4)];
+ const queries=[],client={async query(sql,args){queries.push(sql);let found=rows.filter(row=>row.projectId===args[0]&&row.taskId===args[1]&&row.workerId===args[2]&&row.recordedBy===args[3]&&row.organizationId===args[4]&&row.sectorId===args[5]&&row.status!=='REJECTED');if(sql.includes('i.id=ANY'))return {rows:found.filter(row=>args[6].includes(row.id)).sort((a,b)=>a.id.localeCompare(b.id))};if(sql.startsWith('SELECT EXISTS'))return {rows:[{hasPrevious:false,hasNext:false}]};return {rows:found.sort((a,b)=>key(b).localeCompare(key(a))).slice(0,7)};}};
+ const result=await readConsumptionEvidenceCatalog(client,{...context,retainedIds:['evidence-004','evidence-002','evidence-003','evidence-005']},report);
+ assert.deepEqual(result.unavailableIds,['evidence-002','evidence-003','evidence-005']);assert.ok(result.evidence.some(row=>row.id==='evidence-004'));assert.ok(result.evidence.every(row=>!result.unavailableIds.includes(row.id)));
+ for(const row of [...result.entries,...result.evidence]){assert.equal(Object.hasOwn(row,'processing'),false);assert.equal(JSON.stringify(row).includes('PRIVATE'),false);}
+ assert.ok(queries.every(sql=>!sql.includes('FOR SHARE')));
+ const none=await readConsumptionEvidenceCatalog(client,{...context},report);assert.deepEqual(none.unavailableIds,[]);
+ // The default bridge shape is unchanged and the strict mode still refuses to drop IDs silently.
+ assert.equal(Object.hasOwn(await readConsumptionEvidenceCatalog(client,{...context,retainedIds:['evidence-004']},{lockRetained:false,includeRetainedProcessing:false}),'unavailableIds'),false);
+ await assert.rejects(readConsumptionEvidenceCatalog(client,{...context,retainedIds:['evidence-002']},web),{code:'FIELD_EVIDENCE_UNAVAILABLE'});
+ for(const options of [{...report,requireAllRetained:true},{...report,reportUnavailableRetained:'yes'}])await assert.rejects(readConsumptionEvidenceCatalog(client,{...context},options),{code:'FIELD_EVIDENCE_UNAVAILABLE'});
+});

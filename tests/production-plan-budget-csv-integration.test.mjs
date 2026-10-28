@@ -8,6 +8,7 @@ import {PLAN_BUDGET_SOURCE_PROFILE,PLAN_BUDGET_SOURCE_CONSENT} from '../src/lib/
 import {PLAN_BUDGET_CSV_PROFILE as profile,PLAN_BUDGET_CSV_CONSENT as consent,PLAN_BUDGET_CSV_TYPE as type,planBudgetCsvSourceDigest} from '../src/lib/plan-budget-csv-source.mjs';
 import {budgetStoreHarness,budgetContext as context,budgetSession as session,budgetSourceFile} from './fixtures/plan-budget-store-synthetic.mjs';
 import {syntheticBudgetCsv} from './fixtures/plan-budget-csv-synthetic.mjs';
+import historicalCsv from './fixtures/plan-budget-csv-7400-golden.json' with {type:'json'};
 import {documentCurveFixture} from './fixtures/plan-import-document-curve-synthetic.mjs';
 
 const endpoint='https://obrasaas.com/api/identity/plan-import';
@@ -51,7 +52,7 @@ test('invalid CSV structure and record 201 are definitive pre-reservation reject
 });
 
 test('CSV parser rejections bind the live original upload digest for invalid UTF-8, malformed source and record limit',async()=>{
- const cases=[{bytes:Buffer.from([0xc3,0x28]),code:'PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID',status:400},{bytes:Buffer.from(syntheticBudgetCsv().toString().replace('Synthetic','Syn\u0000thetic')),code:'PLAN_IMPORT_BUDGET_CSV_INVALID',status:400},{bytes:Buffer.from('wrong,header\n1,2\n'),code:'PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID',status:400},{bytes:syntheticBudgetCsv({count:201}),code:'PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT',status:413}];
+ const cases=[{bytes:Buffer.from([0x81,0x28]),code:'PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID',status:400},{bytes:Buffer.from(syntheticBudgetCsv().toString().replace('Synthetic','Syn\u0000thetic')),code:'PLAN_IMPORT_BUDGET_CSV_INVALID',status:400},{bytes:Buffer.from('wrong,header\n1,2\n'),code:'PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID',status:400},{bytes:syntheticBudgetCsv({count:201}),code:'PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT',status:413}];
  for(const item of cases){
   const h=budgetStoreHarness(),operationId=randomUUID(),source={bytes:item.bytes,contentType:type},response=await handlers(h).POST(uploadRequest(source,{operationId})),body=await response.json(),sourceSha256=createHash('sha256').update(item.bytes).digest('hex');
   const expected=createHash('sha256').update(JSON.stringify(['plan-import-upload-command-v1',{action:'UPLOAD',consent,operationId,projectId:context.projectId,scope:context.scope,source:{bytes:item.bytes.length,contentType:type,sha256:sourceSha256}}])).digest('hex');
@@ -94,4 +95,23 @@ test('an uncertain post-upload role loss remains recoverable without a second ar
 
 test('source byte corruption is not silently repaired or returned as the original CSV',async()=>{
  const h=budgetStoreHarness(),result=await h.imports.attach(session,input()),pathname=h.state().logs.get(result.draft.id).metadata.source.pathname;h.mutateBlob(pathname,value=>{value.bytes[0]^=1;});await unchanged(h,()=>h.imports.source(session,{...context,draftId:result.draft.id}),'PLAN_IMPORT_SOURCE_INTEGRITY');assert.equal(h.calls.put,1);assert.equal(h.calls.analyzer,1);noBusiness(h);
+});
+
+test('persisted authentic 7400 CSV READY supports detail recovery and identical upload replay without rewriting or another archive or analyzer dispatch',async()=>{
+ const h=budgetStoreHarness(),command=input(decodePlanSource(Buffer.from(historicalCsv.inputBase64,'base64'),type)),first=await h.imports.attach(session,command);
+ h.mutateDraft(first.draft.id,m=>{m.analysis.budgetSource=structuredClone(historicalCsv.source);m.analysis.budgetDigest=historicalCsv.source.sourceDigest;m.analysis.budgetDescriptor.sourceDigest=historicalCsv.source.sourceDigest;});
+ const before=h.state(),io={get:h.calls.get,put:h.calls.put,analyzer:h.calls.analyzer};
+ const exact=await detail(h,first.draft),recovered=await h.imports.read(session,{...context,operationId:command.operationId}),again=await h.imports.attach(session,command),listed=await h.imports.read(session,context);
+ assert.deepEqual(exact.draft.budgetSource,historicalCsv.source);assert.equal(exact.draft.budgetDescriptor.sourceDigest,historicalCsv.source.sourceDigest);
+ assert.equal(recovered.state,'RECORDED');assert.equal(recovered.draft.id,first.draft.id);assert.equal(Object.hasOwn(recovered.draft,'budgetSource'),false);assert.equal(recovered.draft.budgetDescriptor.sourceDigest,historicalCsv.source.sourceDigest);
+ assert.equal(again.replayed,true);assert.equal(again.draft.id,first.draft.id);assert.equal(again.draft.budgetDescriptor.sourceDigest,historicalCsv.source.sourceDigest);assert.deepEqual(listed.drafts[0].budgetDescriptor,exact.draft.budgetDescriptor);
+ assert.deepEqual(h.state(),before);assert.deepEqual({get:h.calls.get,put:h.calls.put,analyzer:h.calls.analyzer},io);assert.equal(Object.hasOwn(exact.draft.budgetSource,'encoding'),false);assert.equal(Object.hasOwn(exact.draft.budgetSource,'delimiter'),false);noBusiness(h);
+});
+
+test('legacy and explicit CSV reading facts cannot enter exact detail or operation recovery with a forged digest',async()=>{
+ for(const historical of [false,true]){
+  const h=budgetStoreHarness(),command=input(decodePlanSource(Buffer.from(historicalCsv.inputBase64,'base64'),type)),first=await h.imports.attach(session,command);
+  h.mutateDraft(first.draft.id,m=>{if(historical)m.analysis.budgetSource=structuredClone(historicalCsv.source);m.analysis.budgetSource.sourceDigest='f'.repeat(64);m.analysis.budgetDigest='f'.repeat(64);m.analysis.budgetDescriptor.sourceDigest='f'.repeat(64);});
+  await unchanged(h,()=>detail(h,first.draft),'PLAN_IMPORT_RECEIPT_INTEGRITY');await unchanged(h,()=>h.imports.read(session,{...context,operationId:command.operationId}),'PLAN_IMPORT_RECEIPT_INTEGRITY');noBusiness(h);
+ }
 });

@@ -111,6 +111,7 @@ function CsvBudgetFields({source,row}){
     <div><dt>Registro del CSV</dt><dd>{row.provenance.record}</dd></div>
     <div><dt>Líneas del CSV</dt><dd>{row.provenance.lineStart}–{row.provenance.lineEnd}</dd></div>
     <div><dt>Referencia de origen</dt><dd><code>{row.sourceRowId}</code></dd></div>
+    <div><dt>Lectura del archivo</dt><dd data-csv-budget-reading-format>{Object.hasOwn(source,'encoding')?<>{source.encoding==='WINDOWS-1252'?'Windows-1252':'UTF-8'} · separador {source.delimiter===';'?'punto y coma (;)':'coma (,)'}</>:'Formato CSV original: UTF-8, coma'}</dd></div>
    </dl>
    <p className={styles.scope}>Encabezados originales: {source.headers.join(' · ')}.</p>
    <p className={styles.scope}>La procedencia corresponde al CSV conservado. Esta lectura no certifica su coincidencia con otro documento.</p>

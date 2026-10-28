@@ -9,6 +9,7 @@ import {parse} from '@babel/parser';
 import {loadBindings,transform} from 'next/dist/build/swc/index.js';
 import {extractPlanBudgetCsvSource,PLAN_BUDGET_CSV_PROFILE,PLAN_BUDGET_CSV_CONSENT} from '../src/lib/plan-budget-csv-source.mjs';
 import {syntheticBudgetCsv} from './fixtures/plan-budget-csv-synthetic.mjs';
+import historicalCsv from './fixtures/plan-budget-csv-7400-golden.json' with {type:'json'};
 import {PLAN_CSV_BUDGET_PROFILE,PLAN_CSV_BUDGET_CONSENT,PLAN_CSV_BUDGET_HEADERS,planCsvBudgetDescriptor,validatePlanCsvBudgetDetail} from '../src/app/(identity)/cuenta/plan-import-csv-budget-view.mjs';
 import {PLAN_BUDGET_SOURCE_PROFILE,planPartidaBudgetDescriptor,planPartidaBudgetCatalog,validatePlanPartidaBudgetDetail} from '../src/app/(identity)/cuenta/plan-partida-budget-preview.mjs';
 import {planImportUsageView} from '../src/app/(identity)/cuenta/plan-import-usage-view.mjs';
@@ -17,8 +18,8 @@ import {planDocumentDraftView,planInvestmentDraftView} from '../src/app/(identit
 const account=new URL('../src/app/(identity)/cuenta/',import.meta.url),context={projectId:'synthetic-project-csv',scope:'b'.repeat(64)},id='plan_draft_'+'c'.repeat(64);
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 function resign(draft){const {sourceDigest:ignored,...payload}=draft.budgetSource;void ignored;draft.budgetSource.sourceDigest=createHash('sha256').update(JSON.stringify(canonical(payload))).digest('hex');draft.budgetDescriptor.sourceDigest=draft.budgetSource.sourceDigest;return draft;}
-function fixture(options={}){
- const bytes=syntheticBudgetCsv(options),source=extractPlanBudgetCsvSource(bytes,'text/csv'),descriptor={version:1,profile:PLAN_BUDGET_CSV_PROFILE,purpose:'READ_ONLY_BUDGET_SOURCE',projectId:context.projectId,sourceSha256:source.sourceSha256,sourceDigest:source.sourceDigest,rowCount:source.rows.length,currency:{code:null,status:'UNKNOWN'}};
+function fixture(options={},historical=false){
+ const bytes=historical?Buffer.from(historicalCsv.inputBase64,'base64'):syntheticBudgetCsv(options),source=historical?structuredClone(historicalCsv.source):extractPlanBudgetCsvSource(bytes,'text/csv'),descriptor={version:1,profile:PLAN_BUDGET_CSV_PROFILE,purpose:'READ_ONLY_BUDGET_SOURCE',projectId:context.projectId,sourceSha256:source.sourceSha256,sourceDigest:source.sourceDigest,rowCount:source.rows.length,currency:{code:null,status:'UNKNOWN'}};
  const draft={id,revision:1,status:'READY',budgetImport:true,financialSource:true,rows:[],source:{contentType:'text/csv',bytes:bytes.length,sha256:source.sourceSha256},budgetDescriptor:descriptor,budgetSource:source};
  return {draft,descriptor,source,owner:{},entry:{id,revision:1,status:'READY',source:draft.source,budgetDescriptor:descriptor}};
 }
@@ -43,7 +44,7 @@ test('detail binding rejects cross-context, wrong source or revision and tampere
 });
 
 test('even a fresh digest cannot authorize missing rows, extra fields, inferred currency or financial writes',async()=>{
- const f=fixture();for(const mutate of [d=>{d.budgetSource.rows.pop();},d=>{d.budgetSource.rows[0].extra='unexpected';},d=>{d.budgetSource.stockWrites=true;},d=>{d.budgetSource.paymentWrites=true;},d=>{d.budgetSource.amountsCalculated=true;},d=>{d.budgetSource.currency={code:'ARS',status:'KNOWN'};},d=>{d.budgetSource.headers.reverse();},d=>{d.budgetSource.rows[1].code=d.budgetSource.rows[0].code;},d=>{d.budgetSource.rows[0].provenance.pageLiteral=null;},d=>{d.budgetSource.rows[0].provenance.lineStart=0;},d=>{d.budgetSource.rows[1].provenance.lineStart+=1;},d=>{d.budgetSource.rows[0].rawQuantity='=TEXT';},d=>{d.budgetSource.rows[0].rawUnit='\u0000';}]){const d=structuredClone(f.draft);mutate(d);resign(d);assert.notEqual((await validate(d)).status,'BOUND');}
+ const f=fixture();for(const mutate of [d=>{d.budgetSource.rows.pop();},d=>{d.budgetSource.rows[0].extra='unexpected';},d=>{d.budgetSource.stockWrites=true;},d=>{d.budgetSource.paymentWrites=true;},d=>{d.budgetSource.amountsCalculated=true;},d=>{d.budgetSource.currency={code:'ARS',status:'KNOWN'};},d=>{d.budgetSource.headers.reverse();},d=>{d.budgetSource.rows[1].code=d.budgetSource.rows[0].code;},d=>{d.budgetSource.rows[0].provenance.pageLiteral=null;},d=>{d.budgetSource.rows[0].provenance.lineStart=0;},d=>{d.budgetSource.rows[1].provenance.lineStart+=1;},d=>{d.budgetSource.rows[0].rawQuantity='=TEXT';},d=>{d.budgetSource.rows[0].rawUnit='\u0000';},d=>{d.budgetSource.encoding='UTF-16';},d=>{d.budgetSource.delimiter='\t';},d=>{delete d.budgetSource.delimiter;}]){const d=structuredClone(f.draft);mutate(d);resign(d);assert.notEqual((await validate(d)).status,'BOUND');}
 });
 
 test('catalogues contain only descriptors and require current financial authority',()=>{
@@ -105,4 +106,18 @@ test('CSV extension is normalized independently of browser MIME and private draf
 
 test('CSV-specific UI copy offers read-only scope and retains the standard private recovery path',()=>{
  const start=panel.indexOf("{csvBudgetFile?'Autorizo"),end=panel.indexOf(":documentPurpose===",start),copy=panel.slice(start,end);assert.ok(copy.length>0);assert.doesNotMatch(copy,/OpenAI|API|IA\b/);assert.match(copy,/códigos, cantidades, unidades, precios, importes y procedencia/);assert.match(panel,/\.csv,text\/csv/);assert.match(panel,/csvBudgetConsent\]\.includes/);assert.match(panel,/busy\?'Consultando…'/);assert.match(panel,/draft\?\.budgetImport!==true/);assert.match(panel,/draft\.budgetImport===true\|\|action==='APPLY'/);assert.match(panel,/Comprobar resultado/);assert.deepEqual(globalThis.__hoursExportNetworkGuard.attempts,[]);
+});
+
+test('browser binds the authentic 7400 V1 golden without adding reading facts or changing its digest',async()=>{
+ const f=fixture({},true),before=structuredClone(f.draft),result=await validate(f.draft);
+ assert.equal(f.source.sourceDigest,'767e62e1faa2de560c0469810c87e9cab1388a919150785becc6994c8743e34f');
+ assert.equal(result.status,'BOUND');assert.deepEqual(result.source,historicalCsv.source);assert.deepEqual(f.draft,before);
+ for(const mutate of [d=>{d.budgetSource.encoding='UTF-8';},d=>{d.budgetSource.delimiter=',';},d=>{d.budgetSource.encoding='UTF-16';d.budgetSource.delimiter=',';},d=>{d.budgetSource.encoding='UTF-8';d.budgetSource.delimiter='\t';}]){const changed=structuredClone(f.draft);mutate(changed);resign(changed);assert.notEqual((await validate(changed)).status,'BOUND');}
+ for(const f of [fixture(),fixture({},true)]){const changed=structuredClone(f.draft);changed.budgetSource.sourceDigest='f'.repeat(64);changed.budgetDescriptor.sourceDigest='f'.repeat(64);assert.equal((await validate(changed)).status,'DIGEST_MISMATCH');}
+});
+
+test('legacy CSV reading labels its original UTF-8 comma format only in the UI and preserves all source bytes',async()=>{
+ const f=fixture({},true),before=structuredClone(f.draft),p=props(f);ui.reset();await consult(ui.render(p));const markup=html(p);
+ assert.match(markup,/Formato CSV original: UTF-8, coma/);assert.match(markup,/999999999999999999999,000000/);assert.match(markup,/Partida 1 de 2/);
+ assert.deepEqual(f.draft,before);assert.deepEqual(ui.snapshot().result.source,historicalCsv.source);assert.equal(Object.hasOwn(ui.snapshot().result.source,'encoding'),false);assert.equal(Object.hasOwn(ui.snapshot().result.source,'delimiter'),false);
 });

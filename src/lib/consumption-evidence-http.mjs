@@ -28,7 +28,7 @@ export function createConsumptionEvidenceCatalog({workspace}){
    await assertApprovedParticipantKyc(client,row,{...member,clerkUserId:session.userId},{code:'FIELD_KYC_REVIEW_REQUIRED'});
    if(!Array.isArray(project.metadata?.fieldOperations?.sectors)||project.metadata.fieldOperations.sectors.filter(sector=>sector?.id===context.sectorId).length!==1)throw new WorkspaceError('FIELD_SECTOR_UNAVAILABLE',404);
    if(context.taskId!==null){const tasks=(await client.query(`SELECT id FROM public."Task" WHERE id=$1 AND "projectId"=$2`,[context.taskId,project.id])).rows;if(tasks.length!==1||tasks[0].id!==context.taskId)throw new WorkspaceError('WORKSPACE_TASK_UNAVAILABLE',404);}
-   const result=await readConsumptionEvidenceCatalog(client,{organizationId:member.organizationId,projectId:project.id,workerId:row.id,actorId:member.actorId,taskId:context.taskId,sectorId:context.sectorId,page:context.page,direction:context.direction,retainedIds:context.selectedIds},{lockRetained:false,includeRetainedProcessing:false,requireAllRetained:true});
+   const result=await readConsumptionEvidenceCatalog(client,{organizationId:member.organizationId,projectId:project.id,workerId:row.id,actorId:member.actorId,taskId:context.taskId,sectorId:context.sectorId,page:context.page,direction:context.direction,retainedIds:context.selectedIds},{lockRetained:false,includeRetainedProcessing:false,reportUnavailableRetained:true});
    return {projectId:project.id,scope,workerId:row.id,taskId:context.taskId,sectorId:context.sectorId,...result};
   });
  }};

@@ -2,7 +2,11 @@
 export const PLAN_CSV_BUDGET_PROFILE='SOURCE_BUDGET_CSV_V1';
 export const PLAN_CSV_BUDGET_CONSENT='plan-source-budget-csv-local-v1';
 export const PLAN_CSV_BUDGET_HEADERS=Object.freeze(['pagina','codigo','descripcion','unidad_original','cantidad_original','precio_unitario_original','total_iva_incluido_original']);
+export const PLAN_CSV_BUDGET_ENCODINGS=Object.freeze(['UTF-8','WINDOWS-1252']);
+export const PLAN_CSV_BUDGET_DELIMITERS=Object.freeze([',',';']);
 const purpose='READ_ONLY_BUDGET_SOURCE';
+const sourceKeys=['version','profile','purpose','sourceSha256','contentType','encoding','delimiter','headers','rows','currency','warnings','formulasEvaluated','calendarDatesInferred','taskWrites','stockWrites','paymentWrites','amountsCalculated','sourceDigest'];
+const legacySourceKeys=sourceKeys.filter(key=>!['encoding','delimiter'].includes(key));
 const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&[Object.prototype,null].includes(Object.getPrototypeOf(value));
 const exact=(value,keys)=>record(value)&&Object.keys(value).sort().join('|')===[...keys].sort().join('|');
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -32,8 +36,8 @@ function rowsValid(rows){
 export async function validatePlanCsvBudgetDetail(draft,{projectId,descriptor,expectedId,expectedRevision}={}){
  try{
   if(draft?.budgetImport!==true||draft.financialSource!==true||draft.id!==expectedId||draft.revision!==expectedRevision||draft.status!=='READY'||draft.projectId!==undefined&&draft.projectId!==projectId||draft.source?.contentType!=='text/csv'||!planCsvBudgetDescriptor(descriptor,{projectId,sourceSha256:draft.source?.sha256})||!same(canonical(draft.budgetDescriptor),canonical(descriptor)))return {status:'SOURCE_MISMATCH'};
-  const source=canonical(draft.budgetSource);
-  if(!exact(source,['version','profile','purpose','sourceSha256','contentType','headers','rows','currency','warnings','formulasEvaluated','calendarDatesInferred','taskWrites','stockWrites','paymentWrites','amountsCalculated','sourceDigest'])||source.version!==1||source.profile!==PLAN_CSV_BUDGET_PROFILE||source.purpose!==purpose||source.sourceSha256!==descriptor.sourceSha256||source.sourceDigest!==descriptor.sourceDigest||source.contentType!=='text/csv'||!same(source.headers,PLAN_CSV_BUDGET_HEADERS)||!unknownCurrency(source.currency)||!Array.isArray(source.rows)||source.rows.length!==descriptor.rowCount||!rowsValid(source.rows)||['formulasEvaluated','calendarDatesInferred','taskWrites','stockWrites','paymentWrites','amountsCalculated'].some(key=>source[key]!==false))return {status:'SOURCE_MISMATCH'};
+  const source=canonical(draft.budgetSource),explicitFormat=exact(source,sourceKeys),legacyFormat=exact(source,legacySourceKeys);
+  if(!explicitFormat&&!legacyFormat||source.version!==1||source.profile!==PLAN_CSV_BUDGET_PROFILE||source.purpose!==purpose||source.sourceSha256!==descriptor.sourceSha256||source.sourceDigest!==descriptor.sourceDigest||source.contentType!=='text/csv'||explicitFormat&&(!PLAN_CSV_BUDGET_ENCODINGS.includes(source.encoding)||!PLAN_CSV_BUDGET_DELIMITERS.includes(source.delimiter))||!same(source.headers,PLAN_CSV_BUDGET_HEADERS)||!unknownCurrency(source.currency)||!Array.isArray(source.rows)||source.rows.length!==descriptor.rowCount||!rowsValid(source.rows)||['formulasEvaluated','calendarDatesInferred','taskWrites','stockWrites','paymentWrites','amountsCalculated'].some(key=>source[key]!==false))return {status:'SOURCE_MISMATCH'};
   const warnings=['CURRENCY_UNCONFIRMED','ALL_VALUES_REQUIRE_SOURCE_REVIEW',...(source.rows.some(row=>row.issues.length)?['FORMULA_LIKE_TEXT_PRESENT']:[])];
   if(!same(source.warnings,warnings))return {status:'SOURCE_MISMATCH'};
   const bytes=new TextEncoder().encode(JSON.stringify(source));if(bytes.length>2*1024*1024)return {status:'SOURCE_MISMATCH'};
