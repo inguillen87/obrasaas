@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from '../src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs';
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
-function fixture(overrides={}){
+function fixture(overrides={},options={}){
  let time=1800000000000,next=0,visible=true,online=true,source=1,authorityEpoch=0;
  const timers=new Map(),states=[],counts={read:0,apply:0,deny:0};
  const capturedSource=source;
@@ -12,7 +12,7 @@ function fixture(overrides={}){
   isCurrent:stamp=>!spec.blocked&&source===capturedSource&&stamp===authorityEpoch,isAuthorityCurrent:stamp=>source===capturedSource&&stamp===authorityEpoch,
   onAccessRejected:()=>{counts.deny++;spec.enabled=false;},...overrides};
  const controller=createWorksiteLiveRefreshController({contextKey:spec.contextKey,getCurrent:()=>spec,onState:value=>states.push(value),
-  setTimer:(fn,delay)=>{const id=++next;timers.set(id,{fn,due:time+delay,delay});return id;},clearTimer:id=>timers.delete(id),now:()=>time,random:()=>.5,isVisible:()=>visible,isOnline:()=>online});
+  setTimer:(fn,delay)=>{const id=++next;timers.set(id,{fn,due:time+delay,delay});return id;},clearTimer:id=>timers.delete(id),now:()=>time,random:()=>.5,isVisible:()=>visible,isOnline:()=>online,...(options.observedNow?{observedAt:time}:{})});
  return {controller,spec,states,counts,timers,setTime:ms=>{time+=ms;},setVisible:value=>{visible=value;},setOnline:value=>{online=value;},newCanonicalSource:()=>{source++;},bumpAuthorityEpoch:()=>{authorityEpoch++;},
   async fireNext(){const first=[...timers.entries()].sort((a,b)=>a[1].due-b[1].due)[0];if(!first)return;timers.delete(first[0]);time=first[1].due;await first[1].fn();},
   delays:()=>[...timers.values()].map(t=>t.delay)};
@@ -155,3 +155,16 @@ test('a request timeout is not a transient lock: the next check keeps the five-s
  f.timers.clear();f.setTime(-29000);assert.equal(await f.controller.check(),false);assert.equal(reads,1);assert.ok(f.delays().every(delay=>delay>0&&delay<=5000));f.controller.dispose();
 });
 
+
+// Regression: a context that was just read canonically (the schedule after loading or refreshing
+// the obra) must not be read again by the live controller when it activates; the canonical read
+// is the first observation and the first live check keeps the five-second spacing from it.
+test('a context just read canonically is the first observation: activation does not repeat the read',async()=>{
+ const f=fixture({},{observedNow:true});f.controller.start();assert.deepEqual(f.delays(),[5000]);
+ assert.equal(await f.controller.check(),false);assert.equal(f.counts.read,0,'Activation right after the canonical read does not GET again');assert.deepEqual(f.delays(),[5000]);
+ // A transient lock and unlock right after the canonical read still does not repeat it.
+ f.setTime(1200);f.spec.blocked=true;f.controller.pause();f.spec.blocked=false;assert.equal(await f.controller.check(),false);assert.equal(f.counts.read,0);assert.deepEqual(f.delays(),[5000]);
+ await f.fireNext();assert.equal(f.counts.read,1,'The first live check runs once the spacing from the canonical read has elapsed');assert.equal(f.counts.apply,1);assert.deepEqual(f.delays(),[45000]);
+ // Without a canonical observation the activation check is immediate (Decisions has no canonical read).
+ const g=fixture();g.controller.start();assert.equal(await g.controller.check(),true);assert.equal(g.counts.read,1);f.controller.dispose();g.controller.dispose();
+});

@@ -272,6 +272,8 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  useLayoutEffect(()=>{scheduleLiveContext.current={account,view,generation:observationEpoch,blocked:contextLocked||loading,section:activeSection};});
  const scheduleLive=useWorksiteLiveRefresh({
   contextKey:[account?.scope||'',view?.project.id||'',observationEpoch,'schedule'].join(':'),
+  // The key changes with each canonical read (observationEpoch, project): that read is the first observation.
+  canonicalRead:true,
   enabled:Boolean(view&&account?.officeReviewOnly!==true&&['inicio','cronograma'].includes(activeSection)),
   blocked:contextLocked||loading,
   read:async signal=>{

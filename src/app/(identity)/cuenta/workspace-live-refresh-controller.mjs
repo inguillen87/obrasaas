@@ -2,8 +2,10 @@
 export function worksiteLiveRefreshPresentation(status,{contextKey,viewKey='',enabled}){
  return status.contextKey===contextKey&&(status.viewKey===viewKey||['LIMITED','ACCESS'].includes(status.state))?status:{state:enabled?'PAUSED':'IDLE',checkedAt:null,updates:false};
 }
-export function createWorksiteLiveRefreshController({contextKey,getCurrent,onState,setTimer=setTimeout,clearTimer=clearTimeout,now=Date.now,random=Math.random,isVisible=()=>true,isOnline=()=>true}){
- let disposed=false,timer=null,active=null,lastStart=null,failures=0,lastChecked=null,limited=false,settledStart=null,lockRetry=true;
+export function createWorksiteLiveRefreshController({contextKey,getCurrent,onState,setTimer=setTimeout,clearTimer=clearTimeout,now=Date.now,random=Math.random,isVisible=()=>true,isOnline=()=>true,observedAt=null}){
+ // observedAt: when this context was just read canonically, that read is the latest observation,
+ // so the first live check keeps the five-second spacing instead of repeating it.
+ let disposed=false,timer=null,active=null,lastStart=observedAt,failures=0,lastChecked=null,limited=false,settledStart=observedAt,lockRetry=true;
  const jitter=base=>Math.round(base*(.9+random()*.2));
  const same=()=>!disposed&&getCurrent()?.contextKey===contextKey;
  const eligible=()=>same()&&getCurrent().enabled===true&&!getCurrent().blocked&&isVisible()&&isOnline();

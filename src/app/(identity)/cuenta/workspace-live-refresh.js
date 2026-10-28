@@ -3,11 +3,13 @@ import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from './workspace-live-refresh-controller.mjs';
 
 // Existing authenticated GETs; canonical authority and data commits use separate fences.
-export function useWorksiteLiveRefresh({contextKey,viewKey='',enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected}){
+// canonicalRead: the context key changes exactly when a canonical read of that context starts or ends,
+// so creating the controller for a key is itself an observation of that context.
+export function useWorksiteLiveRefresh({contextKey,viewKey='',enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected,canonicalRead=false}){
  const latest=useRef(null),control=useRef(null),[status,setStatus]=useState({state:'IDLE',checkedAt:null,updates:false});
- useLayoutEffect(()=>{latest.current={contextKey,viewKey,enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected};},[contextKey,viewKey,enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected]);
+ useLayoutEffect(()=>{latest.current={contextKey,viewKey,enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected,canonicalRead};},[contextKey,viewKey,enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected,canonicalRead]);
  useEffect(()=>{
-  const controller=createWorksiteLiveRefreshController({contextKey,getCurrent:()=>latest.current,onState:setStatus,isVisible:()=>document.visibilityState==='visible',isOnline:()=>navigator.onLine!==false});
+  const controller=createWorksiteLiveRefreshController({contextKey,getCurrent:()=>latest.current,onState:setStatus,isVisible:()=>document.visibilityState==='visible',isOnline:()=>navigator.onLine!==false,observedAt:latest.current?.canonicalRead===true?Date.now():null});
   control.current=controller;controller.start();
   const changed=()=>controller.environmentChanged();
   window.addEventListener('online',changed);window.addEventListener('offline',changed);window.addEventListener('focus',changed);document.addEventListener('visibilitychange',changed);
