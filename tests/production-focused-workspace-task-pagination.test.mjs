@@ -12,7 +12,7 @@ const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),entry='src/app
 const consumers=['src/app/(identity)/cuenta/field-operations-panel.js','src/app/(identity)/cuenta/material-inventory-panel.js'];
 
 test('task-page browser extension preserves the historical45 and fourteen ordered additions before eighteen home cases',()=>{
- assert.equal(FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,45);assert.equal(HOME_DECISIONS_CHECKS.length,20);assert.equal(new Set(HOME_DECISIONS_CHECKS).size,20);assert.equal(FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,45+14+20);assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_WIDTHS,[320,390,1440]);assert.equal(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.length,14);assert.equal(new Set(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS).size,14);
+ assert.equal(FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,45);assert.equal(HOME_DECISIONS_CHECKS.length,20);assert.equal(new Set(HOME_DECISIONS_CHECKS).size,20);assert.equal(FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,45+14+20+6);assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_WIDTHS,[320,390,1440]);assert.equal(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.length,14);assert.equal(new Set(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS).size,14);
  assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.slice(0,6),[320,390,1440].flatMap(width=>['field','inventory'].map(name=>'account-task-pages-draft-100-200-205-single-GET-'+name+'-'+width)));
  assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.slice(6,12),['field','inventory'].flatMap(name=>['503-retry','403-clear','busy-uncertain-and-late-page'].map(kind=>'account-task-pages-'+kind+'-'+name+'-390')));assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.slice(12),['field','inventory'].map(name=>'account-task-pages-404-revoked-clear-'+name+'-390'));
 });
