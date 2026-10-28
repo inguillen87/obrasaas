@@ -69,6 +69,12 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true&&postgres.cleanup?.poolClosed===true&&postgres.cleanup.databaseRemoved===true,'Owned PostgreSQL cleanup');
  requireProof(Array.isArray(postgres.nativeLockObservations)&&postgres.nativeLockObservations.length===2,'Two native lock races');
  for(const [index,record] of postgres.nativeLockObservations.entries())requireProof(exact(record,['firstTransport','secondTransport','sameOrganization','differentProjects','waitingCount','waitingBeforeProject','bothCompleted'])&&record.firstTransport===['WEB','WHATSAPP'][index]&&record.secondTransport===['WHATSAPP','WEB'][index]&&record.sameOrganization===true&&record.differentProjects===true&&Number.isSafeInteger(record.waitingCount)&&record.waitingCount>=1&&record.waitingBeforeProject===true&&record.bothCompleted===true,'Native advisory-before-project ordering');
+ {
+  const earlyNative=organizationUsageCiSourceClosure(readSource);
+  manifest(postgres.sourceManifest,earlyNative.files,readSource,'PostgreSQL');
+  const earlyBrowser=organizationUsageCiSourceClosure(readSource,{ui:true});
+  manifest(ui.sourceManifest,earlyBrowser.files,readSource,'UI');
+ }
  const native=organizationUsageCiSourceClosure(readSource),currentSourceContract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){verifyWorksiteLiveHoursCurrentSources(currentSourceContract,readSource);verifyWorksiteLiveHoursActualClosure(currentSourceContract,'ORGANIZATION_USAGE',native,readSource);}let historicalNativeFiles,sourceLineage;try{historicalNativeFiles=participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',native.files,readSource);sourceLineage=validatePlanMeasurementConsumerSourceLineage({family:'ORGANIZATION_USAGE',files:native.files,readSource});}catch(error){requireProof(false,error.message);}
  requireProof(historicalNativeFiles.length===115&&native.files.filter(file=>file===fieldReportSource).length===1,'Complete 115-source native closure with the own field report reader and source import');
  const previousNative=historicalNativeFiles.filter(file=>file!==fieldReportSource&&!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));requireProof(previousNative.length===112&&sha(JSON.stringify(previousNative))===previousNativePathsSha256,'Preserved exact previous 112-source native lineage');

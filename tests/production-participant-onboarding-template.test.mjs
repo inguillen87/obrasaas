@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildCustomerTemplate,buildParticipantOnboardingMessage,customerTemplateBlueprint,customerRemoteTemplateMatches,publicCustomerTemplateWorkbench} from '../src/lib/meta-customer-templates.mjs';
+import {buildCustomerTemplate,buildParticipantInvitationMessage,buildParticipantOnboardingMessage,customerTemplateBlueprint,customerRemoteTemplateMatches,publicCustomerTemplateWorkbench} from '../src/lib/meta-customer-templates.mjs';
 import {customerTemplateMessage,createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
 
@@ -114,4 +114,15 @@ test('scoped provider adapter serializes three BODY parameters and the existing 
  assert.deepEqual(body.template,customerTemplateMessage(params.message).template);
  await assert.rejects(provider.sendTemplate({...params,message:{...params.message,bodyParameters:[input.organizationName,'https://evil.example',input.code]}}),invalid);
  assert.equal(requests.length,1,'invalid message cannot reach the provider request');
+});
+
+test('account invitation uses the unchanged one-parameter owned template without an identity code',()=>{
+ const before=JSON.stringify({connection,input}),value=buildParticipantInvitationMessage(connection,{organizationName:input.organizationName}),definition=buildCustomerTemplate(connection,'participant_invitation');
+ assert.deepEqual(value,{name:definition.name,language:'es_AR',bodyParameters:[input.organizationName]});
+ assert.deepEqual(customerTemplateMessage(value),{type:'template',template:{name:definition.name,language:{code:'es_AR'},components:[{type:'body',parameters:[{type:'text',text:input.organizationName}]}]}});
+ assert.equal(definition.contentSha256,legacy.find(row=>row[0]==='participant_invitation')[1]);
+ assert.doesNotMatch(JSON.stringify(value),/IDENTIDAD |invite_|approved|permissionsGranted|clerk/);assert.equal(JSON.stringify({connection,input}),before);
+ for(const candidate of [null,[],{},input,{organizationName:input.organizationName,code:input.code},{organizationName:input.organizationName,url:'https://evil.example'},{organizationName:'x'.repeat(161)},{organizationName:'Empresa\nOtra instrucción'},{organizationName:'<img>'},{organizationName:' '}])assert.throws(()=>buildParticipantInvitationMessage(connection,candidate),invalid);
+ for(const candidate of [null,{}, {...connection,id:'../outside'},{...connection,whatsappBusinessId:'00001'},{...connection,whatsappBusinessId:12345}])assert.throws(()=>buildParticipantInvitationMessage(candidate,{organizationName:input.organizationName}),invalid);
+ assert.equal(buildParticipantInvitationMessage(connection,{organizationName:'x'.repeat(160)}).bodyParameters[0].length,160);
 });

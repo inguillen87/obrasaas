@@ -1,3 +1,4 @@
+import {verifyPlanBudgetCurrentSources,planBudgetCurrentSourcePin} from './lib/plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
 function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
 const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
@@ -106,14 +107,27 @@ const controlledBootstrapCompiler='next/dist/build/swc/index.js';
 // chain. The complete original unit and lock bytes are separately pinned.
 const controlledBootstrapTransformPrefix="import assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport test from 'node:test';\nimport React from 'react';\nimport {renderToStaticMarkup} from 'react-dom/server';\nimport {parse} from '@babel/parser';\nimport {loadBindings,transform} from 'next/dist/build/swc/index.js';\n\nconst source=readFileSync(new URL('../src/app/(identity)/cuenta/company-bootstrap-panel.js',import.meta.url),'utf8');\nconst tree=parse(source,{sourceType:'module',plugins:['jsx']});\nconst component=tree.program.body.find(node=>node.type==='ExportNamedDeclaration'&&node.declaration?.id?.name==='CompanyBootstrapPanel').declaration;\nconst ready=component.body.body.find(node=>node.type==='IfStatement'&&node.test.type==='BinaryExpression'&&node.test.operator==='==='&&node.test.left.name==='stage'&&node.test.right.value==='ready');\nassert.equal(ready.consequent.type,'ReturnStatement');\nconst readyJsx=source.slice(ready.consequent.argument.start,ready.consequent.argument.end);\n// Render the exact ready-branch JSX with real React, including the actual trial\n// component. No hooks are replaced and the onboarding transport is never run.\n// SSR verifies native disclosure markup, not browser layout or keyboard behavior.\nawait loadBindings();\nconst compiled=await transform(`import React,{useCallback,useEffect,useRef,useState} from ${JSON.stringify(import.meta.resolve('react'))};\nconst styles={created:'created',caption:'caption'};\n${source.replace(/^import .*;\\r?\\n/gm,'')}\nexport const renderReady=({receipt,currentCompany,children})=>${readyJsx};`,{filename:'actual-company-ready-receipt.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\nconst {renderReady,CompanyTrialExpiry}=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));\n";
 const syntaxShape=value=>Array.isArray(value)?value.map(syntaxShape):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>!['start','end','loc','extra','leadingComments','innerComments','trailingComments'].includes(key)).map(([key,item])=>[key,syntaxShape(item)])):value;
+function withCurrentCompilerLock(readSource,legacyPin,run){
+ let suppliedMetadata;try{suppliedMetadata=readSource(contractPath);}catch{return run({bytes:bytes(readSource,'package-lock.json'),sha256:legacyPin});}
+ if(suppliedMetadata===null||suppliedMetadata===undefined)return run({bytes:bytes(readSource,'package-lock.json'),sha256:legacyPin});
+ reject(Buffer.isBuffer(suppliedMetadata),'Compiler lock contract bytes required');const metadata=Buffer.from(suppliedMetadata);let contract;try{contract=JSON.parse(metadata);}catch{reject(false,'Compiler lock contract must parse');}reject(plain(contract),'Compiler lock contract object required');
+ if(!Object.hasOwn(contract?.planBudgetCurrentRevision??{},'ownRuntimeDiagnosticAdvance'))return run({bytes:bytes(readSource,'package-lock.json'),sha256:legacyPin});
+ const current=action=>{try{return action();}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}};
+ current(()=>verifyPlanBudgetCurrentSources(contract,readSource));
+ const before=Buffer.from(bytes(readSource,'package-lock.json')),wanted=current(()=>planBudgetCurrentSourcePin(contract,{path:'package-lock.json',sha256:legacyPin}));
+ try{return run({bytes:before,sha256:wanted});}
+ finally{current(()=>verifyPlanBudgetCurrentSources(contract,readSource));reject(bytes(readSource,contractPath).equals(metadata)&&bytes(readSource,'package-lock.json').equals(before),'Compiler lock or metadata RAW bytes changed during source inspection');}
+}
 function controlledBootstrapDependency(value,file,tree,node,readSource){
  if(file!==controlledBootstrapFixture||node.type!=='ImportExpression')return false;
  const rows=WORKSPACE_CONTINUITY_FOCUSED_UI.controlledSourceTransforms;reject(Array.isArray(rows)&&rows.length===1,'One reviewed source transform declaration required');const declaration=rows[0];keys(declaration,['file','sourceLfSha256','kind','source','compiler','packageLockSha256'],'controlled source transform');
  reject(declaration.file===controlledBootstrapFixture&&declaration.kind==='SWC_READY_BRANCH_DATA_MODULE'&&declaration.source===controlledBootstrapPanel&&declaration.compiler===controlledBootstrapCompiler&&typeof readSource==='function','Only the exact original bootstrap source transform is permitted');
- const canonicalHash=raw=>sha(Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n')));reject(canonicalHash(value)===declaration.sourceLfSha256&&canonicalHash(bytes(readSource,'package-lock.json'))===declaration.packageLockSha256,'Controlled unit and compiler lock must equal their reviewed source bytes');
+ return withCurrentCompilerLock(readSource,declaration.packageLockSha256,lock=>{
+ const canonicalHash=raw=>sha(Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n')));reject(canonicalHash(value)===declaration.sourceLfSha256&&canonicalHash(lock.bytes)===lock.sha256,'Controlled unit and compiler lock must equal their reviewed source bytes');
  const expected=parse(controlledBootstrapTransformPrefix,{sourceType:'module',plugins:['jsx'],createImportExpressions:true}).program.body,actual=tree.program.body.slice(0,expected.length),last=actual.at(-1);
  reject(same(syntaxShape(actual),syntaxShape(expected))&&last?.type==='VariableDeclaration'&&last.kind==='const'&&last.declarations.length===1&&last.declarations[0].init?.type==='AwaitExpression'&&last.declarations[0].init.argument===node,'Only the exact local panel, resolved React, SWC JSX transform and compiled.code base64 module shape is permitted');
  bytes(readSource,controlledBootstrapPanel);return true;
+ });
 }
 export function focusedWorkspaceCiLocalImports(value,file,readSource){
  if(file.endsWith('.css')||file.endsWith('.json'))return[];

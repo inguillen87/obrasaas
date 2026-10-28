@@ -135,12 +135,12 @@ test('the view and notice projection do not change the canonical snapshot',()=>{
 
 test('the canonical next step prefers instructions only with current explicit sending authority and the server notice',()=>{
  const input=fixture();input.snapshot.canInvite=true;
- assert.deepEqual(nextStep(input).primary,{action:'SEND_ONBOARDING_WHATSAPP',label:'Enviar instrucciones por WhatsApp'});
+ assert.deepEqual(nextStep(input).primary,{action:'SEND_ONBOARDING_WHATSAPP',label:'Enviar invitación por WhatsApp'});
  assert.equal(nextStep(input).state,'ONBOARDING_WHATSAPP_PREPARATION');
  input.snapshot.records[0].canSendOnboardingWhatsapp=false;
- assert.equal(nextStep(input).primary.action,'PREPARE_KYC_CHAT');
+ assert.equal(nextStep(input).state,'WAIT_ACCOUNT');
  input.snapshot.records[0].canSendOnboardingWhatsapp=true;delete input.snapshot.onboardingContactNotice;
- assert.equal(nextStep(input).primary.action,'PREPARE_KYC_CHAT');
+ assert.equal(nextStep(input).state,'WAIT_ACCOUNT');
 });
 
 test('authorized instructions already queued are consulted before preparing another identity code',()=>{
@@ -149,7 +149,7 @@ test('authorized instructions already queued are consulted before preparing anot
   assert.deepEqual(nextStep(input).primary,{action:'CONSULT_PARTICIPANTS',label:'Consultar envío por WhatsApp'});
   assert.equal(nextStep(input).state,'ONBOARDING_WHATSAPP_PENDING');
   input.snapshot.records[0].onboardingDelivery.contactAuthorized=false;
-  assert.equal(nextStep(input).primary.action,'PREPARE_KYC_CHAT');
+  assert.equal(nextStep(input).state,'WAIT_ACCOUNT');
   input.snapshot.records[0].onboardingDelivery.contactAuthorized=true;input.snapshot.records[0].kycChatChallenge=pendingChat();
   assert.equal(nextStep(input).primary.action,'CANCEL_KYC_CHAT','An existing challenge retains its closure authority');
  }
@@ -187,7 +187,7 @@ test('uncertainty, chat closure, invitation and own identity precede template na
 });
 test('template navigation requires active contact and verified current participation',()=>{
  for(const patch of [{active:false},{status:'REVOKED'},{self:true,status:'ACTIVE',accountLinked:true}]){const input=templatePending();Object.assign(input.snapshot.records[0],patch);assert.notEqual(nextStep(input).primary?.action,'REVIEW_ONBOARDING_TEMPLATE');}
- const input=templatePending();input.snapshot.records[0].onboardingDelivery.contactAuthorized=false;assert.equal(nextStep(input).primary.action,'PREPARE_KYC_CHAT');
+ const input=templatePending();input.snapshot.records[0].onboardingDelivery.contactAuthorized=false;assert.equal(nextStep(input).state,'WAIT_ACCOUNT');
  input.context.verified=false;assert.equal(nextStep(input).primary.action,'CONSULT_ACCESS');input.context.verified=true;input.context.projectId='other-project';assert.equal(nextStep(input).primary.action,'CONSULT_ACCESS');
 });
 test('navigation destinations use only the current scoped context and explicit integration capability',()=>{
@@ -196,4 +196,41 @@ test('navigation destinations use only the current scoped context and explicit i
  for(const current of [null,{...context,scope:'invalid'},{...context,canManageIntegrations:false},{...context,canManageIntegrations:'true'},{...context,canManageIntegrations:undefined}])assert.equal(navigationTarget(value,current),null);
  for(const patch of [{scope:'b'.repeat(64)},{projectId:'other-project'},{target:'unobserved-template'},{target:'customer-template-workbench'}])assert.equal(navigationTarget({...value,...patch},context),null);
  assert.equal(navigationTarget(null,context),null);assert.equal(navigationTarget(value,{...context,projectId:null}),null);
+});
+
+const phased=(phase='ACCOUNT_INVITATION',state='PENDING',patch={})=>{
+ const value=withDelivery(state),person=value.snapshot.records[0];value.snapshot.canInvite=true;
+ if(phase==='IDENTITY_START'){person.status='ACTIVE';person.accountLinked=true;person.invitation.state='ACCEPTED';}
+ person.onboardingDelivery={...person.onboardingDelivery,phase,invitationState:phase==='ACCOUNT_INVITATION'?state:'SENT',identityState:phase==='IDENTITY_START'?state:'WAITING_ACCOUNT_ACCEPTANCE',...patch};return value;
+};
+test('invitation and identity stages have separate truthful status and actionable template guidance',()=>{
+ for(const phase of ['ACCOUNT_INVITATION','IDENTITY_START']){
+  const input=phased(phase,'BLOCKED',{code:'PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED'}),before=JSON.stringify(input),result=view(input);
+  assert.equal(result.observed,true);assert.equal(result.phase,phase);assert.equal(result.canSend,false);assert.equal(result.providerAccepted,false);assert.equal(result.automaticResendAllowed,false);
+  assert.equal(result.label,phase==='ACCOUNT_INVITATION'?'Plantilla de invitación pendiente':'Plantilla de identidad pendiente');
+  assert.deepEqual(nextStep(input).primary,{action:'REVIEW_ONBOARDING_TEMPLATE',label:phase==='ACCOUNT_INVITATION'?'Revisar plantilla de invitación':'Revisar plantilla de identidad'});
+  assert.equal(JSON.stringify(input),before);
+ }
+ const input=phased('ACCOUNT_INVITATION','SENT');assert.equal(view(input).canSend,false);assert.equal(view(input).providerAccepted,true);assert.equal(view(input).deliveryConfirmed,false);assert.equal(nextStep(input).state,'WAIT_ACCOUNT');assert.match(view(input).description,/antes de presentar documentos/);
+ const active=phased('IDENTITY_START','PENDING');active.snapshot.records[0].canRevokeOnboardingContact=true;assert.equal(view(active).providerAccepted,false);assert.match(view(active).revokeWarning,/No puede borrar ni retirar un mensaje/);assert.equal(nextStep(active).state,'ONBOARDING_WHATSAPP_PENDING');
+});
+test('partial crossed unknown or forged stage projections never offer a send or identity preparation',()=>{
+ const input=phased(),person=input.snapshot.records[0],valid=structuredClone(person.onboardingDelivery);
+ for(const patch of [{phase:undefined},{phase:'OTHER'},{identityState:undefined},{invitationState:undefined},{invitationState:'SENT'},{identityState:'PENDING'},{identityState:'WAITING_CONFIGURATION'},{identityState:'CANCELED'},{phase:'IDENTITY_START',identityState:'PENDING'}]){
+  person.onboardingDelivery={...valid,...patch};unknown(input);assert.notEqual(nextStep(input).primary?.action,'PREPARE_KYC_CHAT');assert.notEqual(nextStep(input).primary?.action,'SEND_ONBOARDING_WHATSAPP');
+ }
+ for(const key of ['phase','identityState','invitationState']){person.onboardingDelivery=structuredClone(valid);delete person.onboardingDelivery[key];unknown(input);}
+ const active=phased('IDENTITY_START');active.snapshot.records[0].onboardingDelivery.invitationState='WAITING_ACCOUNT_ACCEPTANCE';unknown(active);assert.equal(nextStep(active).primary.action,'CONSULT_PARTICIPANTS');
+});
+test('contact revocation preserves the bounded invitation history without granting account or capture',()=>{
+ const input=phased('ACCOUNT_INVITATION','CANCELED',{identityState:'CANCELED',contactAuthorized:false}),person=input.snapshot.records[0];person.canSendOnboardingWhatsapp=false;
+ assert.equal(view(input).observed,true);assert.equal(view(input).canSend,false);assert.equal(view(input).canRevoke,false);assert.equal(nextStep(input).state,'WAIT_ACCOUNT');
+ for(const key of ['metadata','phone','clerkUserId','privateBankAccount'])Object.defineProperty(person,key,{get(){throw Error('No private reads');}});
+ assert.doesNotMatch(JSON.stringify(view(input)),/IDENTIDAD |customer_outbound_|privateBankAccount/);
+});
+
+for(const state of ['SEND_STARTED','SEND_UNKNOWN'])test('an uncertain identity phase is observed before a stale null capture can offer replacement: '+state,()=>{
+ const input=phased('IDENTITY_START',state),person=input.snapshot.records[0];person.canSendOnboardingWhatsapp=false;person.kycChatChallenge=null;
+ const before=JSON.stringify(input);assert.equal(view(input).observed,true);assert.equal(view(input).canSend,false);
+ assert.deepEqual(nextStep(input).primary,{action:'CONSULT_PARTICIPANTS',label:'Consultar envío por WhatsApp'});assert.equal(nextStep(input).state,'ONBOARDING_WHATSAPP_PENDING');assert.equal(JSON.stringify(input),before);
 });

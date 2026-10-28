@@ -31,7 +31,9 @@ export function createFieldHandlers({verify,operations}) {
       const file=fieldHoursCsv(report,params.get('expectedHoursDigest'));
       return new Response(file.csv,{headers:{...fieldHeaders,'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="${file.filename}"`,'Content-Security-Policy':"default-src 'none'; sandbox",'X-ObraSaaS-Hours-Digest':file.digest}});
     }
-    const input=context(params,['operationId','proposalId','afterMovement','afterConsumption','consumptionId','afterAdjustment','adjustmentId','inventoryFilter','shiftId','closingEventId','journeyCursor','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp']);
+    const input=context(params,['executionView','executionMandateId','operationId','proposalId','afterMovement','afterConsumption','consumptionId','afterAdjustment','adjustmentId','inventoryFilter','shiftId','closingEventId','journeyCursor','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp']);
+    if(params.has('executionView')){if(params.size!==3||params.get('executionView')!=='1')throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.executionView(session,input));}
+    if(params.has('executionMandateId')){if(params.size!==3||!workspaceId(params.get('executionMandateId')))throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.executionMandate(session,{...input,executionMandateId:params.get('executionMandateId')}));}
     if(params.has('inventoryFilter')){
       const keys=['afterMovement','afterConsumption','consumptionId','afterAdjustment','adjustmentId'],selected=keys.filter(key=>params.has(key)),inventoryFilter=params.get('inventoryFilter');
       if([...params.keys()].some(key=>!['projectId','scope','inventoryFilter',...keys].includes(key))||!['PENDING','ALL'].includes(inventoryFilter)||selected.length>1||selected.some(key=>!workspaceId(params.get(key)))||inventoryFilter==='PENDING'&&selected.some(key=>['consumptionId','adjustmentId'].includes(key)))throw new WorkspaceError('INVENTORY_QUERY_INVALID');

@@ -11,7 +11,7 @@ import {readEmployeeIntake} from '../src/lib/meta-employee-intake.mjs';
 // Actual intake + KYC bridges/resolvers with signed, encrypted synthetic SQL
 // fixtures. PostgreSQL lock/race acceptance remains a separate required check.
 async function routedFixture(){
- const f=await companyKycMemoryFixture();await f.execute(f.code);
+ const f=await companyKycMemoryFixture({historicalChallengeVersion:2});await f.execute(f.code);
  const applicationId='customer_webhook_'+digest(['synthetic-admitted-intake']);
  const senderKey='a'.repeat(64),state={applicationId,organizationId:f.target.organizationId,connectionId:f.connection.id,revision:6,senderKey,sender:f.worker.phone,status:'ADMITTED',step:'ADMITTED',consent:true,noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),lastEventId:applicationId,expiresAt:new Date(f.now.getTime()+60000).toISOString(),admission:{workerId:f.worker.id,projectId:f.target.id}};
  const envelope={version:1,applicationId,organizationId:f.target.organizationId,connectionId:f.connection.id,senderKey,revision:state.revision,status:state.status,lastEventId:applicationId,encryptedState:encryptCustomerSecret(JSON.stringify(state),{organizationId:f.target.organizationId,projectId:f.anchor.id,purpose:'employee-intake',resourceId:applicationId},f.environment)};

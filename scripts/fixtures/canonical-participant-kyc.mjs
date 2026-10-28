@@ -1,3 +1,5 @@
+import {CAPTURE_QUALITY_NOTICE_VERSION,CAPTURE_QUALITY_MODEL_MANIFEST_SHA256} from '../../src/lib/private-capture-quality.mjs';
+import {syntheticCaptureQuality} from '../lib/synthetic-capture-quality.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -27,7 +29,9 @@ export function createCanonicalParticipantKycFixture({workspace,connect,query}) 
     return {url:'https://fixture.private.blob.vercel-storage.com/'+pathname,pathname};
   };
   const uploader=createPrivateImageUploader({put,get,environment:()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-canonical-kyc-fixture'})});
-  const store=createParticipantStore({workspace,connect,upload:uploader.uploadImageToBlob,get});
+  const qualityHelperBytes=readFileSync(new URL('../lib/synthetic-capture-quality.mjs',import.meta.url));assert.equal(hash(qualityHelperBytes),'ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420','Exact reviewed synthetic capture-quality fixture helper');
+  const assessCaptureQuality=async input=>{assert.ok(['DOCUMENT_FRONT','SELFIE'].includes(input.kind));assert.equal(input.image.mimeType,'image/png');assert.equal(input.consentVersion,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_NOTICE_VERSION,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_MODEL_MANIFEST_SHA256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(hash(readFileSync(new URL('../../src/lib/capture-quality-policy.mjs',import.meta.url))),'94cfd5f24158983a93430158a33716119cb17783f6067053610a788638dd5057','Exact reviewed capture notice/policy source');assert.deepEqual(Buffer.from(input.image.buffer),input.kind==='DOCUMENT_FRONT'?images.front:images.selfie,'Only the fixture-owned generated pixel is admitted by this adapter');const result=await syntheticCaptureQuality(input);assert.equal(result.imageSha256,hash(Buffer.from(input.image.buffer)));assert.equal(result.modelManifestSha256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(result.identityCertified,false);assert.equal(result.livenessVerified,false);assert.equal(result.documentAuthenticityVerified,false);return result;};
+  const store=createParticipantStore({workspace,connect,upload:uploader.uploadImageToBlob,get,assessCaptureQuality});
   const row=async(projectId,workerId)=>(await query(`SELECT id,"projectId",active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[workerId,projectId])).rows[0];
   async function approve({projectId,workerId,actor,reviewer}) {
     assert.notEqual(actor.userId,reviewer.userId,'The human reviewer is another synthetic account');
@@ -69,7 +73,7 @@ export function canonicalParticipantKycSourceFiles() {
     const source=readFileSync(file,'utf8');
     for(const match of source.matchAll(/(?:import|export)\s[^;]*?from\s*['"](\.[^'"]+)['"]/g)) {
       const dependency=posix.normalize(posix.join(posix.dirname(file),match[1]));
-      assert.ok(dependency.startsWith('src/')||dependency.startsWith('scripts/fixtures/'));
+      assert.ok(dependency.startsWith('src/')||dependency.startsWith('scripts/fixtures/')||dependency==='scripts/lib/synthetic-capture-quality.mjs');
       visit(dependency);
     }
   }

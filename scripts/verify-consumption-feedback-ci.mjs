@@ -1,3 +1,4 @@
+import {isProxy as preflightIsProxy,isSharedArrayBuffer as preflightIsSharedArrayBuffer} from 'node:util/types';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
 function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')requireProof(false,error.message);throw error;}}
 const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
@@ -13,6 +14,42 @@ import {fileURLToPath} from 'node:url';
 import {parse} from '@babel/parser';
 import {PLAN_MEASUREMENT_CONSUMER_CI_HELPER,validatePlanMeasurementConsumerSourceLineage} from './lib/plan-measurement-consumer-ci-lineage.mjs';
 import {MATERIAL_CONSUMPTION_FEEDBACK_CHECKS,MATERIAL_CONSUMPTION_FEEDBACK_PROOF_VERSION} from './verify-material-consumption-feedback-postgres.mjs';
+
+// This extra pass is confined to passive JSON receipts and ordinary source
+// bytes. Active/exotic inputs retain the complete original validation path.
+const preflightGetPrototype=Object.getPrototypeOf,preflightDescriptor=Object.getOwnPropertyDescriptor,preflightDescriptors=Object.getOwnPropertyDescriptors,preflightKeys=Reflect.ownKeys,preflightApply=Reflect.apply,preflightHas=Object.hasOwn,preflightObjectPrototype=Object.prototype,preflightArrayPrototype=Array.prototype,preflightBufferPrototype=Buffer.prototype,preflightUint8Prototype=Uint8Array.prototype;
+const preflightObjectConstructor=Object,preflightArrayConstructor=Array,preflightBufferConstructor=Buffer,preflightNumberConstructor=Number,preflightWeakSetConstructor=WeakSet,preflightReflectObject=Reflect,preflightJsonObject=JSON,preflightArrayIsArray=Array.isArray,preflightBufferIsBuffer=Buffer.isBuffer,preflightIsFinite=Number.isFinite,preflightSeenHas=WeakSet.prototype.has,preflightSeenAdd=WeakSet.prototype.add;
+const preflightTypedPrototype=preflightGetPrototype(preflightUint8Prototype),preflightBackingGetter=preflightDescriptor(preflightTypedPrototype,'buffer').get,preflightFunctionText=Function.prototype.toString,preflightSameValue=Object.is;
+const preflightPrototypes=[preflightObjectPrototype,preflightArrayPrototype,preflightBufferPrototype,preflightUint8Prototype,preflightTypedPrototype,Function.prototype,String.prototype,RegExp.prototype,preflightObjectConstructor,preflightArrayConstructor,preflightBufferConstructor,preflightNumberConstructor,preflightWeakSetConstructor,WeakSet.prototype,preflightReflectObject,preflightJsonObject],preflightPrototypeDescriptors=preflightPrototypes.map(value=>preflightDescriptors(value)),preflightPrototypeParents=preflightPrototypes.map(value=>preflightGetPrototype(value));
+const preflightBufferOwnHooks=['toString','valueOf','slice','subarray','equals','toJSON','length','byteLength','byteOffset','buffer','constructor','parent','offset','utf8Slice',Symbol.toPrimitive,Symbol.iterator];
+function preflightSameDescriptor(a,b){if(a===undefined||b===undefined)return a===b;const fields=['value','get','set','writable','enumerable','configurable'];for(let i=0;i<fields.length;i++){const key=fields[i],left=preflightHas(a,key),right=preflightHas(b,key);if(left!==right||left&&!preflightSameValue(a[key],b[key]))return false;}return true;}
+function preflightStablePrototypes(){for(let i=0;i<preflightPrototypes.length;i++){if(preflightGetPrototype(preflightPrototypes[i])!==preflightPrototypeParents[i])return false;const before=preflightPrototypeDescriptors[i],after=preflightDescriptors(preflightPrototypes[i]),keys=preflightKeys(before),current=preflightKeys(after);if(keys.length!==current.length)return false;for(let j=0;j<keys.length;j++)if(keys[j]!==current[j]||!preflightSameDescriptor(before[keys[j]],after[current[j]]))return false;}return true;}
+function preflightPassiveJson(value,seen){
+ if(value===null||typeof value==='string'||typeof value==='boolean')return true;
+ if(typeof value==='number')return preflightIsFinite(value);
+ if(typeof value!=='object'||preflightIsProxy(value)||preflightApply(preflightSeenHas,seen,[value]))return false;
+ const prototype=preflightGetPrototype(value),array=preflightArrayIsArray(value);if(array?prototype!==preflightArrayPrototype:prototype!==preflightObjectPrototype&&prototype!==null)return false;
+ preflightApply(preflightSeenAdd,seen,[value]);const descriptors=preflightDescriptors(value),keys=preflightKeys(descriptors);let count=0;
+ for(let i=0;i<keys.length;i++){const key=keys[i],descriptor=descriptors[key];if(array&&key==='length')continue;if(typeof key!=='string'||!preflightHas(descriptor,'value')||descriptor.enumerable!==true)return false;if(array&&key!==''+count++)return false;if(!preflightPassiveJson(descriptor.value,seen))return false;}
+ return !array||count===descriptors.length.value;
+}
+function preflightOrdinarySources(sources){
+ if(!sources||typeof sources!=='object'||preflightIsProxy(sources))return false;const prototype=preflightGetPrototype(sources);if(prototype!==preflightObjectPrototype&&prototype!==null)return false;
+ const descriptors=preflightDescriptors(sources),keys=preflightKeys(descriptors);
+ for(let i=0;i<keys.length;i++){const key=keys[i],descriptor=descriptors[key];if(typeof key!=='string'||!preflightHas(descriptor,'value')||descriptor.enumerable!==true)return false;const value=descriptor.value;if(value===null||typeof value==='string')continue;if(!value||typeof value!=='object'||preflightIsProxy(value)||!preflightBufferIsBuffer(value)||preflightGetPrototype(value)!==preflightBufferPrototype)return false;for(let j=0;j<preflightBufferOwnHooks.length;j++)if(preflightDescriptor(value,preflightBufferOwnHooks[j])!==undefined)return false;if(preflightIsSharedArrayBuffer(preflightApply(preflightBackingGetter,value,[])))return false;}
+ return true;
+}
+function preflightPassiveInput(sources,postgres,ui){
+ try{
+  if(Object!==preflightObjectConstructor||Array!==preflightArrayConstructor||Buffer!==preflightBufferConstructor||Number!==preflightNumberConstructor||WeakSet!==preflightWeakSetConstructor||Reflect!==preflightReflectObject||JSON!==preflightJsonObject)return false;
+  if(!preflightStablePrototypes()||preflightDescriptor(preflightObjectPrototype,'toJSON')!==undefined||preflightDescriptor(preflightArrayPrototype,'toJSON')!==undefined||preflightGetPrototype(preflightArrayPrototype)!==preflightObjectPrototype||preflightGetPrototype(preflightBufferPrototype)!==preflightUint8Prototype||preflightGetPrototype(preflightUint8Prototype)!==preflightTypedPrototype||preflightGetPrototype(preflightTypedPrototype)!==preflightObjectPrototype)return false;
+  if(preflightIsProxy(JSON))return false;const stringify=preflightDescriptor(JSON,'stringify');if(!stringify||!preflightHas(stringify,'value')||typeof stringify.value!=='function'||preflightIsProxy(stringify.value)||preflightApply(preflightFunctionText,stringify.value,[])!=='function stringify() { [native code] }')return false;
+  if(!preflightSameDescriptor({get:preflightBackingGetter,set:undefined,enumerable:false,configurable:true},preflightDescriptor(preflightTypedPrototype,'buffer')))return false;
+  return preflightPassiveJson(postgres,new preflightWeakSetConstructor())&&preflightPassiveJson(ui,new preflightWeakSetConstructor())&&preflightOrdinarySources(sources);
+ }catch{return false;}
+}
+function preflightIsRejection(error,code){if(!error||typeof error!=='object'||preflightIsProxy(error))return false;const descriptor=preflightDescriptor(error,'code');return Boolean(descriptor&&preflightHas(descriptor,'value')&&descriptor.value===code);}
+
 
 export const CONSUMPTION_FEEDBACK_CI_VERSION='material-consumption-feedback-ci-v1';
 export const CONSUMPTION_FEEDBACK_UI_WIDTHS=Object.freeze([320,390,768,1280]);
@@ -110,6 +147,16 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  requireProof(postgres.realIdentityDocuments===false&&postgres.providerCalls===0&&postgres.poolClosed===true&&postgres.databaseRemoved===true,'PostgreSQL provider/identity/cleanup boundary must be closed');
  requireProof(postgres.totalCheckCount===23&&Array.isArray(postgres.checks),'PostgreSQL requires all 23 native checks');
  same(postgres.checks,MATERIAL_CONSUMPTION_FEEDBACK_CHECKS,'PostgreSQL checks must equal the exported native contract');
+  // Reject passive receipt/source defects early; keep every original late check below.
+  if(preflightPassiveInput(gitSources,postgres,ui)){try{
+
+   const earlyPg=consumptionFeedbackSourceClosure(readSource);manifest(postgres,earlyPg.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'PostgreSQL producer hash must match committed Git bytes');
+   requireProof(ui.environment==='isolated-localhost-next-exact-jsx-synthetic-api'&&ui.productionLoginVerified===false&&ui.physicalDeviceAccepted===false&&ui.providerRequests===0,'UI requires intercepted synthetic API/authentication only');
+   for(const key of ['pageErrors','interceptErrors','externalRequests'])requireProof(Array.isArray(ui[key])&&ui[key].length===0,'UI '+key+' must be empty');
+   const earlyCleanup=ui.cleanup;requireProof(earlyCleanup&&earlyCleanup.browserClosed===true&&earlyCleanup.serverClosed===true&&earlyCleanup.gracefulCloseAcknowledged===true&&earlyCleanup.fixtureRemoved===true&&earlyCleanup.fixtureCleanupProof?.fixtureRemoved===true&&earlyCleanup.fixtureCleanupProof?.postcondition?.absent===true,'UI browser/server/owned fixture cleanup must be confirmed');
+   uiChecks(ui);const earlyBrowser=consumptionFeedbackSourceClosure(readSource,{ui:true});manifest(ui,earlyBrowser.files,readSource,'UI');same(ui.externalImports,earlyBrowser.externalImports,'UI package imports must match committed JSX graph');same(ui.externalImports,['react'],'UI fixture package dependency boundary changed');
+   requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI producer and owned cleanup hashes must match committed Git bytes');
+  }catch(error){if(preflightIsRejection(error,'CONSUMPTION_FEEDBACK_CI_REJECTED'))throw error;}}
  const currentSourceContract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources(currentSourceContract,readSource);
  const pgClosure=consumptionFeedbackSourceClosure(readSource);if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursActualClosure(currentSourceContract,'CONSUMPTION_FEEDBACK',pgClosure,readSource);let historicalNativeFiles,sourceLineage;try{historicalNativeFiles=participantPreanalysisConsumerSourceFiles('CONSUMPTION_FEEDBACK',pgClosure.files,readSource);sourceLineage=validatePlanMeasurementConsumerSourceLineage({family:'CONSUMPTION_FEEDBACK',files:pgClosure.files,readSource});}catch(error){requireProof(false,error.message);}requireProof(historicalNativeFiles.length===110,'PostgreSQL committed closure must contain the previous 108 sources and exactly two source import dependencies');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
  requireProof(['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs'].every(file=>pgClosure.files.includes(file)),'Current native document curve dependency lineage');

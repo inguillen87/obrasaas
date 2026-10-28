@@ -18,7 +18,7 @@ export function WorkspaceToolsNavigation({canManageIntegrations=false,canImportP
   <p className={styles.eyebrow}>TU ESPACIO DE TRABAJO</p>
   <label className={styles.mobilePicker}>Ir a la sección<select value={options.find(id=>workspaceDestination(id).section===activeSection)||'workspace-home-title'} onChange={event=>revealWorkspaceDestination(event.target.value)}>{options.map(id=><option key={id} value={id}>{workspaceDestination(id).label}</option>)}</select></label>
   <div className={styles.desktopLinks}>{primary.map(([id,Icon])=>renderLink(id,Icon))}
-   {secondary.length>0&&<details className={styles.settings}><summary><Settings2 size={18} aria-hidden="true"/>Configuración</summary><div className={styles.secondary}>{secondary.map(id=>renderLink(id))}</div></details>}
+   {secondary.length>0&&<details className={styles.settings} open={secondary.some(id=>workspaceDestination(id).section===activeSection)||undefined}><summary><Settings2 size={18} aria-hidden="true"/>Configuración</summary><div className={styles.secondary}>{secondary.map(id=>renderLink(id))}</div></details>}
    {role==='ADMIN'&&<div className={styles.billing}>{renderLink('company-subscription-title',CreditCard)}</div>}
   </div>
   {outstanding.length>0&&<div className={styles.pending} role="status" aria-live="polite"><strong><Clock3 size={16} aria-hidden="true"/>Acciones en curso</strong><p>Tus borradores se conservan en estas secciones.</p>{outstanding.map(id=>renderLink(id))}</div>}

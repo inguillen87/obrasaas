@@ -6,9 +6,13 @@ on:
 permissions:
   contents: read
 jobs:
-  verify:
+  unit:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     services:
       postgres:
         image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -34,7 +38,74 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
-      - run: node --test tests/production-*.test.mjs
+      - name: Production unit shard ${{ matrix.shard }}/16
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readdirSync,lstatSync,readFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {spawnSync} from 'node:child_process';
+
+          const rawShard=process.env.SHARD||'';
+          assert.match(rawShard,/^(?:[1-9]|1[0-6])$/,'SHARD must be an integer from 1 through 16');
+          const shard=Number(rawShard),shardCount=16;
+          const discover=()=>readdirSync('tests',{withFileTypes:true})
+            .filter(entry=>/^production-[^/]+\.test\.mjs$/.test(entry.name))
+            .map(entry=>{const file='tests/'+entry.name;assert.ok(entry.isFile()&&!entry.isSymbolicLink(),'Production test must be a regular file: '+file);return file;})
+            .sort();
+          const universe=discover();
+          assert.ok(universe.length>0,'The production test universe must not be empty');
+          assert.equal(new Set(universe).size,universe.length,'Production tests must be distinct');
+          const selected=universe.filter((_,index)=>index%shardCount===shard-1);
+          assert.ok(selected.length>0,'Every configured shard must contain a production test');
+          const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+          const sourcePins=files=>files.map(file=>{const stat=lstatSync(file);assert.ok(stat.isFile()&&!stat.isSymbolicLink(),'Production test must remain a regular file: '+file);return {path:file,sha256:createHash('sha256').update(readFileSync(file)).digest('hex')};});
+          const before=sourcePins(universe);
+          console.log(JSON.stringify({kind:'production-test-shard-v1',shard,shardCount,universe:{count:universe.length,files:universe,sha256:hash(universe),sourceSha256:hash(before)},selected:{count:selected.length,files:selected,sha256:hash(selected)}}));
+          const child=spawnSync(process.execPath,['--test',...selected],{stdio:'inherit'});
+          let sourceChanged=false;
+          try{assert.deepEqual(discover(),universe,'Production test universe changed during the shard');assert.deepEqual(sourcePins(universe),before,'Production test source changed during the shard');}
+          catch(error){sourceChanged=true;console.error(error);}
+          if(child.error)throw child.error;
+          if(child.signal){console.error('Production test child terminated by signal: '+child.signal);process.kill(process.pid,child.signal);process.exitCode=1;}
+          else{assert.ok(Number.isInteger(child.status),'Production test child exit status is required');process.exitCode=child.status||(sourceChanged?1:0);}
+          NODE
+  verify:
+    needs: unit
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - name: Require every production unit shard
+        env:
+          UNIT_RESULT: ${{ needs.unit.result }}
+        run: test "$UNIT_RESULT" = success
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
       - name: Selected office-review connection and auditor guide
         run: |
           npx eslint src/lib/office-review-*.mjs "src/app/(identity)/cuenta/office-review-panel.js" "src/app/(identity)/cuenta/office-review-view.mjs" "src/app/(identity)/cuenta/onboarding-guide.js" "src/app/(identity)/cuenta/workspace-client.js" "src/app/(identity)/cuenta/workspace-recovery-journal.mjs" scripts/verify-office-review-*.mjs scripts/verify-onboarding-guide-ui.mjs tests/production-office-review*.test.mjs tests/production-workspace-guide-observation.test.mjs --max-warnings 0

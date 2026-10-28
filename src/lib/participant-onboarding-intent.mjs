@@ -1,5 +1,5 @@
 import {WorkspaceError,digest} from './workspace-policy.mjs';
-import {PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256,PARTICIPANT_ONBOARDING_PURPOSE} from './participant-onboarding-policy.mjs';
+import {PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256,PARTICIPANT_ONBOARDING_PURPOSE,createParticipantOnboardingPhases} from './participant-onboarding-policy.mjs';
 // Only contact intent is recorded under the existing projectOperation locks.
 // Another worksite/channel is resolved by the job, before its Worker lock.
 export async function authorizeParticipantOnboarding(client,member,projectId,row,m,operationId){
@@ -12,6 +12,6 @@ export async function authorizeParticipantOnboarding(client,member,projectId,row
  const consent={version:1,status:'GRANTED',purpose:PARTICIPANT_ONBOARDING_PURPOSE,invitationId:invite.id,senderE164:row.phone,issuerActorId:member.actorId,issuerMembershipId:member.membershipId,receiptId,recordedAt:now.toISOString(),noticeVersion:PARTICIPANT_ONBOARDING_NOTICE_VERSION,noticeSha256:PARTICIPANT_ONBOARDING_NOTICE_SHA256};
  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.onboarding.contact_authorized','Worker',$4,$5::jsonb)`,[receiptId,member.organizationId,member.actorId,row.id,JSON.stringify({...consent,organizationId:member.organizationId,projectId})]);
  part.onboardingConsent=consent;
- part.onboardingDelivery={version:1,state:'WAITING_CONFIGURATION',organizationId:member.organizationId,targetProjectId:projectId,workerId:row.id,invitationId:invite.id,issuerActorId:member.actorId,issuerMembershipId:member.membershipId,consentReceiptId:receiptId,requestedAt:now.toISOString(),nextCheckAt:null,outboundId:null,code:null};
+ part.onboardingDelivery=createParticipantOnboardingPhases({version:1,state:'WAITING_CONFIGURATION',organizationId:member.organizationId,targetProjectId:projectId,workerId:row.id,invitationId:invite.id,issuerActorId:member.actorId,issuerMembershipId:member.membershipId,consentReceiptId:receiptId,requestedAt:now.toISOString(),nextCheckAt:null,outboundId:null,code:null},part,now.toISOString());
  return receiptId;
 }

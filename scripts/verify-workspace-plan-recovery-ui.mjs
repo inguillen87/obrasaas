@@ -20,9 +20,9 @@ for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filte
  const source='src/app/(identity)/cuenta/'+file;copyFileSync(path.join(root,source),path.join(components,file));
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(components,file))).digest('hex')});
 }
-for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/voice-progress-draft.mjs','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js','src/lib/worker-channel-consent-policy.mjs','src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs','src/lib/company-entitlement.mjs','src/lib/identity-return-path.mjs']){
+for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/voice-progress-draft.mjs','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js','src/lib/worker-channel-consent-policy.mjs','src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs','src/lib/company-entitlement.mjs','src/lib/identity-return-path.mjs','src/lib/procurement-quantity.js','src/lib/capture-quality-policy.mjs']){
  const destination=path.join(fixture,source);mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(path.join(root,source),destination);
-  if(['src/lib/company-entitlement.mjs','src/lib/identity-return-path.mjs'].includes(source))assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));
+  if(['src/lib/company-entitlement.mjs','src/lib/identity-return-path.mjs','src/lib/capture-quality-policy.mjs'].includes(source))assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});
 }
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
@@ -109,7 +109,7 @@ async function closeRetainedUncertainReview(page,posts){
 async function scenario(mode,width){
  const taskMode=mode.startsWith('task-');
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push({mode,width,message:error.message}));await page.setRequestInterception(true);
- let draft=null,receipt=null,applied=mode==='task-recover-existing',heldRead=null,readFailures=0;const posts=[],workspaceReads=[],recoveryReads=[],subscriptionReads=[];
+ let draft=null,receipt=null,applied=mode==='task-recover-existing',heldRead=null,readFailures=0;let initialReadbackObserved=false;const posts=[],workspaceReads=[],recoveryReads=[],subscriptionReads=[];
  const send=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(!url.pathname.startsWith('/api/'))return request.continue();
@@ -133,7 +133,9 @@ async function scenario(mode,width){
    const after=url.searchParams.get('afterTask'),all=[...existingTasks,...(applied?[importedTask]:[])];
    if(after)assert.equal(after,'existing-100');
    const body={scope,project:{id:projectId,name:'Obra paginada A'},canPlanSchedule:true,tasks:after?all.slice(100):all.slice(0,100),totalTasks:all.length,nextCursor:after?null:'existing-100'};
-   const readback=applied&&!after&&workspaceReads.filter(read=>read.scope===scope).length===2;
+   // Faults belong to the first complete post-application read, independently
+   // of legitimate background GETs before the application.
+   const readback=applied&&!after&&!initialReadbackObserved;if(readback)initialReadbackObserved=true;
    if(readback&&['context-change-read','unmount-read'].includes(mode)){heldRead={request,body};return;}
    if(readback&&mode==='read-failure'){readFailures++;return send(request,{code:'WORKSPACE_QUERY_FAILED'},503);}
    if(readback&&mode==='scope-mismatch')return send(request,{...body,scope:scopeB,totalTasks:999});

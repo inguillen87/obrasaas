@@ -17,6 +17,11 @@ export function buildCustomerTemplate(connection,blueprintKey){
 }
 // Produces only the owned, versioned onboarding message. It does not establish
 // template approval, contact consent, delivery, KYC or operational permission.
+export function buildParticipantInvitationMessage(connection,input){
+ if(!workspaceId(connection?.id)||/\s/.test(connection.id)||typeof connection.whatsappBusinessId!=='string'||!/^[1-9]\d{4,31}$/.test(connection.whatsappBusinessId)||/\D/.test(connection.whatsappBusinessId)||!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).join('|')!=='organizationName'||typeof input.organizationName!=='string'||!input.organizationName.trim()||input.organizationName.length>160||/[\u0000-\u001f\u007f<>]/.test(input.organizationName))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
+ const definition=buildCustomerTemplate(connection,'participant_invitation');
+ return {name:definition.name,language:definition.language,bodyParameters:[input.organizationName]};
+}
 export function buildParticipantOnboardingMessage(connection,input){
  if(!workspaceId(connection?.id)||/\s/.test(connection.id)||typeof connection.whatsappBusinessId!=='string'||!/^[1-9]\d{4,31}$/.test(connection.whatsappBusinessId)||/\D/.test(connection.whatsappBusinessId)||!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).sort().join('|')!=='code|invitationId|organizationName'||typeof input.organizationName!=='string'||!input.organizationName.trim()||input.organizationName.length>160||/[\u0000-\u001f\u007f<>]/.test(input.organizationName)||typeof input.invitationId!=='string'||input.invitationId.length!==39||!/^invite_[a-f0-9]{32}$/.test(input.invitationId)||typeof input.code!=='string'||input.code.length!==53||!/^IDENTIDAD [A-Za-z0-9_-]{43}$/.test(input.code))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
  const definition=buildCustomerTemplate(connection,'participant_onboarding_v1');

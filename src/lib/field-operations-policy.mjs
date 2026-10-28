@@ -5,6 +5,7 @@ import { normalizeProgressMeasurementQuantity, parseProgressMeasurementQuantity 
 import {inventoryQuantity} from './material-inventory.mjs';
 import {OVERTIME_ACTIONS,normalizeOvertimePayload} from './field-overtime-policy.mjs';
 import {MEASUREMENT_UNITS} from './task-progress-measurement.js';
+import {EXECUTION_ACTIONS,normalizeExecutionPayload} from './field-execution-policy.mjs';
 
 // The enterprise attendance transition and conservative geofence contracts are
 // preserved from 1677ff72773c95140535603093e5cb8624d1f063. This adapter writes the
@@ -51,7 +52,8 @@ export function normalizeFieldCommand(input) {
   recordKeys(input,['operationId','projectId','scope','action','payload']);
   if(!operationId(input.operationId)||!workspaceId(input.projectId)||!/^[a-f0-9]{64}$/.test(input.scope||''))throw new WorkspaceError('FIELD_INPUT_INVALID');
   const p=input.payload;let payload;
-  if(OVERTIME_ACTIONS.includes(input.action))payload=normalizeOvertimePayload(input.action,p);
+  if(EXECUTION_ACTIONS.includes(input.action))payload=normalizeExecutionPayload(input.action,p);
+  else if(OVERTIME_ACTIONS.includes(input.action))payload=normalizeOvertimePayload(input.action,p);
   else if(input.action==='ADD_MATERIAL') {
     recordKeys(p,['revision','catalogHash','name','unit']);if(!MATERIAL_UNITS.includes(p.unit)||!/^[a-f0-9]{64}$/.test(p.catalogHash||''))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
     payload={revision:siteRevision(p.revision),catalogHash:p.catalogHash,name:siteText(p.name,160,2),unit:p.unit};

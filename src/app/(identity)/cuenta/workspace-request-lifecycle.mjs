@@ -1,4 +1,4 @@
-import {workspaceSessionRequest} from './workspace-session-request.mjs';
+import {workspaceSessionRequest,workspaceRequestTimeoutLimit} from './workspace-session-request.mjs';
 
 // Own only the browser request lifetime. Authentication and dispatch remain in
 // the existing transport; reading the response body shares the same deadline.
@@ -11,7 +11,7 @@ export function createWorkspaceRequestLifecycle(getSessionToken, {fetchImpl,jour
     async request(url, options = {}, consume = response => response.json()) {
       if (!active) throw Object.assign(new DOMException('La consulta se canceló.', 'AbortError'), {requestDispatched:false});
       const requestTimeoutMs = options.requestTimeoutMs ?? 20000;
-      if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 1 || requestTimeoutMs > 60000) throw new TypeError('A bounded request deadline is required');
+      if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 1 || requestTimeoutMs > workspaceRequestTimeoutLimit(url,options)) throw new TypeError('A bounded request deadline is required');
       const controller = new AbortController();
       const external = options.signal;
       const abort = () => controller.abort();

@@ -37,10 +37,15 @@ const changes=[...OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges,...OOX
 
 // This projection authenticates the current outer set before retaining the
 // exact historical count/hash assertions belonging to the earlier CI revision.
+function assertCompactOwnSourceStages(actualFiles,files){
+ const historical67=[...files,'src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'].sort();
+ assert.equal(historical67.length,144);assert.equal(sha(JSON.stringify(historical67)),'28a9b504febaed95532993938780263453766590362baaaf8e867b26dadb59d4');
+ assert.deepEqual(actualFiles,[...historical67,...["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"]].sort());
+}
 function historicalCompactFiles(actualFiles,contract){
  assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
  const files=restorePlanBudgetSourceSet(contract,'COMPACT',actualFiles);
- assert.deepEqual(actualFiles,[...files,'src/lib/plan-budget-source.mjs'].sort());
+ assertCompactOwnSourceStages(actualFiles,files);
  const historical=restoreWorksiteLiveHoursSourceSet(contract,'COMPACT',files);
  assert.equal(historical.length,139);assert.equal(sha(JSON.stringify(historical)),'cd474d8e9a3b754daaeef61f986e31f1c92997a8423cd9a14c06d43ea706dbea');
  assert.equal(files.length,140);assert.deepEqual(files,[...historical,'src/lib/field-hours-report.mjs'].sort());

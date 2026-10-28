@@ -37,7 +37,13 @@ export function createParticipantHandlers({verify,store,join=false,scheduleOnboa
   const params=new URL(request.url).searchParams;
   if(request.method==='POST'){
    if(params.size||request.headers.get('origin')!=='https://obrasaas.com'||request.headers.has('content-encoding'))throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
-   if(join)return reply(await store.join(session,await boundedBody(request),{accept:true}));
+   if(join){
+    const result=await store.join(session,await boundedBody(request),{accept:true}),{onboardingReference,...publicResult}=result;
+    if(result.saved===true&&result.joined===true&&result.replayed===false&&onboardingReference&&workspaceId(onboardingReference.projectId)&&onboardingReference.projectId===result.projectId&&workspaceId(onboardingReference.workerId)){
+     try{Promise.resolve(scheduleOnboarding({projectId:onboardingReference.projectId,workerId:onboardingReference.workerId})).catch(()=>{});}catch{}
+    }
+    return reply(publicResult);
+   }
    // Images have their own bounded reader. The exact command contract rejects
    // mixing KYC submissions with administrative mutation payloads.
    const body=await readParticipantKycBody(request),result=['front','selfie','back','backConsent','backNoticeVersion','backNoticeSha256'].some(key=>Object.hasOwn(body,key))?await store.submitKyc(session,body):await store.save(session,body);

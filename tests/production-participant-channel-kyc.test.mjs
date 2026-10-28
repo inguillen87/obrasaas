@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './fixtures/capture-quality-synthetic.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createParticipantChannelKycDeposit,adoptParticipantChannelKyc} from '../src/lib/participant-channel-kyc.mjs';
@@ -20,12 +21,12 @@ function fixture(status='INVITED'){
   if(sql.startsWith('INSERT INTO public."AuditLog"')){assert.ok(!receipts.has(args[0]));receipts.set(args[0],{id:args[0],entityType:'Worker',entityId:args[3],metadata:JSON.parse(args[4])});return {rows:[]};}
   assert.fail('Unexpected SQL '+sql);
  }};
- const adapter=createParticipantChannelKycDeposit({connect:async()=>client,resolveAuthority:async(_client,context,options)=>{counts.resolve++;assert.deepEqual(context,{eventId});assert.equal(options.deposit,true);resolveChange?.(counts.resolve);return structuredClone(r);},upload:async(_bytes,filename,type)=>{counts.upload++;assert.equal(type,'image/png');uploadChange?.(counts.upload);return 'https://fixture.private.blob.vercel-storage.com/obrasaas/legacy-images/v1/'+digest(filename)+'/image.png';},environment:{}});
+ const adapter=createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,connect:async()=>client,resolveAuthority:async(_client,context,options)=>{counts.resolve++;assert.deepEqual(context,{eventId});assert.equal(options.deposit,true);resolveChange?.(counts.resolve);return structuredClone(r);},upload:async(_bytes,filename,type)=>{counts.upload++;assert.equal(type,'image/png');uploadChange?.(counts.upload);return 'https://fixture.private.blob.vercel-storage.com/obrasaas/legacy-images/v1/'+digest(filename)+'/image.png';},environment:{}});
  const body={operationId:metaKycOperationId(eventId),noticeVersion:state.noticeVersion,noticeSha256:state.noticeSha256,consent:true,ocrConsent:false,ocrNoticeVersion:state.ocrNoticeVersion,front:image,selfie:image};
  return {adapter,body,context:{eventId},row,r,receipts,counts,events,client,setResolve:fn=>resolveChange=fn,setUpload:fn=>uploadChange=fn};
 }
 for(const status of ['INVITED','ACTIVE'])test('limited signed-channel '+status+' capture is canonical and never grants access',async()=>{
- const f=fixture(status),result=await f.adapter.deposit(f.context,f.body);assert.equal(result.status,status==='INVITED'?'PENDING_ACCOUNT_CLAIM':'PENDING_REVIEW');assert.equal(result.identityCertified,false);assert.equal(result.permissionsGranted,false);assert.equal(result.whatsAppAccessGranted,false);assert.equal(f.counts.resolve,2);assert.equal(f.counts.upload,2);assert.equal(f.row.metadata.participant.status,status);assert.deepEqual(f.row.metadata.participant.permissions,{attendance:false,report:false});assert.deepEqual(f.row.metadata.unrelated,{keep:true});assert.equal(f.row.metadata.participant.kyc.ocrConsent.allowed,false);
+ const f=fixture(status),result=await f.adapter.deposit(f.context,f.body);assert.equal(result.status,status==='INVITED'?'PENDING_ACCOUNT_CLAIM':'PENDING_REVIEW');assert.equal(result.identityCertified,false);assert.equal(result.permissionsGranted,false);assert.equal(result.whatsAppAccessGranted,false);assert.equal(f.counts.resolve,5);assert.equal(f.counts.upload,2);assert.equal(f.row.metadata.participant.status,status);assert.deepEqual(f.row.metadata.participant.permissions,{attendance:false,report:false});assert.deepEqual(f.row.metadata.unrelated,{keep:true});assert.equal(f.row.metadata.participant.kyc.ocrConsent.allowed,false);
  assert.doesNotMatch(JSON.stringify([...f.receipts.values()]),/541155555555|senderE164|data:image|\.private\.blob|mediaId/);assert.equal(f.events.some(sql=>/(?:INSERT|UPDATE).*"(?:PlatformUser|TenantMembership|ProjectMembership|Attendance|Task)"/.test(sql)),false);
  const replay=await f.adapter.deposit(f.context,f.body);assert.equal(replay.replayed,true);assert.equal(replay.receiptId,result.receiptId);assert.equal(f.counts.upload,2);
 });
