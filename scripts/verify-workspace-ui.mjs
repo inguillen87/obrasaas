@@ -11,7 +11,7 @@ import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-co
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
-assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots','navigation','post-progress'].includes(process.env.WORKSPACE_UI_SCENARIO));
+assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots','navigation','post-progress','post-conflicts','post-creation'].includes(process.env.WORKSPACE_UI_SCENARIO));
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
@@ -48,6 +48,19 @@ const baseTask=()=>({id:'task-a',title:'Mampostería · sector norte',status:'IN
 const text=page=>page.evaluate(()=>document.body.innerText);
 async function click(page,label){const handle=await page.evaluateHandle(name=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===name),label);const element=handle.asElement();assert.ok(element,'Missing button '+label);await element.click();await handle.dispose();}
 async function waitText(page,value){await page.waitForFunction(expected=>document.body.innerText.includes(expected),{timeout:15000},value);}
+async function respondClosedHomeDecisions(request,{origin,scope,projectId,allowed,reads,phase}){
+ const url=new URL(request.url());if(url.origin!==origin||url.pathname!=='/api/identity/operations-status')return false;
+ assert.equal(allowed,true);assert.equal(request.method(),'GET');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+ assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','view']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('view'),'decisions');
+ reads.push({phase,method:'GET',projectId,scope,view:'decisions'});
+ const body={scope,projectId,view:'decisions',observedAt:'2026-10-28T00:00:00.000Z',proposals:{pending:0},inventory:{canManage:true,pendingCounts:{consumptions:0,adjustments:0}}};
+ await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});return true;
+}
+const homeDecisionsResponse=page=>page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/operations-status'&&response.request().method()==='GET'&&url.searchParams.get('scope')===scope&&url.searchParams.get('projectId')==='p-a'&&url.searchParams.get('view')==='decisions';},{timeout:15000});
+async function confirmedHomeDecisions(page,pending){
+ assert.equal((await pending).status(),200);
+ await page.waitForFunction(()=>{const button=document.querySelector('section[aria-labelledby="home-decisions-title"] button');return button?.textContent==='Actualizar pendientes'&&!button.disabled;},{timeout:15000});
+}
 async function fill(page,taskId='task-a'){
  await page.waitForFunction(id=>{const button=[...document.querySelectorAll('[data-task-id]')].find(element=>element.dataset.taskId===id)?.querySelector('button');return button?.disabled===false&&button.getClientRects().length;},{timeout:15000},taskId);
  const handle=await page.evaluateHandle(id=>[...document.querySelectorAll('[data-task-id]')].find(element=>element.dataset.taskId===id)?.querySelector('button'),taskId);
@@ -82,14 +95,18 @@ async function toggleTools(page,opened,activation='click'){
  if(activation==='click')await page.locator(toolsNav+' details summary').click();else{await summary.focus();await page.keyboard.press(activation);}
  await page.waitForFunction(value=>document.querySelector('nav[aria-label="Navegación de la obra"] details')?.open===value,{},opened);
 }
-async function narrowToolsBeforeOriginalTraversal(page,width,requests,posts){
- const before=requests.length,forms=await page.$$eval('form',nodes=>nodes.length),picker=toolsNav+' select',desktop=toolsNav+' > div';
+async function narrowToolsBeforeOriginalTraversal(page,width,requests,posts,homeDecisionReads=[],homeAllowed=false){
+ const before=requests.length,homeBefore=homeDecisionReads.length,forms=await page.$$eval('form',nodes=>nodes.length),picker=toolsNav+' select',desktop=toolsNav+' > div';
  await page.evaluate(()=>{window.__mobileNavigation=document.querySelector('nav[aria-label="Navegación de la obra"]');window.__mobileForms=[...document.querySelectorAll('form')];window.__mobileGroups=document.querySelector('nav[aria-label="Navegación de la obra"] select');});
  assert.equal(await page.$eval(picker,node=>node.tagName),'SELECT');assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),width>=1100);assert.equal(await page.$eval(picker,node=>node.getClientRects().length>0),width<1100);
- if(width<1100){assert.ok(await page.$eval(picker,node=>node.getBoundingClientRect().height>=44));for(const activation of ['Enter','Space','click']){if(activation==='click')await page.click(picker);else{await page.focus(picker);await page.keyboard.press(activation);}await page.keyboard.press('Escape');await page.select(picker,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen="cronograma"]')?.hidden===false);assert.ok(await page.$eval('[data-workspace-screen="cronograma"]',node=>node.getClientRects().length>0));await page.select(picker,'workspace-home-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen="inicio"]')?.hidden===false);assert.equal(await page.$eval('[data-workspace-screen="cronograma"]',node=>node.getClientRects().length>0),false);}}
+ if(width<1100){assert.ok(await page.$eval(picker,node=>node.getBoundingClientRect().height>=44));for(const activation of ['Enter','Space','click']){if(activation==='click')await page.click(picker);else{await page.focus(picker);await page.keyboard.press(activation);}await page.keyboard.press('Escape');await page.select(picker,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen="cronograma"]')?.hidden===false);assert.ok(await page.$eval('[data-workspace-screen="cronograma"]',node=>node.getClientRects().length>0));
+  // Returning to Inicio intentionally refreshes its closed, read-only counts.
+  // Observe that one response; keyboard/pointer/orientation must do nothing else.
+  const homeResponse=homeAllowed?homeDecisionsResponse(page):null;await page.select(picker,'workspace-home-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen="inicio"]')?.hidden===false);if(homeResponse)await confirmedHomeDecisions(page,homeResponse);assert.equal(await page.$eval('[data-workspace-screen="cronograma"]',node=>node.getClientRects().length>0),false);
+ }}
  await page.setViewport({width:1099,height:1000});assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),false);await page.setViewport({width:1100,height:1000});assert.ok(await page.$eval(desktop,node=>node.getClientRects().length>0));assert.equal(await page.$eval(picker,node=>node.getClientRects().length>0),false);await page.setViewport({width:1099,height:1000});assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),false);
  await page.setViewport({width:1280,height:1000});await page.focus(toolsNav+' details summary');await page.evaluate(()=>{window.__mobileFocusedGroup=document.activeElement;});await page.setViewport({width:320,height:1000});await page.waitForFunction(()=>document.querySelector('nav[aria-label="Navegación de la obra"] select')?.checkVisibility());assert.equal(await page.evaluate(()=>window.__mobileFocusedGroup.isConnected),true);assert.ok(await page.$eval(picker,node=>node.getClientRects().length>0));await page.focus(picker);assert.equal(await page.evaluate(()=>document.activeElement===document.querySelector('nav[aria-label="Navegación de la obra"] select')),true);
- await page.setViewport({width,height:1000});if(width>=1100)await toggleTools(page,true);assert.ok(await page.$eval(width<1100?picker:desktop,node=>node.getClientRects().length>0));assert.equal(await page.evaluate(()=>document.querySelector('nav[aria-label="Navegación de la obra"]')===window.__mobileNavigation&&document.querySelector('nav[aria-label="Navegación de la obra"] select')===window.__mobileGroups&&window.__mobileForms.every(node=>node.isConnected)),true);assert.equal(await page.$$eval('form',nodes=>nodes.length),forms);assert.equal(requests.length,before);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push('mobile-tools-native-keyboard-pointer-breakpoint-focused-orientation-no-unmount-no-requests-'+width);
+ await page.setViewport({width,height:1000});if(width>=1100)await toggleTools(page,true);assert.ok(await page.$eval(width<1100?picker:desktop,node=>node.getClientRects().length>0));assert.equal(await page.evaluate(()=>document.querySelector('nav[aria-label="Navegación de la obra"]')===window.__mobileNavigation&&document.querySelector('nav[aria-label="Navegación de la obra"] select')===window.__mobileGroups&&window.__mobileForms.every(node=>node.isConnected)),true);assert.equal(await page.$$eval('form',nodes=>nodes.length),forms);const expectedHomeReads=homeAllowed&&width<1100?3:0;assert.equal(homeDecisionReads.length-homeBefore,expectedHomeReads);assert.equal(requests.length-before,expectedHomeReads);assert.ok(requests.slice(before).every(row=>row.method==='GET'&&row.path==='/api/identity/operations-status'));assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push('mobile-tools-native-keyboard-pointer-breakpoint-focused-orientation-no-unmount-only-explicit-home-reads-'+width);
 }
 async function assertClosedPendingNavigation(page,width,id,requests,posts){
  const before=requests.length,postCount=posts.length;
@@ -119,6 +136,9 @@ async function mobileImportNavigationScenario(width,uncertain){
 }
 async function scenario(mode,width=390){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ // Other screens remain mounted with their own disabled recovery inputs. The
+ // schedule oracle must inspect all three controls of this operation's form.
+ const editor='form[aria-labelledby="schedule-edit-title"]',controls=editor+' input,'+editor+' textarea';
  page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
  const requests=[],posts=[];let record=null,applications=0,statusChecks=0;
  await page.setRequestInterception(true);
@@ -170,15 +190,15 @@ async function scenario(mode,width=390){
  assert.ok((await text(page)).includes('37 %'));
   if(mode==='readonly'){assert.equal(await page.$$eval('button',nodes=>nodes.filter(node=>node.textContent==='Planificar fechas').length),0);checks.push('read-only-role-has-no-schedule-write-control');const before=requests.length;await click(page,'Meses');await page.waitForFunction(()=>document.querySelector('[data-gantt-scroll]').dataset.ganttScale==='MONTHS');assert.equal(requests.length,before);assert.equal(posts.length,0);checks.push('read-only-gantt-zoom-is-local-without-business-write-'+width);await context.close();return;}
  if(mode==='success')await page.screenshot({path:path.join(evidence,`workspace-${width}.png`),fullPage:true});
- await showWorkspaceSection(page,'schedule-title');await fill(page);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));
+ await showWorkspaceSection(page,'schedule-title');await fill(page);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));assert.deepEqual(await page.$$eval(controls,nodes=>nodes.map(node=>node.disabled)),[false,false,false]);
  if(mode==='sdk-unavailable')await page.evaluate(()=>{window.__failNextToken=true;});
  if(mode==='unmount-token')await page.evaluate(()=>{window.__holdToken=true;});
- if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form'));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>!b.disabled)));assert.equal(posts.length,0);checks.push('schedule-draft-locks-project-and-refresh-until-explicit-cancel');await context.close();return;}
+ if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector),{},editor);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>!b.disabled)));assert.equal(posts.length,0);checks.push('schedule-draft-locks-project-and-refresh-until-explicit-cancel');await context.close();return;}
  await click(page,'Confirmar planificación');
  if(mode==='sdk-unavailable'){
   await waitText(page,'No se pudo renovar tu sesión');assert.equal(posts.length,0);
-  assert.equal(await page.$eval('textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');
-  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));
+  assert.equal(await page.$eval(editor+' textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');
+  assert.deepEqual(await page.$$eval(controls,nodes=>nodes.map(node=>node.disabled)),[false,false,false]);
   assert.ok(!(await text(page)).includes('Comprobar guardado'));assert.ok(!(await text(page)).includes('private SDK diagnostic'));
   await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);
   checks.push('unsent-session-failure-preserves-editable-schedule-and-allows-explicit-retry');
@@ -195,12 +215,12 @@ async function scenario(mode,width=390){
   await waitText(page,'no confirmó el guardado');assert.equal(posts.length,1);assert.equal(applications,0);
   assert.ok(!(await text(page)).includes('Reintentar la misma planificación'));
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));
-  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>e.disabled)));
+  assert.deepEqual(await page.$$eval(controls,nodes=>nodes.map(node=>node.disabled)),[true,true,true]);
   await click(page,'Comprobar guardado');await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(statusChecks,1);
-  assert.ok(await page.$eval('textarea',e=>e.disabled));assert.equal(await page.$eval('textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');
+  assert.ok(await page.$eval(editor+' textarea',e=>e.disabled));assert.equal(await page.$eval(editor+' textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');
   if(mode==='rollback'){
    await page.evaluate(()=>{window.__failNextToken=true;});await click(page,'Reintentar la misma planificación');await waitText(page,'Conservamos el intento anterior');
-   assert.equal(posts.length,1);assert.ok(await page.$eval('textarea',e=>e.disabled));assert.ok((await text(page)).includes('Comprobar guardado'));
+   assert.equal(posts.length,1);assert.ok(await page.$eval(editor+' textarea',e=>e.disabled));assert.ok((await text(page)).includes('Comprobar guardado'));
    checks.push('unsent-retry-keeps-the-previous-uncertain-operation-and-original-draft');
   }
   await click(page,'Reintentar la misma planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);assert.equal(applications,1);
@@ -299,7 +319,7 @@ async function scheduleConflictScenario(mode,width=390){
 async function navigationScenario(role,width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'navigation-'+role,width,message:error.message}));
- const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0,phase='INITIAL';
+ const requests=[],posts=[],subscriptionReads=[],homeDecisionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0,phase='INITIAL';
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
@@ -309,6 +329,7 @@ async function navigationScenario(role,width){
    if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Navigation must not mutate a business record');}
    assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
    if(await respondClosedCompanySubscription(request,{origin,scope,authorization:'Bearer synthetic-active-tab-A',allowed:administrator,reads:subscriptionReads}))return;
+   if(await respondClosedHomeDecisions(request,{origin,scope,projectId:'p-a',allowed:administrator,reads:homeDecisionReads,phase}))return;
    if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
     assert.equal(administrator,true);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');
     const body=url.pathname==='/api/identity/project-creation'?{scope,projectId:'p-a',canCreate:true}:{scope,projectId:'p-a',canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false};
@@ -328,7 +349,9 @@ async function navigationScenario(role,width){
  });
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de navegación');
  assert.equal(subscriptionReads.length,administrator?1:0,'Only the administrator automatically consults closed subscription status');
+ const initialHomeResponse=administrator?homeDecisionsResponse(page):null;
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
+ if(initialHomeResponse)await confirmedHomeDecisions(page,initialHomeResponse);assert.equal(homeDecisionReads.length,administrator?1:0);
  await page.waitForSelector(workspaceNav);
  const nav=workspaceNav;
  if(administrator){await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false');assert.equal(preparationReads,1);}else{assert.equal(preparationReads,0);assert.equal(await page.$('section[aria-labelledby="project-preparation-title"]'),null);}
@@ -337,15 +360,16 @@ async function navigationScenario(role,width){
  const anchors=await page.$$eval(nav+' a[href^="#"]',elements=>elements.map(element=>element.hash.slice(1)));
  assert.deepEqual([...new Set(anchors)].sort(),expected.sort());
  assert.equal(await page.$eval(nav,element=>[...element.querySelectorAll('a[href^="#"]')].every(link=>document.getElementById(link.hash.slice(1)))),true);
- await narrowToolsBeforeOriginalTraversal(page,width,requests,posts);
+ phase='NATIVE_PICKER_AND_ORIENTATION';await narrowToolsBeforeOriginalTraversal(page,width,requests,posts,homeDecisionReads,administrator);
  const groups=await page.$$(nav+' details');if(width>=1100){for(const group of groups){assert.ok(await group.$eval('summary',element=>element.getBoundingClientRect().height>=44));if(!await group.evaluate(element=>element.open))await page.locator(nav+' details summary').click();}}else assert.ok(await page.$eval(nav+' select',element=>element.getBoundingClientRect().height>=44));
  const projectRead=row=>{if(row.path!=='/api/identity/workspace'||!row.query)return false;const url=new URL(origin+row.path+row.query);assert.equal(row.method,'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');return true;};const nonProjectReads=()=>requests.filter(row=>!projectRead(row));
- const initialRequestCount=nonProjectReads().length,initialFormCount=await page.$$eval('form',elements=>elements.length);
- phase='NAVIGATION_TRAVERSAL';for(const id of expected){await showWorkspaceSection(page,id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}
- await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(nonProjectReads().length,initialRequestCount+participantReads);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);
- if(width<1100){await showWorkspaceSection(page,'workspace-home-title');await page.focus(nav+' select');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');}else{const keyboard=await page.$(nav+' a[href="#schedule-title"]');await keyboard.focus();await page.keyboard.press('Enter');}await page.waitForFunction(()=>document.activeElement.id==='schedule-title');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');
+ const initialRequestCount=nonProjectReads().length,initialHomeReads=homeDecisionReads.length,initialFormCount=await page.$$eval('form',elements=>elements.length);
+ phase='NAVIGATION_TRAVERSAL';for(const id of expected){const homeResponse=administrator&&id==='workspace-home-title'?homeDecisionsResponse(page):null;await showWorkspaceSection(page,id);if(homeResponse)await confirmedHomeDecisions(page,homeResponse);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}
+ await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(homeDecisionReads.length,initialHomeReads+Number(administrator));assert.equal(nonProjectReads().length,initialRequestCount+participantReads+Number(administrator));assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);
+ phase='KEYBOARD_NAVIGATION';if(width<1100){const homeResponse=administrator?homeDecisionsResponse(page):null;await showWorkspaceSection(page,'workspace-home-title');if(homeResponse)await confirmedHomeDecisions(page,homeResponse);await page.focus(nav+' select');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');}else{const keyboard=await page.$(nav+' a[href="#schedule-title"]');await keyboard.focus();await page.keyboard.press('Enter');}await page.waitForFunction(()=>document.activeElement.id==='schedule-title');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');
+ const expectedHomeReads=initialHomeReads+Number(administrator)+Number(administrator&&width<1100),expectedNonProjectReads=initialRequestCount+participantReads+expectedHomeReads-initialHomeReads;assert.equal(homeDecisionReads.length,expectedHomeReads);assert.equal(nonProjectReads().length,expectedNonProjectReads);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- checks.push('navigation-authorized-canonical-destinations-keyboard-no-requests-'+role+'-'+width);
+ checks.push('navigation-authorized-canonical-destinations-keyboard-only-canonical-reads-'+role+'-'+width);
  await (await page.$(nav)).screenshot({path:path.join(evidence,'workspace-navigation-'+role+'-'+width+'.png')});
  if(administrator){
   await click(page,'Planificar fechas');await page.waitForSelector('#schedule-edit-title');await page.waitForFunction(()=>document.activeElement.id==='schedule-edit-title',{timeout:15000});
@@ -358,7 +382,7 @@ async function navigationScenario(role,width){
   await page.locator(nav+' a[href="#schedule-edit-title"]').click();await page.waitForFunction(()=>document.activeElement.id==='schedule-edit-title',{timeout:15000});
   assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-edit-title');
   assert.equal(await page.$eval('textarea',element=>element.value),'Planificación de ensayo que debe conservarse.');
-  assert.equal(nonProjectReads().length,initialRequestCount+participantReads);assert.equal(posts.length,0);
+  assert.equal(homeDecisionReads.length,expectedHomeReads);assert.equal(nonProjectReads().length,expectedNonProjectReads);assert.equal(posts.length,0);
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(button=>button.textContent==='Actualizar'||button.textContent.includes('Obra de prueba B')).every(button=>button.disabled)));
   await assertClosedPendingNavigation(page,width,'schedule-edit-title',requests,posts);
   checks.push('long-schedule-editor-focus-and-pending-navigation-preserve-draft-'+width);
@@ -368,7 +392,7 @@ async function navigationScenario(role,width){
   assert.equal(await page.$(nav+' a[href="#schedule-edit-title"]'),null);
   assert.equal(posts.length,0);checks.push('cancel-clears-pending-navigation-without-mutation-'+width);
  }
- writeFileSync(path.join(evidence,'workspace-navigation-request-ledger-'+role+'-'+width+'.json'),JSON.stringify({role,width,requests,posts:posts.length,participantReads,preparationReads},null,2));await context.close();
+ assert.equal(homeDecisionReads.length,administrator?(width<1100?6:2):0);assert.equal(nonProjectReads().length,expectedNonProjectReads);writeFileSync(path.join(evidence,'workspace-navigation-request-ledger-'+role+'-'+width+'.json'),JSON.stringify({role,width,requests,posts:posts.length,participantReads,preparationReads,homeDecisionReads},null,2));await context.close();
 }
 const workbenchControl={search:'input[aria-label="Buscar tareas"]',status:'select[aria-label="Estado de las tareas"]',planning:'select[aria-label="Planificación de las tareas"]',order:'select[aria-label="Orden de las tareas"]'};
 const workbenchTasks=()=>[
@@ -625,6 +649,7 @@ async function ganttVolumeScenario(width){
 }
 async function taskCreateScenario(mode){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});page.on('pageerror',error=>pageErrors.push({mode:'taskcreate-'+mode,width:390,message:error.message}));
+ const editor='section[aria-label="Crear tarea de la obra"] form';
  const posts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0,manualReadbackPending=false,phase='INITIAL';const scheduleReadLedger=[];await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
@@ -642,14 +667,14 @@ async function taskCreateScenario(mode){
    await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'no-store'}});
   }catch(error){pageErrors.push({mode:'taskcreate-'+mode,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
- await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});phase='CREATION_DRAFT';await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('form input:not([type="date"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));
- if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled));assert.equal(posts.length,0);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');writeFileSync(path.join(evidence,'workspace-task-create-read-ledger-'+mode+'.json'),JSON.stringify({mode,scheduleReadLedger,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit},null,2));await context.close();return;}
+ await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});phase='CREATION_DRAFT';await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type(editor+' input:not([type="date"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.deepEqual(await page.$$eval(editor+' input',nodes=>nodes.map(node=>node.disabled)),[false,false,false]);
+ if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector)&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled),{},editor);assert.equal(posts.length,0);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');writeFileSync(path.join(evidence,'workspace-task-create-read-ledger-'+mode+'.json'),JSON.stringify({mode,scheduleReadLedger,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit},null,2));await context.close();return;}
  phase='CREATION_COMMAND_AND_RECOVERY';await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(posts.length,1);
  assert.ok(!(await text(page)).includes('Reintentar la misma creación'));
  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));
- assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>e.disabled)));await click(page,'Comprobar tarea');
+ assert.deepEqual(await page.$$eval(editor+' input',nodes=>nodes.map(node=>node.disabled)),[true,true,true]);await click(page,'Comprobar tarea');
  if(mode==='uncertain'){await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,1);checks.push('taskcreate-uncertain-commit-recovers-without-second-post');}
- else {await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(await page.$eval('form input',e=>e.value),'Tarea de ensayo recuperable');assert.ok(await page.$eval('form input',e=>e.disabled));await click(page,'Reintentar la misma creación');await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);checks.push('taskcreate-'+mode+'-checked-then-exact-retry-once');}
+ else {await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(await page.$eval(editor+' input',e=>e.value),'Tarea de ensayo recuperable');assert.ok(await page.$eval(editor+' input',e=>e.disabled));await click(page,'Reintentar la misma creación');await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);checks.push('taskcreate-'+mode+'-checked-then-exact-retry-once');}
  await page.waitForSelector('[data-task-id="new-task"]');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(manualReadbackPending,false);assert.equal(scheduleReadLedger.filter(row=>row.kind==='CONFIRMED_CREATION_READBACK').length,1);assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(scheduleReadsAfterCommit,1);assert.equal(await page.$$eval('[data-task-id="new-task"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));
  const createdProgress=await page.$eval('[data-task-id="new-task"]',element=>({text:element.innerText.replace(/\s+/g,' '),bars:[...element.querySelectorAll('[role="progressbar"]')].map(bar=>bar.getAttribute('aria-valuenow'))}));assert.ok(createdProgress.text.includes('Avance registrado: 0 %'));assert.deepEqual(createdProgress.bars,['0']);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));writeFileSync(path.join(evidence,'workspace-task-create-read-ledger-'+mode+'.json'),JSON.stringify({mode,scheduleReadLedger,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit},null,2));await context.close();
@@ -1165,9 +1190,13 @@ try{
  if([undefined,'post-progress'].includes(process.env.WORKSPACE_UI_SCENARIO)){
   for(const width of [320,390,768,1280])for(const mode of ['changed-again','get-failed','missing','denied-401','denied-403'])await scheduleConflictScenario(mode,width);
   for(const mode of ['foreign-project','foreign-scope','foreign-task','read-only','unmount-token','retry-conflict'])await scheduleConflictScenario(mode,390);
+ }
+ if([undefined,'post-progress','post-conflicts'].includes(process.env.WORKSPACE_UI_SCENARIO)){
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
  for(const mode of ['draft-cancel','uncertain','rollback','not-arrived'])await taskCreateScenario(mode);
+ }
+ if([undefined,'post-progress','post-conflicts','post-creation'].includes(process.env.WORKSPACE_UI_SCENARIO)){
  for(const width of [320,390,768,1280])for(const role of ['ADMIN','AUDITOR'])await navigationScenario(role,width);
  for(const width of [320,768,1280])await scenario('uncertain',width);
  for(const width of [320,390,768,1280])for(const uncertain of [false,true])await mobileImportNavigationScenario(width,uncertain);

@@ -12617,519 +12617,614 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-workspace-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-        "currentSha256": "151c3a11b38170b5db975fb99a4c4b65ed8d8060267981671b228b02e88e3587",
+        "currentSha256": "fa61a745984c731028ef0dc329cdcad353bb9e59bac5a12e007c8e8ccc6c0eb6",
         "previousBytes": 173377,
-        "currentBytes": 207828,
+        "currentBytes": 212188,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 802,
-            "currentText": "assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots','navigation','post-progress'].includes(process.env.WORKSPACE_UI_SCENARIO));\n",
+            "currentText": "assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots','navigation','post-progress','post-conflicts','post-creation'].includes(process.env.WORKSPACE_UI_SCENARIO));\n",
             "previousText": "assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots','navigation'].includes(process.env.WORKSPACE_UI_SCENARIO));\n"
           },
           {
-            "currentOffsetCharacters": 4345,
+            "currentOffsetCharacters": 4378,
             "currentText": "for(const file of ['voice-progress-draft.mjs','procurement-quantity.js','progress-measurement-quantity.js','task-progress-measurement.js','capture-quality-policy.mjs']){const source='src/lib/'+file,destination=path.join(fixture,source);copyFileSync(path.join(root,source),destination);assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});}\n",
             "previousText": "for(const file of ['voice-progress-draft.mjs','progress-measurement-quantity.js','task-progress-measurement.js']){const source='src/lib/'+file,destination=path.join(fixture,source);copyFileSync(path.join(root,source),destination);assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});}\n"
           },
           {
-            "currentOffsetCharacters": 5479,
+            "currentOffsetCharacters": 5512,
             "currentText": "// Next's development indicator overlaps the mobile load-more button; exclude\n// that development-only overlay while preserving compilation/runtime errors.\nwriteFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};\\n`);\n",
             "previousText": "writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\\n`);\n"
           },
           {
-            "currentOffsetCharacters": 20384,
+            "currentOffsetCharacters": 8653,
+            "currentText": "async function respondClosedHomeDecisions(request,{origin,scope,projectId,allowed,reads,phase}){\n const url=new URL(request.url());if(url.origin!==origin||url.pathname!=='/api/identity/operations-status')return false;\n assert.equal(allowed,true);assert.equal(request.method(),'GET');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');\n assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','view']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('view'),'decisions');\n reads.push({phase,method:'GET',projectId,scope,view:'decisions'});\n const body={scope,projectId,view:'decisions',observedAt:'2026-10-28T00:00:00.000Z',proposals:{pending:0},inventory:{canManage:true,pendingCounts:{consumptions:0,adjustments:0}}};\n await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});return true;\n}\nconst homeDecisionsResponse=page=>page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/operations-status'&&response.request().method()==='GET'&&url.searchParams.get('scope')===scope&&url.searchParams.get('projectId')==='p-a'&&url.searchParams.get('view')==='decisions';},{timeout:15000});\nasync function confirmedHomeDecisions(page,pending){\n assert.equal((await pending).status(),200);\n await page.waitForFunction(()=>{const button=document.querySelector('section[aria-labelledby=\"home-decisions-title\"] button');return button?.textContent==='Actualizar pendientes'&&!button.disabled;},{timeout:15000});\n}\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 15208,
+            "currentText": "async function narrowToolsBeforeOriginalTraversal(page,width,requests,posts,homeDecisionReads=[],homeAllowed=false){\n const before=requests.length,homeBefore=homeDecisionReads.length,forms=await page.$$eval('form',nodes=>nodes.length),picker=toolsNav+' select',desktop=toolsNav+' > div';\n",
+            "previousText": "async function narrowToolsBeforeOriginalTraversal(page,width,requests,posts){\n const before=requests.length,forms=await page.$$eval('form',nodes=>nodes.length),picker=toolsNav+' select',desktop=toolsNav+' > div';\n"
+          },
+          {
+            "currentOffsetCharacters": 16018,
+            "currentText": " if(width<1100){assert.ok(await page.$eval(picker,node=>node.getBoundingClientRect().height>=44));for(const activation of ['Enter','Space','click']){if(activation==='click')await page.click(picker);else{await page.focus(picker);await page.keyboard.press(activation);}await page.keyboard.press('Escape');await page.select(picker,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen=\"cronograma\"]')?.hidden===false);assert.ok(await page.$eval('[data-workspace-screen=\"cronograma\"]',node=>node.getClientRects().length>0));\n  // Returning to Inicio intentionally refreshes its closed, read-only counts.\n  // Observe that one response; keyboard/pointer/orientation must do nothing else.\n  const homeResponse=homeAllowed?homeDecisionsResponse(page):null;await page.select(picker,'workspace-home-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen=\"inicio\"]')?.hidden===false);if(homeResponse)await confirmedHomeDecisions(page,homeResponse);assert.equal(await page.$eval('[data-workspace-screen=\"cronograma\"]',node=>node.getClientRects().length>0),false);\n }}\n",
+            "previousText": " if(width<1100){assert.ok(await page.$eval(picker,node=>node.getBoundingClientRect().height>=44));for(const activation of ['Enter','Space','click']){if(activation==='click')await page.click(picker);else{await page.focus(picker);await page.keyboard.press(activation);}await page.keyboard.press('Escape');await page.select(picker,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen=\"cronograma\"]')?.hidden===false);assert.ok(await page.$eval('[data-workspace-screen=\"cronograma\"]',node=>node.getClientRects().length>0));await page.select(picker,'workspace-home-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen=\"inicio\"]')?.hidden===false);assert.equal(await page.$eval('[data-workspace-screen=\"cronograma\"]',node=>node.getClientRects().length>0),false);}}\n"
+          },
+          {
+            "currentOffsetCharacters": 18291,
+            "currentText": " await page.setViewport({width,height:1000});if(width>=1100)await toggleTools(page,true);assert.ok(await page.$eval(width<1100?picker:desktop,node=>node.getClientRects().length>0));assert.equal(await page.evaluate(()=>document.querySelector('nav[aria-label=\"Navegación de la obra\"]')===window.__mobileNavigation&&document.querySelector('nav[aria-label=\"Navegación de la obra\"] select')===window.__mobileGroups&&window.__mobileForms.every(node=>node.isConnected)),true);assert.equal(await page.$$eval('form',nodes=>nodes.length),forms);const expectedHomeReads=homeAllowed&&width<1100?3:0;assert.equal(homeDecisionReads.length-homeBefore,expectedHomeReads);assert.equal(requests.length-before,expectedHomeReads);assert.ok(requests.slice(before).every(row=>row.method==='GET'&&row.path==='/api/identity/operations-status'));assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push('mobile-tools-native-keyboard-pointer-breakpoint-focused-orientation-no-unmount-only-explicit-home-reads-'+width);\n",
+            "previousText": " await page.setViewport({width,height:1000});if(width>=1100)await toggleTools(page,true);assert.ok(await page.$eval(width<1100?picker:desktop,node=>node.getClientRects().length>0));assert.equal(await page.evaluate(()=>document.querySelector('nav[aria-label=\"Navegación de la obra\"]')===window.__mobileNavigation&&document.querySelector('nav[aria-label=\"Navegación de la obra\"] select')===window.__mobileGroups&&window.__mobileForms.every(node=>node.isConnected)),true);assert.equal(await page.$$eval('form',nodes=>nodes.length),forms);assert.equal(requests.length,before);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push('mobile-tools-native-keyboard-pointer-breakpoint-focused-orientation-no-unmount-no-requests-'+width);\n"
+          },
+          {
+            "currentOffsetCharacters": 22731,
             "currentText": "  if(url.pathname==='/api/identity/workspace'){assert.equal(request.method(),'GET');if(!url.search)body={scope,organizationName:'Empresa sintética de navegación de importación',role:'DIRECTOR',roleLabel:'Director de obra',canManageIntegrations:false,canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Director de obra',canPlanSchedule:true,tasks:[baseTask()],totalTasks:1,nextCursor:null};}}\n",
             "previousText": "  if(url.pathname==='/api/identity/workspace'){assert.equal(request.method(),'GET');if(!url.search)body={scope,organizationName:'Empresa sintética de navegación de importación',role:'DIRECTOR',roleLabel:'Director de obra',canManageIntegrations:false,canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[baseTask()],totalTasks:1,nextCursor:null};}}\n"
           },
           {
-            "currentOffsetCharacters": 22808,
+            "currentOffsetCharacters": 25155,
             "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"project-preparation-title\"]')?.getAttribute('aria-busy')==='false');await showWorkspaceSection(page,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tareas');await click(page,'Para revisar · 2026-10-06 · 1 tareas');await waitText(page,'Compará cada fila con el archivo');\n",
             "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"project-preparation-title\"]')?.getAttribute('aria-busy')==='false');await showWorkspaceSection(page,'schedule-title');await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tareas');await click(page,'Para revisar · 2026-10-06 · 1 tareas');await waitText(page,'Compará cada fila con el archivo');\n"
           },
           {
-            "currentOffsetCharacters": 29307,
+            "currentOffsetCharacters": 28687,
+            "currentText": " // Other screens remain mounted with their own disabled recovery inputs. The\n // schedule oracle must inspect all three controls of this operation's form.\n const editor='form[aria-labelledby=\"schedule-edit-title\"]',controls=editor+' input,'+editor+' textarea';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 31916,
             "currentText": "    body={scope,project:{id:projectId,name:projectId==='p-b'?'Obra de prueba B':'Obra de prueba A',status:'ACTIVE'},roleLabel:mode==='readonly'?'Auditor':'Jefe de obra',canPlanSchedule:mode!=='readonly',tasks:mode==='empty'?[]:[projectId==='p-b'?{...baseTask(),id:'task-b',title:'Tarea visible de la última obra'}:record?.task||baseTask()],totalTasks:mode==='empty'?0:1,nextCursor:null};\n",
             "previousText": "    body={scope,project:{id:projectId,name:projectId==='p-b'?'Obra de prueba B':'Obra de prueba A'},canPlanSchedule:mode!=='readonly',tasks:mode==='empty'?[]:[projectId==='p-b'?{...baseTask(),id:'task-b',title:'Tarea visible de la última obra'}:baseTask()],totalTasks:mode==='empty'?0:1,nextCursor:null};\n"
           },
           {
-            "currentOffsetCharacters": 31230,
+            "currentOffsetCharacters": 33839,
             "currentText": " await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});\n",
             "previousText": " await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');\n"
           },
           {
-            "currentOffsetCharacters": 38785,
+            "currentOffsetCharacters": 34892,
+            "currentText": " await showWorkspaceSection(page,'schedule-title');await fill(page);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));assert.deepEqual(await page.$$eval(controls,nodes=>nodes.map(node=>node.disabled)),[false,false,false]);\n",
+            "previousText": " await showWorkspaceSection(page,'schedule-title');await fill(page);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));\n"
+          },
+          {
+            "currentOffsetCharacters": 35413,
+            "currentText": " if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector),{},editor);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>!b.disabled)));assert.equal(posts.length,0);checks.push('schedule-draft-locks-project-and-refresh-until-explicit-cancel');await context.close();return;}\n",
+            "previousText": " if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form'));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>!b.disabled)));assert.equal(posts.length,0);checks.push('schedule-draft-locks-project-and-refresh-until-explicit-cancel');await context.close();return;}\n"
+          },
+          {
+            "currentOffsetCharacters": 36033,
+            "currentText": "  assert.equal(await page.$eval(editor+' textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');\n  assert.deepEqual(await page.$$eval(controls,nodes=>nodes.map(node=>node.disabled)),[false,false,false]);\n",
+            "previousText": "  assert.equal(await page.$eval('textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');\n  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));\n"
+          },
+          {
+            "currentOffsetCharacters": 38590,
+            "currentText": "  assert.deepEqual(await page.$$eval(controls,nodes=>nodes.map(node=>node.disabled)),[true,true,true]);\n",
+            "previousText": "  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>e.disabled)));\n"
+          },
+          {
+            "currentOffsetCharacters": 38849,
+            "currentText": "  assert.ok(await page.$eval(editor+' textarea',e=>e.disabled));assert.equal(await page.$eval(editor+' textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');\n",
+            "previousText": "  assert.ok(await page.$eval('textarea',e=>e.disabled));assert.equal(await page.$eval('textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');\n"
+          },
+          {
+            "currentOffsetCharacters": 39216,
+            "currentText": "   assert.equal(posts.length,1);assert.ok(await page.$eval(editor+' textarea',e=>e.disabled));assert.ok((await text(page)).includes('Comprobar guardado'));\n",
+            "previousText": "   assert.equal(posts.length,1);assert.ok(await page.$eval('textarea',e=>e.disabled));assert.ok((await text(page)).includes('Comprobar guardado'));\n"
+          },
+          {
+            "currentOffsetCharacters": 41403,
             "currentText": " const initialPage=[baseTask(),...Array.from({length:99},(_,index)=>({...baseTask(),id:'task-b-'+String(index).padStart(3,'0'),title:'Partida anterior de la página '+index}))],pageCursor=initialPage.at(-1).id;\n const posts=[],directedReads=[],receiptReads=[],pageReadLedger=[];let applications=0,savedTask=null,pageReadPhase='INITIAL',explicitCursorPending=false;\n",
             "previousText": " const posts=[],directedReads=[],receiptReads=[];let applications=0;\n"
           },
           {
-            "currentOffsetCharacters": 40637,
+            "currentOffsetCharacters": 43255,
             "currentText": "    else{assert.equal(p.expectedRevision,currentTask.revision);applications++;body={scope,saved:true,replayed:false,task:{...currentTask,startsOn:p.startsOn,endsOn:p.endsOn,revision:'2026-10-03T10:00:00.123456'},receipt:{id:'workspace_schedule_'+'b'.repeat(64),taskId:target.id,recordedAt:'2026-10-03T10:00:00.123456',before:{startsOn:currentTask.startsOn,endsOn:currentTask.endsOn},after:{startsOn:p.startsOn,endsOn:p.endsOn}}};savedTask=body.task;}\n",
             "previousText": "    else{assert.equal(p.expectedRevision,currentTask.revision);applications++;body={scope,saved:true,replayed:false,task:{...currentTask,startsOn:p.startsOn,endsOn:p.endsOn,revision:'2026-10-03T10:00:00.123456'},receipt:{id:'workspace_schedule_'+'b'.repeat(64),taskId:target.id,recordedAt:'2026-10-03T10:00:00.123456',before:{startsOn:currentTask.startsOn,endsOn:currentTask.endsOn},after:{startsOn:p.startsOn,endsOn:p.endsOn}}};}\n"
           },
           {
-            "currentOffsetCharacters": 42731,
+            "currentOffsetCharacters": 45349,
             "currentText": "   else{assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),project.id);const cursor=url.searchParams.get('afterTask');assert.ok(cursor===null||cursor===pageCursor);assert.deepEqual([...url.searchParams.keys()].sort(),cursor?['afterTask','projectId','scope']:['projectId','scope']);const kind=cursor&&explicitCursorPending?'EXPLICIT_CURSOR':cursor?'RETAINED_CURSOR':'BASE';if(kind==='EXPLICIT_CURSOR')explicitCursorPending=false;pageReadLedger.push({phase:pageReadPhase,kind,query:url.search});body={scope,project,roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:cursor?[savedTask||target]:initialPage,totalTasks:101,nextCursor:cursor?null:pageCursor};}\n",
             "previousText": "   else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),project.id);body={scope,project,canPlanSchedule:true,tasks:url.searchParams.has('afterTask')?[target]:[baseTask()],totalTasks:2,nextCursor:url.searchParams.has('afterTask')?null:'task-a'};}\n"
           },
           {
-            "currentOffsetCharacters": 43780,
+            "currentOffsetCharacters": 46398,
             "currentText": " const closeScenario=async()=>{writeFileSync(path.join(evidence,'workspace-conflict-page-ledger-'+mode+'-'+width+'.json'),JSON.stringify({mode,width,pageReadLedger,directedReads,receiptReads,posts:posts.length},null,2));await context.close();};\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 44170,
+            "currentOffsetCharacters": 46788,
             "currentText": " await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});pageReadPhase='EXPLICIT_APPEND';explicitCursorPending=true;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,target.title);await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(explicitCursorPending,false);assert.equal(pageReadLedger.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);pageReadPhase='DIRECTED_REVIEW';await showWorkspaceSection(page,'schedule-title');await fill(page,target.id);\n",
             "previousText": " await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,target.title);await showWorkspaceSection(page,'schedule-title');await fill(page,target.id);\n"
           },
           {
-            "currentOffsetCharacters": 46872,
+            "currentOffsetCharacters": 49490,
             "currentText": "  await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Consultar revisión actual');await page.waitForFunction(()=>typeof window.__resolveToken==='function');await click(page,'Desmontar ensayo');await waitText(page,'Ensayo desmontado');await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});await page.waitForFunction(()=>window.__guideObservation===null);assert.equal(directedReads.length,0);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-unmounted-token-cannot-query-or-restore-draft-'+width);await closeScenario();return;\n",
             "previousText": "  await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Consultar revisión actual');await page.waitForFunction(()=>typeof window.__resolveToken==='function');await click(page,'Desmontar ensayo');await waitText(page,'Ensayo desmontado');await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});await page.waitForFunction(()=>window.__guideObservation===null);assert.equal(directedReads.length,0);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-unmounted-token-cannot-query-or-restore-draft-'+width);await context.close();return;\n"
           },
           {
-            "currentOffsetCharacters": 48972,
+            "currentOffsetCharacters": 51590,
             "currentText": " if(mode==='denied-401'||mode==='denied-403'){assert.ok(!(await text(page)).includes(target.title));assert.ok(!(await text(page)).includes('Reprogramación revisada en reunión de obra.'));assert.equal(applications,0);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-hides-private-draft-without-clearing-history-'+width);await closeScenario();return;}\n",
             "previousText": " if(mode==='denied-401'||mode==='denied-403'){assert.ok(!(await text(page)).includes(target.title));assert.ok(!(await text(page)).includes('Reprogramación revisada en reunión de obra.'));assert.equal(applications,0);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-hides-private-draft-without-clearing-history-'+width);await context.close();return;}\n"
           },
           {
-            "currentOffsetCharacters": 49752,
+            "currentOffsetCharacters": 52370,
             "currentText": "  await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector),{},editor);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-keeps-draft-blocks-post-and-allows-explicit-cancel-'+width);await closeScenario();return;\n",
             "previousText": "  await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector),{},editor);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-keeps-draft-blocks-post-and-allows-explicit-cancel-'+width);await context.close();return;\n"
           },
           {
-            "currentOffsetCharacters": 53495,
+            "currentOffsetCharacters": 56113,
             "currentText": " checks.push('schedule-conflict-'+mode+'-later-page-directed-get-preserves-draft-requires-new-review-and-keeps-history-'+width);await closeScenario();\n",
             "previousText": " checks.push('schedule-conflict-'+mode+'-later-page-directed-get-preserves-draft-requires-new-review-and-keeps-history-'+width);await context.close();\n"
           },
           {
-            "currentOffsetCharacters": 53922,
-            "currentText": " const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0,phase='INITIAL';\n",
+            "currentOffsetCharacters": 56540,
+            "currentText": " const requests=[],posts=[],subscriptionReads=[],homeDecisionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0,phase='INITIAL';\n",
             "previousText": " const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0;\n"
           },
           {
-            "currentOffsetCharacters": 54366,
+            "currentOffsetCharacters": 57005,
             "currentText": "   requests.push({method:request.method(),path:url.pathname,query:url.search,phase});\n",
             "previousText": "   requests.push({method:request.method(),path:url.pathname,query:url.search});\n"
           },
           {
-            "currentOffsetCharacters": 57072,
+            "currentOffsetCharacters": 57471,
+            "currentText": "   if(await respondClosedHomeDecisions(request,{origin,scope,projectId:'p-a',allowed:administrator,reads:homeDecisionReads,phase}))return;\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 59850,
             "currentText": "   const body=!url.search?{scope,organizationName:'Empresa de ensayo de navegación',role,roleLabel:administrator?'Administrador':'Auditor',canManageIntegrations:administrator,canPlanSchedule:administrator,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false}:{scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:administrator?'Administrador':'Auditor',canPlanSchedule:administrator,tasks,totalTasks:tasks.length,nextCursor:null};\n",
             "previousText": "   const body=!url.search?{scope,organizationName:'Empresa de ensayo de navegación',role,roleLabel:administrator?'Administrador':'Auditor',canManageIntegrations:administrator,canPlanSchedule:administrator,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false}:{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:administrator,tasks,totalTasks:tasks.length,nextCursor:null};\n"
           },
           {
-            "currentOffsetCharacters": 58675,
+            "currentOffsetCharacters": 60918,
+            "currentText": " const initialHomeResponse=administrator?homeDecisionsResponse(page):null;\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 61131,
+            "currentText": " if(initialHomeResponse)await confirmedHomeDecisions(page,initialHomeResponse);assert.equal(homeDecisionReads.length,administrator?1:0);\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 61665,
             "currentText": " await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});await showGuide(page);assert.ok(await page.$('#onboarding-guide-title'));\n",
             "previousText": " await showGuide(page);assert.ok(await page.$('#onboarding-guide-title'));\n"
           },
           {
-            "currentOffsetCharacters": 60251,
-            "currentText": " const projectRead=row=>{if(row.path!=='/api/identity/workspace'||!row.query)return false;const url=new URL(origin+row.path+row.query);assert.equal(row.method,'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');return true;};const nonProjectReads=()=>requests.filter(row=>!projectRead(row));\n const initialRequestCount=nonProjectReads().length,initialFormCount=await page.$$eval('form',elements=>elements.length);\n phase='NAVIGATION_TRAVERSAL';for(const id of expected){await showWorkspaceSection(page,id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}\n await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(nonProjectReads().length,initialRequestCount+participantReads);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);\n",
-            "previousText": " const initialRequestCount=requests.length,initialFormCount=await page.$$eval('form',elements=>elements.length);\n for(const id of expected){await showWorkspaceSection(page,id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}\n await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);\n"
+            "currentOffsetCharacters": 62790,
+            "currentText": " phase='NATIVE_PICKER_AND_ORIENTATION';await narrowToolsBeforeOriginalTraversal(page,width,requests,posts,homeDecisionReads,administrator);\n",
+            "previousText": " await narrowToolsBeforeOriginalTraversal(page,width,requests,posts);\n"
           },
           {
-            "currentOffsetCharacters": 63380,
-            "currentText": "  assert.equal(nonProjectReads().length,initialRequestCount+participantReads);assert.equal(posts.length,0);\n",
+            "currentOffsetCharacters": 63311,
+            "currentText": " const projectRead=row=>{if(row.path!=='/api/identity/workspace'||!row.query)return false;const url=new URL(origin+row.path+row.query);assert.equal(row.method,'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');return true;};const nonProjectReads=()=>requests.filter(row=>!projectRead(row));\n const initialRequestCount=nonProjectReads().length,initialHomeReads=homeDecisionReads.length,initialFormCount=await page.$$eval('form',elements=>elements.length);\n phase='NAVIGATION_TRAVERSAL';for(const id of expected){const homeResponse=administrator&&id==='workspace-home-title'?homeDecisionsResponse(page):null;await showWorkspaceSection(page,id);if(homeResponse)await confirmedHomeDecisions(page,homeResponse);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}\n await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(homeDecisionReads.length,initialHomeReads+Number(administrator));assert.equal(nonProjectReads().length,initialRequestCount+participantReads+Number(administrator));assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);\n phase='KEYBOARD_NAVIGATION';if(width<1100){const homeResponse=administrator?homeDecisionsResponse(page):null;await showWorkspaceSection(page,'workspace-home-title');if(homeResponse)await confirmedHomeDecisions(page,homeResponse);await page.focus(nav+' select');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');}else{const keyboard=await page.$(nav+' a[href=\"#schedule-title\"]');await keyboard.focus();await page.keyboard.press('Enter');}await page.waitForFunction(()=>document.activeElement.id==='schedule-title');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');\n const expectedHomeReads=initialHomeReads+Number(administrator)+Number(administrator&&width<1100),expectedNonProjectReads=initialRequestCount+participantReads+expectedHomeReads-initialHomeReads;assert.equal(homeDecisionReads.length,expectedHomeReads);assert.equal(nonProjectReads().length,expectedNonProjectReads);\n",
+            "previousText": " const initialRequestCount=requests.length,initialFormCount=await page.$$eval('form',elements=>elements.length);\n for(const id of expected){await showWorkspaceSection(page,id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}\n await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);\n if(width<1100){await showWorkspaceSection(page,'workspace-home-title');await page.focus(nav+' select');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');}else{const keyboard=await page.$(nav+' a[href=\"#schedule-title\"]');await keyboard.focus();await page.keyboard.press('Enter');}await page.waitForFunction(()=>document.activeElement.id==='schedule-title');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');\n"
+          },
+          {
+            "currentOffsetCharacters": 65768,
+            "currentText": " checks.push('navigation-authorized-canonical-destinations-keyboard-only-canonical-reads-'+role+'-'+width);\n",
+            "previousText": " checks.push('navigation-authorized-canonical-destinations-keyboard-no-requests-'+role+'-'+width);\n"
+          },
+          {
+            "currentOffsetCharacters": 67223,
+            "currentText": "  assert.equal(homeDecisionReads.length,expectedHomeReads);assert.equal(nonProjectReads().length,expectedNonProjectReads);assert.equal(posts.length,0);\n",
             "previousText": "  assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);\n"
           },
           {
-            "currentOffsetCharacters": 64391,
-            "currentText": " writeFileSync(path.join(evidence,'workspace-navigation-request-ledger-'+role+'-'+width+'.json'),JSON.stringify({role,width,requests,posts:posts.length,participantReads,preparationReads},null,2));await context.close();\n",
+            "currentOffsetCharacters": 68278,
+            "currentText": " assert.equal(homeDecisionReads.length,administrator?(width<1100?6:2):0);assert.equal(nonProjectReads().length,expectedNonProjectReads);writeFileSync(path.join(evidence,'workspace-navigation-request-ledger-'+role+'-'+width+'.json'),JSON.stringify({role,width,requests,posts:posts.length,participantReads,preparationReads,homeDecisionReads},null,2));await context.close();\n",
             "previousText": " await context.close();\n"
           },
           {
-            "currentOffsetCharacters": 67004,
+            "currentOffsetCharacters": 71044,
             "currentText": "   requests.push({method:request.method(),path:url.pathname,query:url.search,phase});\n",
             "previousText": "   requests.push({method:request.method(),path:url.pathname,query:url.search});\n"
           },
           {
-            "currentOffsetCharacters": 68605,
+            "currentOffsetCharacters": 72645,
             "currentText": "    body={scope,project:{id:projectId,name:projectId==='p-a'?'Obra de prueba A':'Obra de prueba B',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks,totalTasks,nextCursor};\n",
             "previousText": "    body={scope,project:{id:projectId,name:projectId==='p-a'?'Obra de prueba A':'Obra de prueba B'},canPlanSchedule:true,tasks,totalTasks,nextCursor};\n"
           },
           {
-            "currentOffsetCharacters": 69544,
+            "currentOffsetCharacters": 73584,
             "currentText": "  await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 69730,
+            "currentOffsetCharacters": 73770,
             "currentText": "  // These six deliberately malformed/legacy rows test defensive rendering.\n  // Their background read is rejected; it must not silently sanitize the UI.\n  const assertLocalControls=()=>{assert.equal(posts.length,0);assert.equal(requests.filter(row=>new URL(origin+row.path+row.query).searchParams.has('afterTask')).length,0);assert.ok(requests.slice(initialRequests).every(row=>{const url=new URL(origin+row.path+row.query);return row.method==='GET'&&url.searchParams.get('projectId')==='p-a'&&url.searchParams.get('scope')===scope&&[...url.searchParams.keys()].sort().join('|')==='projectId|scope';}),'Only the unchanged-context background base GET may overlap local controls');};\n",
             "previousText": "  const assertLocalControls=()=>{assert.equal(requests.length,initialRequests);assert.equal(posts.length,0);};\n"
           },
           {
-            "currentOffsetCharacters": 77090,
+            "currentOffsetCharacters": 81130,
             "currentText": "  checks.push('workbench-accent-insensitive-search-combined-filters-no-business-write-'+width);\n",
             "previousText": "  checks.push('workbench-accent-insensitive-search-combined-filters-no-requests-'+width);\n"
           },
           {
-            "currentOffsetCharacters": 81609,
+            "currentOffsetCharacters": 85649,
             "currentText": "  const cursorReads=requests.filter(row=>new URL(origin+row.path+row.query).searchParams.has('afterTask'));assert.equal(cursorReads.length,1);assert.equal(cursorReads[0].phase,'pagination-with-filters');assert.equal(new URL(origin+cursorReads[0].path+cursorReads[0].query).searchParams.get('afterTask'),'controlled-page-2');assert.equal(posts.length,0);\n",
             "previousText": "  assert.equal(requests.length,initialRequests+1);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('afterTask'),'controlled-page-2');assert.equal(posts.length,0);\n"
           },
           {
-            "currentOffsetCharacters": 82605,
+            "currentOffsetCharacters": 86645,
             "currentText": "  await click(page,'Limpiar filtros');assert.equal((await workbenchTaskIds(page)).length,8);assert.equal(new Set(await workbenchTaskIds(page)).size,8);assert.equal(requests.filter(row=>new URL(origin+row.path+row.query).searchParams.has('afterTask')).length,1);\n",
             "previousText": "  await click(page,'Limpiar filtros');assert.equal((await workbenchTaskIds(page)).length,8);assert.equal(new Set(await workbenchTaskIds(page)).size,8);assert.equal(requests.length,initialRequests+1);\n"
           },
           {
-            "currentOffsetCharacters": 83375,
+            "currentOffsetCharacters": 87415,
             "currentText": "  await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});const projectBReads=requests.filter(row=>new URL(origin+row.path+row.query).searchParams.get('projectId')==='p-b');assert.equal(projectBReads.length,2,'Explicit project reset and its confirmed background read');assert.ok(projectBReads.every(row=>row.phase==='project-reset'&&new URL(origin+row.path+row.query).searchParams.get('scope')===scope&&!new URL(origin+row.path+row.query).searchParams.has('afterTask')));assert.equal(posts.length,0);assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'');\n",
             "previousText": "  assert.equal(requests.length,initialRequests+2);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('projectId'),'p-b');assert.equal(posts.length,0);assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'');\n"
           },
           {
-            "currentOffsetCharacters": 86228,
+            "currentOffsetCharacters": 90268,
             "currentText": "async function workbenchCanonicalPaginationScenario(width){\n const mode='workbench-canonical-pagination',context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000,hasTouch:width<768});\n const tasks=Array.from({length:102},(_,index)=>({...baseTask(),id:'canonical-'+String(index).padStart(3,'0'),title:index===10||index===100?'Mampostería canónica '+index:'Otra partida '+index,progress:index%100,startsOn:'2026-10-01',endsOn:'2026-10-05'}));\n const cursor=tasks[99].id,requests=[],posts=[];let phase='INITIAL',manualCursorPending=false;\n page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));await page.setRequestInterception(true);\n page.on('request',async request=>{try{\n  const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}if(!url.pathname.startsWith('/api/'))return request.continue();\n  assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');if(request.method()!=='GET')posts.push(request.postData());assert.equal(request.method(),'GET','Canonical pagination and filters never write');\n  let body,kind='ACCOUNT';if(!url.search)body={scope,organizationName:'Empresa de paginación canónica',role:'AUDITOR',roleLabel:'Auditor',canPlanSchedule:false,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};\n  else{\n   assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterTask')?['afterTask','projectId','scope']:['projectId','scope']);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);\n   const after=url.searchParams.get('afterTask');assert.ok(after===null||after===cursor);kind=after===null?'BASE':manualCursorPending?'EXPLICIT_CURSOR':'RETAINED_CURSOR';if(kind==='EXPLICIT_CURSOR')manualCursorPending=false;\n   body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Auditor',canPlanSchedule:false,tasks:after?tasks.slice(100):tasks.slice(0,100),totalTasks:102,nextCursor:after?null:cursor};\n  }\n  requests.push({method:request.method(),path:url.pathname,query:url.search,phase,kind});await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});\n }catch(error){pageErrors.push({mode,width,phase,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});\n try{\n  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de paginación canónica');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});\n  assert.equal(requests.filter(row=>row.kind==='ACCOUNT').length,1);assert.equal(requests.filter(row=>row.kind==='BASE').length,2,'Explicit project selection plus its confirmed initial background read');assert.equal(requests.filter(row=>row.kind.includes('CURSOR')).length,0);assert.equal(posts.length,0);\n  phase='LOCAL_FILTER';await searchWorkbench(page,'mamposteria');await waitWorkbenchTasks(page,['canonical-010']);await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await page.select(workbenchControl.order,'START_ASC');assert.equal(requests.filter(row=>row.kind.includes('CURSOR')).length,0);assert.equal(posts.length,0);\n  phase='EXPLICIT_APPEND';manualCursorPending=true;await click(page,'Cargar más tareas');await waitWorkbenchTasks(page,['canonical-010','canonical-100']);await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});\n  assert.equal(manualCursorPending,false);assert.equal(requests.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);const append=requests.filter(row=>row.phase==='EXPLICIT_APPEND').map(row=>row.kind);assert.equal(append[0],'EXPLICIT_CURSOR');assert.ok(append.slice(1).every((kind,index)=>kind===(index%2===0?'BASE':'RETAINED_CURSOR')),'Every later cursor must follow a same-scope retained-page base read, never a second explicit append');assert.equal(append.length%2,1);\n  assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'mamposteria');for(const [control,value]of [['status','IN_PROGRESS'],['planning','VALID'],['order','START_ASC']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);await waitText(page,'Mostrando 2 de 102 tareas cargadas');assert.equal(posts.length,0);\n  phase='CLEAR_FILTERS';await click(page,'Limpiar filtros');await waitWorkbenchTasks(page,tasks.map(task=>task.id));assert.equal(new Set(await workbenchTaskIds(page)).size,102);assert.equal(await page.$$eval('[data-gantt-task-id]',elements=>elements.length),102);assert.equal(await page.$('#schedule-load-more'),null);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,firstPage:100,loaded:102,canonicalCursor:cursor,nativeCurrentBeforeAppend:true,nativeCurrentAfterAppend:true,requests,posts:posts.length});\n }catch(error){writeFileSync(path.join(evidence,'workspace-canonical-pagination-failure-'+width+'.json'),JSON.stringify({mode,width,phase,requests,posts:posts.length,message:error.message},null,2));throw error;}finally{await context.close();}\n}\n\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 92134,
+            "currentOffsetCharacters": 96174,
             "currentText": " const mode='gantt-volume',requests=[],posts=[];let phase='INITIAL',manualCursorPending=null;page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));\n",
             "previousText": " const mode='gantt-volume',requests=[],posts=[];page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));\n"
           },
           {
-            "currentOffsetCharacters": 92823,
+            "currentOffsetCharacters": 96863,
             "currentText": "   const after=url.searchParams.get('afterTask'),kind=!url.search?'ACCOUNT':after===null?'BASE':manualCursorPending===after?'EXPLICIT_CURSOR':'RETAINED_CURSOR';if(kind==='EXPLICIT_CURSOR')manualCursorPending=null;requests.push({method:request.method(),path:url.pathname,query:url.search,phase,kind});\n",
             "previousText": "   requests.push({method:request.method(),path:url.pathname,query:url.search});\n"
           },
           {
-            "currentOffsetCharacters": 93739,
+            "currentOffsetCharacters": 97779,
             "currentText": "    const cursor=url.searchParams.get('afterTask');assert.ok([null,tasks[99].id,tasks[199].id].includes(cursor));\n    const start=cursor===tasks[99].id?100:cursor===tasks[199].id?200:0;\n    // Deliberate partial-count case: a previously counted300 has240 rows left.\n    // Page shape/cursors remain canonical; the UI must keep its partial warning.\n    body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Auditor',canPlanSchedule:false,tasks:tasks.slice(start,start+100),totalTasks:300,nextCursor:start===0?tasks[99].id:start===100?tasks[199].id:null};\n",
             "previousText": "    const cursor=url.searchParams.get('afterTask');assert.ok([null,'volume-page-2','volume-page-3'].includes(cursor));\n    const start=cursor==='volume-page-2'?100:cursor==='volume-page-3'?200:0;\n    body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:false,tasks:tasks.slice(start,start+100),totalTasks:300,nextCursor:start===0?'volume-page-2':start===100?'volume-page-3':null};\n"
           },
           {
-            "currentOffsetCharacters": 94614,
+            "currentOffsetCharacters": 98654,
             "currentText": " const assertVolumeReads=()=>{assert.equal(posts.length,0);assert.ok(requests.every(row=>row.method==='GET'&&row.path==='/api/identity/workspace'));assert.equal(requests.filter(row=>row.kind==='ACCOUNT').length,1);for(const [name,explicit,cycle]of [['INITIAL',null,['BASE','BASE']],['APPEND_100',tasks[99].id,['BASE','RETAINED_CURSOR']],['APPEND_200',tasks[199].id,['BASE','RETAINED_CURSOR','RETAINED_CURSOR']],['LOCAL_CONTROLS',null,['BASE','RETAINED_CURSOR','RETAINED_CURSOR']]]){const rows=requests.filter(row=>row.phase===name&&row.kind!=='ACCOUNT');if(name==='INITIAL'){assert.deepEqual(rows.map(row=>row.kind),cycle);continue;}if(explicit){assert.equal(rows[0]?.kind,'EXPLICIT_CURSOR');assert.equal(new URL(origin+rows[0].path+rows[0].query).searchParams.get('afterTask'),explicit);assert.equal(rows.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);}const background=explicit?rows.slice(1):rows;assert.equal(background.length%cycle.length,0,'Complete retained-page read cycles for '+name);assert.ok(background.every((row,index)=>row.kind===cycle[index%cycle.length]));for(const row of rows){const url=new URL(origin+row.path+row.query);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),row.kind==='BASE'?['projectId','scope']:['afterTask','projectId','scope']);}}};\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 96261,
+            "currentOffsetCharacters": 100301,
             "currentText": "  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});\n  phase='APPEND_100';manualCursorPending=tasks[99].id;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(manualCursorPending,null);\n  phase='APPEND_200';manualCursorPending=tasks[199].id;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(manualCursorPending,null);\n  assertVolumeReads();assert.equal(posts.length,0);\n",
             "previousText": "  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');\n  assert.equal(requests.length,4);assert.equal(posts.length,0);\n"
           },
           {
-            "currentOffsetCharacters": 98011,
+            "currentOffsetCharacters": 102051,
             "currentText": "  phase='LOCAL_CONTROLS';for(const [label,scale,maxCells] of [['Días','DAYS',28],['Semanas','WEEKS',12],['Meses','MONTHS',12]]){\n",
             "previousText": "  for(const [label,scale,maxCells] of [['Días','DAYS',28],['Semanas','WEEKS',12],['Meses','MONTHS',12]]){\n"
           },
           {
-            "currentOffsetCharacters": 99907,
+            "currentOffsetCharacters": 103947,
             "currentText": "  assertVolumeReads();assert.equal(posts.length,0);\n",
             "previousText": "  assert.equal(requests.length,4);assert.equal(posts.length,0);\n"
           },
           {
-            "currentOffsetCharacters": 100538,
-            "currentText": " const posts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0,manualReadbackPending=false,phase='INITIAL';const scheduleReadLedger=[];await page.setRequestInterception(true);\n",
+            "currentOffsetCharacters": 104578,
+            "currentText": " const editor='section[aria-label=\"Crear tarea de la obra\"] form';\n const posts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0,manualReadbackPending=false,phase='INITIAL';const scheduleReadLedger=[];await page.setRequestInterception(true);\n",
             "previousText": " const posts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0;await page.setRequestInterception(true);\n"
           },
           {
-            "currentOffsetCharacters": 101456,
+            "currentOffsetCharacters": 105563,
             "currentText": "    else {assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);const kind=record&&manualReadbackPending?'CONFIRMED_CREATION_READBACK':'BACKGROUND_BASE';if(kind==='CONFIRMED_CREATION_READBACK'){scheduleReadsAfterCommit++;manualReadbackPending=false;}scheduleReadLedger.push({phase,kind,query:url.search});body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:record?[baseTask(),record.task]:[baseTask()],totalTasks:record?2:1,nextCursor:null};}\n",
             "previousText": "    else {assert.equal(url.searchParams.get('projectId'),'p-a');if(record)scheduleReadsAfterCommit++;body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:record?[baseTask(),record.task]:[baseTask()],totalTasks:record?2:1,nextCursor:null};}\n"
           },
           {
-            "currentOffsetCharacters": 102734,
+            "currentOffsetCharacters": 106841,
             "currentText": "    else {applications++;record={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:{id:'new-task',title:input.title,status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:'2026-10-01T12:00:00.111111'}};manualReadbackPending=true;body=record;if(mode==='uncertain'){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED'};}}\n",
             "previousText": "    else {applications++;record={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:{id:'new-task',title:input.title,status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:'2026-10-01T12:00:00.111111'}};body=record;if(mode==='uncertain'){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED'};}}\n"
           },
           {
-            "currentOffsetCharacters": 103587,
-            "currentText": " await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});phase='CREATION_DRAFT';await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('form input:not([type=\"date\"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));\n if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled));assert.equal(posts.length,0);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');writeFileSync(path.join(evidence,'workspace-task-create-read-ledger-'+mode+'.json'),JSON.stringify({mode,scheduleReadLedger,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit},null,2));await context.close();return;}\n phase='CREATION_COMMAND_AND_RECOVERY';await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(posts.length,1);\n",
+            "currentOffsetCharacters": 107694,
+            "currentText": " await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});phase='CREATION_DRAFT';await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type(editor+' input:not([type=\"date\"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.deepEqual(await page.$$eval(editor+' input',nodes=>nodes.map(node=>node.disabled)),[false,false,false]);\n if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector)&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled),{},editor);assert.equal(posts.length,0);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');writeFileSync(path.join(evidence,'workspace-task-create-read-ledger-'+mode+'.json'),JSON.stringify({mode,scheduleReadLedger,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit},null,2));await context.close();return;}\n phase='CREATION_COMMAND_AND_RECOVERY';await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(posts.length,1);\n",
             "previousText": " await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('form input:not([type=\"date\"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));\n if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled));assert.equal(posts.length,0);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');await context.close();return;}\n await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(posts.length,1);\n"
           },
           {
-            "currentOffsetCharacters": 106441,
-            "currentText": " await page.waitForSelector('[data-task-id=\"new-task\"]');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(manualReadbackPending,false);assert.equal(scheduleReadLedger.filter(row=>row.kind==='CONFIRMED_CREATION_READBACK').length,1);assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(scheduleReadsAfterCommit,1);assert.equal(await page.$$eval('[data-task-id=\"new-task\"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));\n",
-            "previousText": " await page.waitForSelector('[data-task-id=\"new-task\"]');assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(scheduleReadsAfterCommit,1);assert.equal(await page.$$eval('[data-task-id=\"new-task\"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));\n"
+            "currentOffsetCharacters": 109800,
+            "currentText": " assert.deepEqual(await page.$$eval(editor+' input',nodes=>nodes.map(node=>node.disabled)),[true,true,true]);await click(page,'Comprobar tarea');\n",
+            "previousText": " assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>e.disabled)));await click(page,'Comprobar tarea');\n"
           },
           {
-            "currentOffsetCharacters": 107379,
+            "currentOffsetCharacters": 110121,
+            "currentText": " else {await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(await page.$eval(editor+' input',e=>e.value),'Tarea de ensayo recuperable');assert.ok(await page.$eval(editor+' input',e=>e.disabled));await click(page,'Reintentar la misma creación');await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);checks.push('taskcreate-'+mode+'-checked-then-exact-retry-once');}\n await page.waitForSelector('[data-task-id=\"new-task\"]');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});assert.equal(manualReadbackPending,false);assert.equal(scheduleReadLedger.filter(row=>row.kind==='CONFIRMED_CREATION_READBACK').length,1);assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(scheduleReadsAfterCommit,1);assert.equal(await page.$$eval('[data-task-id=\"new-task\"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));\n",
+            "previousText": " else {await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(await page.$eval('form input',e=>e.value),'Tarea de ensayo recuperable');assert.ok(await page.$eval('form input',e=>e.disabled));await click(page,'Reintentar la misma creación');await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);checks.push('taskcreate-'+mode+'-checked-then-exact-retry-once');}\n await page.waitForSelector('[data-task-id=\"new-task\"]');assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(scheduleReadsAfterCommit,1);assert.equal(await page.$$eval('[data-task-id=\"new-task\"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));\n"
+          },
+          {
+            "currentOffsetCharacters": 111527,
             "currentText": " assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));writeFileSync(path.join(evidence,'workspace-task-create-read-ledger-'+mode+'.json'),JSON.stringify({mode,scheduleReadLedger,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit},null,2));await context.close();\n",
             "previousText": " assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();\n"
           },
           {
-            "currentOffsetCharacters": 107694,
+            "currentOffsetCharacters": 111842,
             "currentText": "// The live progress reader verifies both the base access stamp and a closed\n// review page. These synthetic responses retain the same independent reviewer\n// and current proposal revisions; returning the base snapshot for every GET\n// would correctly revoke the panel before any concurrent-receipt assertion.\nconst confirmedProgressAccessStamp='e'.repeat(64);\nfunction confirmedProgressFieldRead(url,field,reads){\n assert.equal(url.pathname,'/api/identity/field-operations');assert.equal(url.searchParams.get('scope'),field.scope);assert.equal(url.searchParams.get('projectId'),field.projectId);\n const section=url.searchParams.get('reviewSection');\n if(section===null){assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);reads.push({kind:'BASE',scope:field.scope,projectId:field.projectId,reviewAccessStamp:field.reviewAccessStamp});return field;}\n assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','reviewAccessStamp','reviewFilter','reviewSection','scope']);assert.equal(section,'PROGRESS');assert.equal(url.searchParams.get('reviewFilter'),'ALL');assert.equal(url.searchParams.get('reviewAccessStamp'),field.reviewAccessStamp);\n assert.ok(field.proposals.length<=100);\n const page={scope:field.scope,projectId:field.projectId,reviewAccessStamp:field.reviewAccessStamp,reviewSection:section,reviewFilter:'ALL',afterReview:null,reviewId:null,records:field.proposals,total:field.proposals.length,nextCursor:null,canReview:field.canReview,canApproveProgress:field.canApproveProgress};\n reads.push({kind:'REVIEW',scope:page.scope,projectId:page.projectId,reviewAccessStamp:page.reviewAccessStamp,records:page.records.map(row=>({id:row.id,status:row.status,revision:row.revision}))});return page;\n}\nconst waitCurrentProgress=page=>page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"field-title\"] [data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 110616,
+            "currentOffsetCharacters": 114764,
             "currentText": " const field={scope,projectId:'p-a',reviewAccessStamp:confirmedProgressAccessStamp,projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:planningMode?[]:[proposal],evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente sintética de la medición.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};\n const padding=Array.from({length:98},(_,index)=>({...original,id:'task-b-'+String(index+1).padStart(3,'0'),title:'Tarea de paginación '+(index+1)})),tail={...created,id:'z-tail-task',title:'Última tarea autorizada'};\n const posts=[],projectReads=[],fieldReads=[];let creation=null,heldReadback=null,heldDecision=null,heldPlanning=null,readbackCount=0,preparationReads=0,canonicalTask=original,phase='INITIAL',manualReadbackPending=false,manualCursorPending=false;\n const markPhase=async value=>{phase=value;await page.evaluate(next=>{window.__confirmedProgressPhase=next;},value);};\n const ordered=rows=>[...rows].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0),currentTasks=()=>planningMode?[canonicalTask]:ordered([canonicalTask,...padding,tail,...(creation?[created]:[])]);\n const taskPage=(all,cursor=null)=>{const remaining=cursor?all.filter(task=>task.id>cursor):all,rows=remaining.slice(0,100);return {scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Director de obra',canPlanSchedule:true,tasks:rows,totalTasks:all.length,nextCursor:remaining.length>100?rows.at(-1).id:null};};\n const noteRead=(url,kind,body)=>{projectReads.push({phase,kind,query:url.search,scope:url.searchParams.get('scope'),projectId:url.searchParams.get('projectId'),afterTask:url.searchParams.get('afterTask'),rows:body?.tasks.length??null,total:body?.totalTasks??null,nextCursor:body?.nextCursor??null,taskRevision:body?.tasks.find(task=>task.id===original.id)?.revision??null});};\n const assertProjectReads=()=>{assert.equal(projectReads.filter(row=>row.kind==='MANUAL_READBACK').length,planningMode?0:1);assert.equal(projectReads.filter(row=>row.kind==='EXPLICIT_CURSOR').length,planningMode?0:1);let previous=null;for(const row of projectReads){assert.equal(row.scope,scope);assert.equal(row.projectId,'p-a');if(row.kind==='RETAINED_CURSOR'){assert.ok(previous&&['BASE','RETAINED_CURSOR'].includes(previous.kind));assert.equal(row.afterTask,previous.nextCursor);}previous=row;}assert.ok(projectReads.every(row=>row.afterTask===null||row.afterTask===ordered([original,created,...padding]).at(-1).id));};\n const assertProgressTrace=async()=>{const trace=await page.evaluate(()=>window.__confirmedProgressTrace);assert.ok(trace.length>0);if(planningMode){assert.ok(trace.filter(row=>row.phase==='PLANNING_REPLY_RELEASED').every(row=>row.progress===50&&JSON.stringify(row.dates)===JSON.stringify(['2026-10-07','2026-10-15'])),'A late planning receipt cannot transiently roll back current progress or dates');}else{const expected=mode==='readback'?50:70,phases=mode==='readback'?['MANUAL_READBACK_RELEASED','EXPLICIT_CURSOR']:['LATE_DECISION_CALLBACK','EXPLICIT_CURSOR'];assert.ok(trace.filter(row=>phases.includes(row.phase)).every(row=>row.progress===expected&&JSON.stringify(row.dates)===JSON.stringify([original.startsOn,original.endsOn])),'Late responses cannot transiently overwrite the current task');if(mode==='callback')assert.ok(trace.some(row=>row.phase==='MANUAL_READBACK_RELEASED'&&row.progress===70));}return trace;};\n const waitCurrentSchedule=()=>page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});\n",
             "previousText": " const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:planningMode?[]:[proposal],evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente sintética de la medición.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};\n const posts=[];let creation=null,heldReadback=null,heldDecision=null,heldPlanning=null,readbackCount=0,preparationReads=0;\n"
           },
           {
-            "currentOffsetCharacters": 116590,
+            "currentOffsetCharacters": 120738,
             "currentText": "     const task={...original,startsOn:input.startsOn,endsOn:input.endsOn,revision:afterRevision};canonicalTask=task;\n",
             "previousText": "     const task={...original,startsOn:input.startsOn,endsOn:input.endsOn,revision:afterRevision};\n"
           },
           {
-            "currentOffsetCharacters": 117595,
+            "currentOffsetCharacters": 121743,
             "currentText": "    const cursor=url.searchParams.get('afterTask');assert.deepEqual([...url.searchParams.keys()].sort(),cursor?['afterTask','projectId','scope']:['projectId','scope']);\n    if(creation&&!cursor&&manualReadbackPending){manualReadbackPending=false;heldReadback=request;readbackCount++;noteRead(url,'MANUAL_READBACK',null);readbackStarted();return;}\n    const body=taskPage(currentTasks(),cursor),kind=cursor?(manualCursorPending?'EXPLICIT_CURSOR':'RETAINED_CURSOR'):'BASE';if(kind==='EXPLICIT_CURSOR')manualCursorPending=false;noteRead(url,kind,body);return respond(request,body);\n",
             "previousText": "    if(creation&&!url.searchParams.has('afterTask')){heldReadback=request;readbackCount++;readbackStarted();return;}\n    const tasks=url.searchParams.has('afterTask')?[{...created,id:'tail-task',title:'Última tarea autorizada'}]:[original];\n    return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks,totalTasks:creation?3:1,nextCursor:null});\n"
           },
           {
-            "currentOffsetCharacters": 118179,
+            "currentOffsetCharacters": 122327,
             "currentText": "   if(request.method()==='GET')return respond(request,confirmedProgressFieldRead(url,field,fieldReads));\n",
             "previousText": "   if(request.method()==='GET')return respond(request,field);\n"
           },
           {
-            "currentOffsetCharacters": 118490,
+            "currentOffsetCharacters": 122638,
             "currentText": "    assert.equal(input.title,created.title);creation={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:created};manualReadbackPending=true;return respond(request,creation);\n",
             "previousText": "    assert.equal(input.title,created.title);creation={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:created};return respond(request,creation);\n"
           },
           {
-            "currentOffsetCharacters": 119014,
+            "currentOffsetCharacters": 123162,
             "currentText": "   const task={...(planningMode?heldPlanning.outcome.task:original),status:'IN_PROGRESS',progress:50,revision:planningMode?latestRevision:afterRevision};canonicalTask=task;\n",
             "previousText": "   const task={...(planningMode?heldPlanning.outcome.task:original),status:'IN_PROGRESS',progress:50,revision:planningMode?latestRevision:afterRevision};\n"
           },
           {
-            "currentOffsetCharacters": 120136,
+            "currentOffsetCharacters": 124284,
             "currentText": "  await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();await page.evaluate(()=>{window.__confirmedProgressTrace=[];window.__confirmedProgressPhase='INITIAL';window.__confirmedProgressObserver=new MutationObserver(()=>{const row=document.querySelector('[data-task-id=\"task-a\"]');if(row)window.__confirmedProgressTrace.push({phase:window.__confirmedProgressPhase,progress:Number(row.querySelector('[role=\"progressbar\"]')?.getAttribute('aria-valuenow')),dates:[...row.querySelectorAll('time')].map(time=>time.dateTime)});});window.__confirmedProgressObserver.observe(document.querySelector('section[aria-labelledby=\"schedule-title\"]'),{subtree:true,childList:true,attributes:true});});\n  if(planningMode){await markPhase('PLANNING_PENDING');await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await planningReady;}\n  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');if(!planningMode){await waitCurrentProgress(page);assert.ok(fieldReads.some(row=>row.kind==='REVIEW'));}\n  if(!planningMode){await markPhase('CREATION_READBACK_PENDING');await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('section[aria-label=\"Crear tarea de la obra\"] form input:not([type=\"date\"])',created.title);await click(page,'Crear tarea');await readbackReady;}\n  await markPhase('PROGRESS_DECISION');await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.type('section[aria-labelledby=\"field-title\"] form textarea','Aprobación sintética independiente.');await click(page,'Guardar con recibo');await decisionReady;\n",
             "previousText": "  if(planningMode){await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await planningReady;}\n  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');\n  if(!planningMode){await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('section[aria-label=\"Crear tarea de la obra\"] form input:not([type=\"date\"])',created.title);await click(page,'Crear tarea');await readbackReady;}\n  await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.type('section[aria-labelledby=\"field-title\"] form textarea','Aprobación sintética independiente.');await click(page,'Guardar con recibo');await decisionReady;\n"
           },
           {
-            "currentOffsetCharacters": 122128,
+            "currentOffsetCharacters": 126276,
             "currentText": "   await markPhase('PLANNING_REPLY_RELEASED');await respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');await waitCurrentSchedule();\n",
             "previousText": "   await respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');\n"
           },
           {
-            "currentOffsetCharacters": 123067,
+            "currentOffsetCharacters": 127215,
             "currentText": "   assertProjectReads();await assertProgressTrace();checks.push('schedule-delayed-planning-reply-keeps-current-dates-and-progress-'+width);return;\n",
             "previousText": "   checks.push('schedule-delayed-planning-reply-keeps-current-dates-and-progress-'+width);return;\n"
           },
           {
-            "currentOffsetCharacters": 123481,
+            "currentOffsetCharacters": 127629,
             "currentText": "  canonicalTask=mode==='callback'?readbackTask:heldDecision.outcome.task;await markPhase('MANUAL_READBACK_RELEASED');\n  // This one retained readback carries its captured task revision. Every later\n  // ordinary GET reflects canonicalTask, never this intentionally old reply.\n  const capturedPage=taskPage(ordered([readbackTask,created,...padding,tail]));assert.equal(capturedPage.tasks.length,100);assert.equal(capturedPage.nextCursor,capturedPage.tasks.at(-1).id);Object.assign(projectReads.find(row=>row.kind==='MANUAL_READBACK'),{rows:capturedPage.tasks.length,total:capturedPage.totalTasks,nextCursor:capturedPage.nextCursor,taskRevision:readbackTask.revision});await respond(heldReadback,capturedPage);\n",
             "previousText": "  await respond(heldReadback,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[readbackTask,created],totalTasks:3,nextCursor:created.id});\n"
           },
           {
-            "currentOffsetCharacters": 124321,
+            "currentOffsetCharacters": 128469,
             "currentText": "  if(mode==='callback'){await markPhase('LATE_DECISION_CALLBACK');await respond(heldDecision.request,heldDecision.outcome);await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');await showWorkspaceSection(page,'schedule-title');}\n",
             "previousText": "  if(mode==='callback'){await respond(heldDecision.request,heldDecision.outcome);await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');await showWorkspaceSection(page,'schedule-title');}\n"
           },
           {
-            "currentOffsetCharacters": 125079,
+            "currentOffsetCharacters": 129227,
             "currentText": "  await waitCurrentSchedule();assert.ok((await text(page)).includes('100 de 101 tareas cargadas'));assert.equal(readbackCount,1);assert.equal(posts.length,2);assert.equal(await page.$('[data-task-id=\"z-tail-task\"]'),null);\n  await markPhase('EXPLICIT_CURSOR');manualCursorPending=true;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id=\"z-tail-task\"]');await waitCurrentSchedule();assert.ok((await text(page)).includes('101 de 101 tareas cargadas'));assert.equal(manualCursorPending,false);assertProjectReads();await assertProgressTrace();\n",
             "previousText": "  assert.ok((await text(page)).includes('2 de 3 tareas cargadas'));assert.equal(readbackCount,1);assert.equal(posts.length,2);\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id=\"tail-task\"]');assert.ok((await text(page)).includes('3 de 3 tareas cargadas'));\n"
           },
           {
-            "currentOffsetCharacters": 126489,
+            "currentOffsetCharacters": 130637,
             "currentText": "  finally{const trace=await page.evaluate(()=>window.__confirmedProgressTrace||[]).catch(()=>[]);await page.evaluate(()=>window.__confirmedProgressObserver?.disconnect()).catch(()=>{});writeFileSync(path.join(evidence,`workspace-confirmed-progress-${mode}-${width}-request-ledger.json`),JSON.stringify({mode,width,phase,projectReads,fieldReads,posts,readbackCount,trace},null,2)+'\\n');for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();}\n",
             "previousText": " finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();}\n"
           },
           {
-            "currentOffsetCharacters": 127401,
+            "currentOffsetCharacters": 131549,
             "currentText": " const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000010',currentRevision='2026-10-02T09:00:00.000020';\n",
             "previousText": " const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000010',currentRevision='2026-10-02T09:00:00.000020',cursor='unloaded-progress-cursor';\n"
           },
           {
-            "currentOffsetCharacters": 127751,
+            "currentOffsetCharacters": 131899,
             "currentText": " const padding=Array.from({length:99},(_,index)=>({...original,id:'task-b-'+String(index+1).padStart(3,'0'),title:'Tarea cargada de paginación '+(index+1)})),firstPage=[original,...padding],cursor=firstPage.at(-1).id;\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 128282,
+            "currentOffsetCharacters": 132430,
             "currentText": " const field={scope,projectId:'p-a',reviewAccessStamp:confirmedProgressAccessStamp,projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:[proposal],evidence:[{id:'evidence-outside',taskId:outside.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente revisada de otro participante.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};\n const posts=[],scheduleReads=[],receiptQueries=[],projectReadLedger=[],fieldReads=[];let recorded=null,currentTask=null,preparationReads=0,phase='INITIAL',manualCursorPending=false;\n const markPhase=async value=>{phase=value;await page.evaluate(next=>{window.__unloadedReceiptPhase=next;},value);};\n const taskPage=(tasks,nextCursor)=>({scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Director de obra',canPlanSchedule:true,tasks,totalTasks:101,nextCursor});\n const waitCurrentSchedule=()=>page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});\n",
             "previousText": " const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:[proposal],evidence:[{id:'evidence-outside',taskId:outside.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente revisada de otro participante.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};\n const posts=[],scheduleReads=[],receiptQueries=[];let recorded=null,currentTask=null,preparationReads=0;\n"
           },
           {
-            "currentOffsetCharacters": 131483,
+            "currentOffsetCharacters": 135631,
             "currentText": "    const after=url.searchParams.get('afterTask');assert.deepEqual([...url.searchParams.keys()].sort(),after?['afterTask','projectId','scope']:['projectId','scope']);\n    if(after){assert.equal(decision,'APPROVE');assert.equal(url.searchParams.get('afterTask'),cursor);assert.ok(currentTask);const kind=manualCursorPending?'EXPLICIT_CURSOR':'RETAINED_CURSOR';if(manualCursorPending)manualCursorPending=false;projectReadLedger.push({phase,kind,afterTask:after,scope,projectId:'p-a',rows:1,nextCursor:null});return respond(request,taskPage([currentTask],null));}\n    projectReadLedger.push({phase,kind:'BASE',afterTask:null,scope,projectId:'p-a',rows:firstPage.length,nextCursor:cursor});return respond(request,taskPage(firstPage,cursor));\n",
             "previousText": "    if(url.searchParams.has('afterTask')){assert.equal(decision,'APPROVE');assert.equal(url.searchParams.get('afterTask'),cursor);assert.ok(currentTask);return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[currentTask],totalTasks:2,nextCursor:null});}\n    assert.equal(scheduleReads.length,1,'The approval and navigation never fetch the schedule automatically');return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original],totalTasks:2,nextCursor:cursor});\n"
           },
           {
-            "currentOffsetCharacters": 132364,
+            "currentOffsetCharacters": 136512,
             "currentText": "    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');\n    if(url.searchParams.has('operationId')){assert.deepEqual([...url.searchParams.keys()].sort(),['operationId','projectId','scope']);receiptQueries.push(url.searchParams.get('operationId'));assert.ok(recorded);assert.equal(receiptQueries.at(-1),posts[0].operationId);assert.equal(recorded.proposal.progress,25);assert.equal(recorded.task.progress,25);assert.equal(currentTask.progress,50);return respond(request,{state:'RECORDED',...recorded,replayed:true,task:currentTask,decisionTaskSnapshot:recorded.task});}\n    return respond(request,confirmedProgressFieldRead(url,field,fieldReads));\n",
             "previousText": "    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('operationId')?['operationId','projectId','scope']:['projectId','scope']);\n    if(url.searchParams.has('operationId')){receiptQueries.push(url.searchParams.get('operationId'));assert.ok(recorded);assert.equal(receiptQueries.at(-1),posts[0].operationId);assert.equal(recorded.proposal.progress,25);assert.equal(recorded.task.progress,25);assert.equal(currentTask.progress,50);return respond(request,{state:'RECORDED',...recorded,replayed:true,task:currentTask,decisionTaskSnapshot:recorded.task});}\n    return respond(request,field);\n"
           },
           {
-            "currentOffsetCharacters": 135520,
+            "currentOffsetCharacters": 139668,
             "currentText": "  await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();\n  await page.evaluate(()=>{window.__unloadedReceiptTrace=[];window.__unloadedReceiptPhase='INITIAL';window.__unloadedReceiptObserver=new MutationObserver(()=>{const receipt=document.querySelector('[data-confirmed-progress=\"task-outside\"]'),task=document.querySelector('[data-task-id=\"task-outside\"]');window.__unloadedReceiptTrace.push({phase:window.__unloadedReceiptPhase,receipt:receipt?.textContent||null,loadedProgress:task?Number(task.querySelector('[role=\"progressbar\"]')?.getAttribute('aria-valuenow')):null});});window.__unloadedReceiptObserver.observe(document.querySelector('main'),{subtree:true,childList:true,attributes:true});});\n  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');await waitCurrentProgress(page);assert.ok(fieldReads.some(row=>row.kind==='REVIEW'));assert.equal(posts.length,0);assert.ok(projectReadLedger.length>0,'The current schedule must have accepted a canonical base page before any decision');assert.ok(projectReadLedger.every(row=>row.phase==='INITIAL'&&row.kind==='BASE'&&row.afterTask===null&&row.scope===scope&&row.projectId==='p-a'&&row.rows===100&&row.nextCursor===cursor),'Before any decision only current-context canonical base reads are allowed; no cursor GET is initiated');\n  await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.waitForSelector('section[aria-labelledby=\"field-title\"] form');await page.select('section[aria-labelledby=\"field-title\"] form select',decision);await page.type('section[aria-labelledby=\"field-title\"] form textarea','Decisión sintética de otra cuenta responsable.');assert.equal(posts.length,0);await markPhase('DECISION');await click(page,'Guardar con recibo');\n  if(decision==='APPROVE'){await waitText(page,'El resultado quedó sin confirmar.');assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(posts.length,1);await markPhase('RECEIPT_RECOVERY');await click(page,'Comprobar guardado');await waitText(page,'Avance aprobado con recibo.');assert.deepEqual(receiptQueries,[posts[0].operationId]);}\n",
             "previousText": "  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');assert.equal(posts.length,0);assert.equal(scheduleReads.length,1);\n  await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.waitForSelector('section[aria-labelledby=\"field-title\"] form');await page.select('section[aria-labelledby=\"field-title\"] form select',decision);await page.type('section[aria-labelledby=\"field-title\"] form textarea','Decisión sintética de otra cuenta responsable.');assert.equal(posts.length,0);await click(page,'Guardar con recibo');\n  if(decision==='APPROVE'){await waitText(page,'El resultado quedó sin confirmar.');assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(posts.length,1);await click(page,'Comprobar guardado');await waitText(page,'Avance aprobado con recibo.');assert.deepEqual(receiptQueries,[posts[0].operationId]);}\n"
           },
           {
-            "currentOffsetCharacters": 137880,
+            "currentOffsetCharacters": 142028,
             "currentText": "  await markPhase('BEFORE_EXPLICIT_CURSOR');await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();assert.equal(posts.length,1);assert.equal(projectReadLedger.filter(row=>row.afterTask!==null).length,0);assert.equal((await page.$$('[data-task-id=\"task-outside\"]')).length,0);assert.ok((await text(page)).includes('100 de 101 tareas cargadas'));\n",
             "previousText": "  await showWorkspaceSection(page,'schedule-title');assert.equal(posts.length,1);assert.equal(scheduleReads.length,1);assert.equal((await page.$$('[data-task-id=\"task-outside\"]')).length,0);assert.ok((await text(page)).includes('1 de 2 tareas cargadas'));\n"
           },
           {
-            "currentOffsetCharacters": 139384,
+            "currentOffsetCharacters": 143532,
             "currentText": "   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Ver en el cronograma'&&!button.disabled)&&document.getElementById('schedule-load-more')?.disabled===false);assert.ok(await page.$eval('[data-confirmed-progress=\"task-outside\"] button',element=>element.getBoundingClientRect().height>=44));await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(projectReadLedger.filter(row=>row.afterTask!==null).length,0);\n   await markPhase('EXPLICIT_CURSOR');manualCursorPending=true;await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id=\"task-outside\"]');assert.equal(manualCursorPending,false);await waitCurrentSchedule();assert.equal(projectReadLedger.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);assert.ok((await text(page)).includes('101 de 101 tareas cargadas'));await markPhase('CURRENT_LOADED');\n",
             "previousText": "   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Ver en el cronograma'&&!button.disabled)&&document.getElementById('schedule-load-more')?.disabled===false);assert.ok(await page.$eval('[data-confirmed-progress=\"task-outside\"] button',element=>element.getBoundingClientRect().height>=44));await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(scheduleReads.length,1);\n   await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id=\"task-outside\"]');assert.equal(scheduleReads.length,2);assert.ok((await text(page)).includes('2 de 2 tareas cargadas'));\n"
           },
           {
-            "currentOffsetCharacters": 141560,
+            "currentOffsetCharacters": 145708,
             "currentText": "   await showWorkspaceSection(page,'field-title');await waitText(page,'Esta tarea está cargada en el cronograma.');await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(projectReadLedger.filter(row=>row.kind==='EXPLICIT_CURSOR').length,1);assert.equal(posts.length,1);\n",
             "previousText": "   await showWorkspaceSection(page,'field-title');await waitText(page,'Esta tarea está cargada en el cronograma.');await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(scheduleReads.length,2);assert.equal(posts.length,1);\n"
           },
           {
-            "currentOffsetCharacters": 142533,
+            "currentOffsetCharacters": 146681,
             "currentText": "  const trace=await page.evaluate(()=>window.__unloadedReceiptTrace);assert.ok(trace.every(row=>!row.receipt||!row.receipt.includes('50%')),'Current50 must never replace historical25 in the receipt');\n  if(decision==='APPROVE'){assert.ok(trace.some(row=>row.receipt?.includes('25% de avance aprobado en este recibo')));assert.ok(trace.every(row=>row.loadedProgress===null||['EXPLICIT_CURSOR','CURRENT_LOADED'].includes(row.phase)));}else assert.ok(trace.every(row=>row.receipt===null));\n  let previous=null;for(const row of projectReadLedger){if(row.kind==='RETAINED_CURSOR'){assert.ok(previous&&previous.kind==='BASE');assert.equal(row.afterTask,previous.nextCursor);}previous=row;}assert.ok(projectReadLedger.every(row=>row.scope===scope&&row.projectId==='p-a'));\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 143911,
+            "currentOffsetCharacters": 148059,
             "currentText": " finally{const trace=await page.evaluate(()=>window.__unloadedReceiptTrace||[]).catch(()=>[]);writeFileSync(path.join(evidence,`workspace-unloaded-progress-${decision}-${width}-request-ledger.json`),JSON.stringify({width,decision,phase,projectReadLedger,fieldReads,posts,receiptQueries,trace},null,2)+'\\n');await page.evaluate(()=>window.__unloadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}\n",
             "previousText": " finally{await context.close();}\n"
           },
           {
-            "currentOffsetCharacters": 146041,
+            "currentOffsetCharacters": 150189,
             "currentText": " const field={scope,projectId:'p-a',reviewAccessStamp:confirmedProgressAccessStamp,projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals,evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Evidencia para contrastar el recibo histórico.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};\n const posts=[],receiptQueries=[],scheduleReads=[],projectReadLedger=[],fieldReads=[];let recorded=null,heldRefresh=null,holdNextRefresh=false,preparationReads=0,phase='INITIAL',readsBeforeRecovery=null;\n const markPhase=async value=>{phase=value;await page.evaluate(next=>{window.__loadedReceiptPhase=next;},value);};\n const waitCurrentSchedule=()=>page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});\n",
             "previousText": " const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals,evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Evidencia para contrastar el recibo histórico.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};\n const posts=[],receiptQueries=[],scheduleReads=[];let recorded=null,heldRefresh=null,holdNextRefresh=false,preparationReads=0;\n"
           },
           {
-            "currentOffsetCharacters": 148996,
+            "currentOffsetCharacters": 153144,
             "currentText": "    assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');scheduleReads.push([...url.searchParams]);projectReadLedger.push({phase,kind:'BASE',scope,projectId:'p-a',afterTask:null,taskRevision:recorded?currentTask.revision:original.revision});\n    // A later native read reports current50. Only decisionTaskSnapshot below\n    // carries historical25; explicit null and malformed progress stay adversarial.\n    return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Director de obra',canPlanSchedule:true,tasks:[recorded?currentTask:original,untouched],totalTasks:2,nextCursor:null});\n",
             "previousText": "    assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');scheduleReads.push([...url.searchParams]);assert.equal(scheduleReads.length,1,'The loaded task changes only through the confirmed callback, without a schedule GET');\n    return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original,untouched],totalTasks:2,nextCursor:null});\n"
           },
           {
-            "currentOffsetCharacters": 149893,
+            "currentOffsetCharacters": 154041,
             "currentText": "    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');\n",
             "previousText": "    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('operationId')?['operationId','projectId','scope']:['projectId','scope']);\n"
           },
           {
-            "currentOffsetCharacters": 150047,
+            "currentOffsetCharacters": 154195,
             "currentText": "     assert.deepEqual([...url.searchParams.keys()].sort(),['operationId','projectId','scope']);\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 150777,
+            "currentOffsetCharacters": 154925,
             "currentText": "    const response=confirmedProgressFieldRead(url,field,fieldReads);\n    if(holdNextRefresh&&!url.searchParams.has('reviewSection')){assert.equal(heldRefresh,null);holdNextRefresh=false;heldRefresh=request;return;}\n    return respond(request,response);\n",
             "previousText": "    if(holdNextRefresh){assert.equal(heldRefresh,null);holdNextRefresh=false;heldRefresh=request;return;}\n    return respond(request,field);\n"
           },
           {
-            "currentOffsetCharacters": 152309,
+            "currentOffsetCharacters": 156457,
             "currentText": " const assertCurrentSchedule=async({pendingRefresh=false}={})=>{\n  await markPhase('CURRENT_SCHEDULE');await showWorkspaceSection(page,'schedule-title');\n  if(pendingRefresh){\n   // The held field GET deliberately keeps the operation pending. Verify the\n   // receipt callback while native schedule reads remain paused; waiting for\n   // CURRENT here would consume the request timeout and release that lock.\n   assert.ok(heldRefresh);await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='PAUSED',{timeout:15000});assert.equal(scheduleReads.length,readsBeforeRecovery,'A held field refresh must not start a native schedule read');\n  }else await waitCurrentSchedule();\n",
             "previousText": " const assertCurrentSchedule=async()=>{\n  await showWorkspaceSection(page,'schedule-title');\n"
           },
           {
-            "currentOffsetCharacters": 154275,
+            "currentOffsetCharacters": 158423,
             "currentText": "  assert.ok(gantt.text.includes('50 % registrado')&&gantt.text.includes('Bloqueada'));assert.ok(gantt.dates.every(value=>gantt.planned?.includes(value)));assert.ok(projectReadLedger.every(row=>row.kind==='BASE'&&row.afterTask===null));assert.ok((await text(page)).includes('2 de 2 tareas cargadas'));\n",
             "previousText": "  assert.ok(gantt.text.includes('50 % registrado')&&gantt.text.includes('Bloqueada'));assert.ok(gantt.dates.every(value=>gantt.planned?.includes(value)));assert.equal(scheduleReads.length,1);assert.ok((await text(page)).includes('2 de 2 tareas cargadas'));\n"
           },
           {
-            "currentOffsetCharacters": 155698,
+            "currentOffsetCharacters": 159846,
             "currentText": "  await showWorkspaceSection(page,'schedule-title');await waitCurrentSchedule();await page.evaluate(()=>{window.__loadedReceiptTrace=[];window.__loadedReceiptPhase='INITIAL';window.__loadedReceiptObserver=new MutationObserver(()=>{const row=document.querySelector('[data-task-id=\"task-a\"]');if(row)window.__loadedReceiptTrace.push({phase:window.__loadedReceiptPhase,progress:Number(row.querySelector('[role=\"progressbar\"]')?.getAttribute('aria-valuenow')),dates:[...row.querySelectorAll('time')].map(time=>time.dateTime)});});window.__loadedReceiptObserver.observe(document.querySelector('section[aria-labelledby=\"schedule-title\"]'),{subtree:true,childList:true,attributes:true});});\n  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitCurrentProgress(page);assert.ok(fieldReads.some(row=>row.kind==='REVIEW'));\n",
             "previousText": "  await page.evaluate(()=>{window.__loadedReceiptTrace=[];window.__loadedReceiptObserver=new MutationObserver(()=>{const row=document.querySelector('[data-task-id=\"task-a\"]');if(row)window.__loadedReceiptTrace.push({progress:Number(row.querySelector('[role=\"progressbar\"]')?.getAttribute('aria-valuenow')),dates:[...row.querySelectorAll('time')].map(time=>time.dateTime)});});window.__loadedReceiptObserver.observe(document.querySelector('section[aria-labelledby=\"schedule-title\"]'),{subtree:true,childList:true,attributes:true});});\n  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');\n"
           },
           {
-            "currentOffsetCharacters": 156697,
+            "currentOffsetCharacters": 160845,
             "currentText": "   await page.waitForSelector('[data-field-proposal=\"proposal-snapshot-'+index+'\"] button');await page.$eval('[data-field-proposal=\"proposal-snapshot-'+index+'\"] button',element=>element.click());await page.waitForSelector('section[aria-labelledby=\"field-title\"] form');await page.select('section[aria-labelledby=\"field-title\"] form select','APPROVE');await page.type('section[aria-labelledby=\"field-title\"] form textarea','Decisión sintética '+kind+'.');await markPhase('DECISION_UNCERTAIN');await click(page,'Guardar con recibo');\n   await waitText(page,'El resultado quedó sin confirmar.');assert.equal(posts.length,index+1);assert.equal((await page.$$('[data-confirmed-progress]')).length,0);readsBeforeRecovery=scheduleReads.length;await markPhase('RECOVERY_CALLBACK');await click(page,'Comprobar guardado');await waitText(page,mode==='invalid-snapshot'?'Decisión guardada con recibo. Consultá el estado de la propuesta.':'Avance aprobado con recibo.');\n   await page.waitForFunction(()=>document.querySelector('[data-task-id=\"task-a\"] [role=\"progressbar\"]')?.getAttribute('aria-valuenow')==='50');for(let i=0;i<80&&!heldRefresh;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(heldRefresh,'Hold the field refresh to observe the schedule callback separately');assert.equal(scheduleReads.length,readsBeforeRecovery,'The current50 callback is observed before returning to the schedule or any background schedule GET');const callbackTrace=await page.evaluate(()=>window.__loadedReceiptTrace);assert.ok(callbackTrace.some(row=>row.phase==='RECOVERY_CALLBACK'&&row.progress===50),'Current50 must reach the loaded schedule through the receipt callback before native refresh');assert.ok(callbackTrace.every(row=>row.progress!==25));await assertCurrentSchedule({pendingRefresh:true});assert.deepEqual(receiptQueries,posts.map(input=>input.operationId));assert.equal(posts.length,index+1);assert.equal(new Set(posts.map(input=>input.operationId)).size,posts.length);\n",
             "previousText": "   await page.waitForSelector('[data-field-proposal=\"proposal-snapshot-'+index+'\"] button');await page.$eval('[data-field-proposal=\"proposal-snapshot-'+index+'\"] button',element=>element.click());await page.waitForSelector('section[aria-labelledby=\"field-title\"] form');await page.select('section[aria-labelledby=\"field-title\"] form select','APPROVE');await page.type('section[aria-labelledby=\"field-title\"] form textarea','Decisión sintética '+kind+'.');await click(page,'Guardar con recibo');\n   await waitText(page,'El resultado quedó sin confirmar.');assert.equal(posts.length,index+1);assert.equal((await page.$$('[data-confirmed-progress]')).length,0);await click(page,'Comprobar guardado');await waitText(page,mode==='invalid-snapshot'?'Decisión guardada con recibo. Consultá el estado de la propuesta.':'Avance aprobado con recibo.');\n   await page.waitForFunction(()=>document.querySelector('[data-task-id=\"task-a\"] [role=\"progressbar\"]')?.getAttribute('aria-valuenow')==='50');for(let i=0;i<80&&!heldRefresh;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(heldRefresh,'Hold the field refresh to observe the schedule callback separately');await assertCurrentSchedule();assert.deepEqual(receiptQueries,posts.map(input=>input.operationId));assert.equal(posts.length,index+1);assert.equal(new Set(posts.map(input=>input.operationId)).size,posts.length);\n"
           },
           {
-            "currentOffsetCharacters": 159934,
+            "currentOffsetCharacters": 164082,
             "currentText": "   if(mode==='loaded-current'){await markPhase('FOCUS_LOADED_TASK');await page.focus('[data-confirmed-progress=\"task-a\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.ok(projectReadLedger.every(row=>row.kind==='BASE'&&row.afterTask===null));assert.equal(posts.length,1);assert.ok((await page.$eval('[data-confirmed-progress=\"task-a\"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));}\n",
             "previousText": "   if(mode==='loaded-current'){await page.focus('[data-confirmed-progress=\"task-a\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.equal(scheduleReads.length,1);assert.equal(posts.length,1);assert.ok((await page.$eval('[data-confirmed-progress=\"task-a\"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));}\n"
           },
           {
-            "currentOffsetCharacters": 161207,
+            "currentOffsetCharacters": 165355,
             "currentText": " finally{const trace=await page.evaluate(()=>window.__loadedReceiptTrace||[]).catch(()=>[]);writeFileSync(path.join(evidence,`workspace-loaded-receipt-${mode}-${snapshotCase}-${width}-request-ledger.json`),JSON.stringify({width,mode,snapshotCase,phase,projectReadLedger,fieldReads,posts,receiptQueries,trace},null,2)+'\\n');if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}\n",
             "previousText": " finally{if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}\n"
           },
           {
-            "currentOffsetCharacters": 162182,
+            "currentOffsetCharacters": 166330,
             "currentText": " const padding=Array.from({length:99},(_,index)=>({...original,id:'task-b-'+String(index+1).padStart(3,'0'),title:'Tarea de página inicial '+(index+1)})),cursor=padding.at(-1).id,late={...original,id:'z-late-page-task',title:'Tarea añadida por la página tardía'};let canonicalTask=original,phase='INITIAL',manualCursorPending=false;\n const taskPage=(cursorRequest=false)=>({scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:cursorRequest?[late]:[canonicalTask,...padding],totalTasks:101,nextCursor:cursorRequest?null:cursor});\n const waitCurrentSchedule=()=>page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 163387,
+            "currentOffsetCharacters": 167535,
             "currentText": "   if(!url.pathname.startsWith('/api/'))return request.continue();assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');const kind=request.method()==='POST'?'POST':!url.search?'ACCOUNT':url.searchParams.has('afterTask')?(manualCursorPending?'EXPLICIT_CURSOR':'RETAINED_CURSOR'):'BASE';requests.push({phase,kind,method:request.method(),query:url.search});let body;\n",
             "previousText": "   if(!url.pathname.startsWith('/api/'))return request.continue();assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');requests.push({method:request.method(),query:url.search});let body;\n"
           },
           {
-            "currentOffsetCharacters": 164214,
+            "currentOffsetCharacters": 168362,
             "currentText": "    canonicalTask={...original,startsOn:payload.startsOn,endsOn:payload.endsOn,revision:afterRevision};body={scope,saved:true,replayed:false,task:canonicalTask,receipt:{id:'workspace_schedule_'+ 'c'.repeat(64),taskId:original.id,recordedAt:afterRevision,before:{startsOn:original.startsOn,endsOn:original.endsOn},after:{startsOn:payload.startsOn,endsOn:payload.endsOn}}};\n",
             "previousText": "    body={scope,saved:true,replayed:false,task:{...original,startsOn:payload.startsOn,endsOn:payload.endsOn,revision:afterRevision},receipt:{id:'workspace_schedule_'+ 'c'.repeat(64),taskId:original.id,recordedAt:afterRevision,before:{startsOn:original.startsOn,endsOn:original.endsOn},after:{startsOn:payload.startsOn,endsOn:payload.endsOn}}};\n"
           },
           {
-            "currentOffsetCharacters": 164932,
+            "currentOffsetCharacters": 169080,
             "currentText": "    const after=url.searchParams.get('afterTask');assert.deepEqual([...url.searchParams.keys()].sort(),after?['afterTask','projectId','scope']:['projectId','scope']);\n    if(after){assert.equal(after,cursor);if(manualCursorPending){manualCursorPending=false;assert.equal(heldPage.request,null);heldPage.request=request;heldPage.resolve();return;}body=taskPage(true);}else body=taskPage();\n",
             "previousText": "    if(url.searchParams.has('afterTask')){assert.equal(url.searchParams.get('afterTask'),'held-page');heldPage.request=request;heldPage.resolve();return;}\n    body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original],totalTasks:2,nextCursor:'held-page'};\n"
           },
           {
-            "currentOffsetCharacters": 166009,
+            "currentOffsetCharacters": 170157,
             "currentText": "  await waitCurrentSchedule();phase='HELD_EXPLICIT_CURSOR';manualCursorPending=true;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;phase='PLANNING_WITH_PAGE_PENDING';await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n  // Deliberately adversarial: this single retained cursor response repeats\n  // original below the cursor with its old revision. Keep that overlap to prove\n  // mergeLoadedTasks cannot roll back the later confirmed planning receipt.\n  phase='LATE_PAGE_RELEASED';await heldPage.request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify({...taskPage(true),tasks:[original,late]})});\n  await page.waitForSelector('[data-task-id=\"z-late-page-task\"]');await waitCurrentSchedule();phase='CURRENT_AFTER_LATE_PAGE';assert.equal(manualCursorPending,false);assert.equal(await page.$$eval('[data-task-id=\"task-a\"]',elements=>elements.length),1);\n",
             "previousText": "  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n  await heldPage.request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify({scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original,{...original,id:'late-page-task',title:'Tarea añadida por la página tardía'}],totalTasks:2,nextCursor:null})});\n  await page.waitForSelector('[data-task-id=\"late-page-task\"]');assert.equal(await page.$$eval('[data-task-id=\"task-a\"]',elements=>elements.length),1);\n"
           },
           {
-            "currentOffsetCharacters": 167315,
+            "currentOffsetCharacters": 171463,
             "currentText": "  assert.equal(await page.$eval('[data-task-id=\"task-a\"] [role=\"progressbar\"]',element=>element.getAttribute('aria-valuenow')),'37');assert.ok((await text(page)).includes('2026-10-07 → 2026-10-15'));assert.ok((await text(page)).includes('Cambio confirmado'));assert.equal(posts.length,1);assert.equal(requests.filter(request=>request.kind==='ACCOUNT').length,1);assert.equal(requests.filter(request=>request.kind==='EXPLICIT_CURSOR').length,1);const retained=requests.filter(request=>['LATE_PAGE_RELEASED','CURRENT_AFTER_LATE_PAGE'].includes(request.phase)&&request.method==='GET');assert.equal(retained.length%2,0);assert.ok(retained.every((request,index)=>request.kind===(index%2===0?'BASE':'RETAINED_CURSOR')),'Post-append native reads must be complete canonical base/cursor cycles, not a repeated held page');assert.ok((await text(page)).includes('101 de 101 tareas cargadas'));\n",
             "previousText": "  assert.equal(await page.$eval('[data-task-id=\"task-a\"] [role=\"progressbar\"]',element=>element.getAttribute('aria-valuenow')),'37');assert.ok((await text(page)).includes('2026-10-07 → 2026-10-15'));assert.ok((await text(page)).includes('Cambio confirmado'));assert.equal(posts.length,1);assert.equal(requests.filter(request=>request.method==='GET').length,3);\n"
           },
           {
-            "currentOffsetCharacters": 168647,
+            "currentOffsetCharacters": 172795,
             "currentText": " finally{writeFileSync(path.join(evidence,'workspace-stale-pagination-request-ledger.json'),JSON.stringify({phase,requests,posts},null,2)+'\\n');if(heldPage.request&&!heldPage.request.isInterceptResolutionHandled())await heldPage.request.abort().catch(()=>{});await context.close();}\n",
             "previousText": " finally{if(heldPage.request&&!heldPage.request.isInterceptResolutionHandled())await heldPage.request.abort().catch(()=>{});await context.close();}\n"
           },
           {
-            "currentOffsetCharacters": 169248,
+            "currentOffsetCharacters": 173396,
             "currentText": " // Keep this epoch-only oracle independent of background refresh. Native refresh\n // timing/visibility is exercised separately by verify-worksite-live-refresh-ui.\n await page.evaluateOnNewDocument(()=>Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'}));\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 175489,
+            "currentOffsetCharacters": 179637,
             "currentText": "  await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculaci\\u00f3n');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_VERIFIED\"]');assert.equal(channelReads,3);assert.equal(await page.$$eval('a[href^=\"https://wa.me/\"]',els=>els.length),1);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,`workspace-onboarding-epoch-${width}.png`),fullPage:true});checks.push({mode,width,workspaceReads,channelReads,posts:posts.length,appendInvalidates:true,lateSnapshotRejected:true,freshExplicitReadRequired:true,backgroundRefreshPrecondition:'document-hidden-for-epoch-only-oracle'});\n",
             "previousText": "  await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculaci\\u00f3n');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_VERIFIED\"]');assert.equal(channelReads,3);assert.equal(await page.$$eval('a[href^=\"https://wa.me/\"]',els=>els.length),1);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,`workspace-onboarding-epoch-${width}.png`),fullPage:true});checks.push({mode,width,workspaceReads,channelReads,posts:posts.length,appendInvalidates:true,lateSnapshotRejected:true,freshExplicitReadRequired:true});\n"
           },
           {
-            "currentOffsetCharacters": 183530,
+            "currentOffsetCharacters": 187678,
             "currentText": " // Manual HTML-denial oracle: native visible refresh is exercised separately.\n // A hidden document keeps its exact two explicit reads causally independent.\n await page.evaluateOnNewDocument(()=>Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'}));\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 188515,
+            "currentOffsetCharacters": 192663,
             "currentText": "  checks.push({mode,width,projectReads,receiptReads,posts:0,htmlDenialClearsAccount:true,htmlDenialClearsView:true,htmlDenialClearsGuideFacts:true,currentToken:true,backgroundRefreshPrecondition:'document-hidden-for-http-denial-only-oracle'});\n",
             "previousText": "  checks.push({mode,width,projectReads,receiptReads,posts:0,htmlDenialClearsAccount:true,htmlDenialClearsView:true,htmlDenialClearsGuideFacts:true,currentToken:true});\n"
           },
           {
-            "currentOffsetCharacters": 189458,
+            "currentOffsetCharacters": 193606,
             "currentText": " const projectRequestLedger=[];let projectReadPhase='INITIAL_PROJECT';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 191745,
+            "currentOffsetCharacters": 195893,
             "currentText": "   else{assert.equal(url.searchParams.get('scope'),scope);projectReads++;const projectId=url.searchParams.get('projectId');projectRequestLedger.push({number:projectReads,projectId,scope:url.searchParams.get('scope'),phase:projectReadPhase,queryKeys:[...url.searchParams.keys()].sort()});assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.ok(!['ACCESS_UNAVAILABLE','FRESH_ACCOUNT'].includes(projectReadPhase),'No project-page GET may start after access became unavailable');if(url.searchParams.get('projectId')==='p-b'){assert.equal(action,'project');assert.equal(projectRequestLedger.filter(row=>row.projectId==='p-b').length,1,'Only one canonical request may follow the explicit project-B action');projectRequest=request;return;}assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:action!=='project',tasks:[baseTask()],totalTasks:1,nextCursor:null};}\n",
             "previousText": "   else{assert.equal(url.searchParams.get('scope'),scope);projectReads++;if(url.searchParams.get('projectId')==='p-b'){projectRequest=request;return;}assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:action!=='project',tasks:[baseTask()],totalTasks:1,nextCursor:null};}\n"
           },
           {
-            "currentOffsetCharacters": 193693,
+            "currentOffsetCharacters": 197841,
             "currentText": "  // The real mounted schedule hook immediately re-reads the selected project.\n  // A canonical response must reach CURRENT before beginning the access race.\n  await page.waitForFunction(()=>{const live=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return live.length===1&&live[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});\n  assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),'p-a');assert.equal(projectReads,2);assert.deepEqual(projectRequestLedger.map(row=>({projectId:row.projectId,phase:row.phase})),[{projectId:'p-a',phase:'INITIAL_PROJECT'},{projectId:'p-a',phase:'INITIAL_PROJECT'}]);projectReadPhase='PROJECT_A_BACKGROUND';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 195527,
+            "currentOffsetCharacters": 199675,
             "currentText": "   projectReadPhase='CONCURRENT_PROJECT_B';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 195966,
+            "currentOffsetCharacters": 200114,
             "currentText": "   await showWorkspaceSection(page,'schedule-title');\n   // Schedule/token variants can legitimately trigger another native GET A\n   // when returning to the schedule. The five-second gap is product behavior,\n   // not a guessed new aggregate count. Keep its real CURRENT result visible.\n   await page.waitForFunction(()=>{const live=[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length);return live.length===1&&live[0].dataset.worksiteLiveRefresh==='CURRENT';},{timeout:15000});\n   assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),'p-a');projectReadPhase='SCHEDULE_OR_TOKEN_PENDING';await fill(page);if(action==='token')await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Confirmar planificación');\n",
             "previousText": "   await showWorkspaceSection(page,'schedule-title');await fill(page);if(action==='token')await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Confirmar planificación');\n"
           },
           {
-            "currentOffsetCharacters": 197543,
+            "currentOffsetCharacters": 201691,
             "currentText": "  projectReadPhase='ACCESS_UNAVAILABLE';const projectReadsAtAccessLoss=projectReads;\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 198576,
+            "currentOffsetCharacters": 202724,
             "currentText": "  if(action==='project')await projectRequest.respond({status:200,contentType:'application/json',body:JSON.stringify({scope,project:{id:'p-b',name:'Obra privada de respuesta anterior',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:false,tasks:[{...baseTask(),title:'Tarea privada de respuesta anterior'}],totalTasks:1,nextCursor:null})}).catch(()=>{});\n",
             "previousText": "  if(action==='project')await projectRequest.respond({status:200,contentType:'application/json',body:JSON.stringify({scope,project:{id:'p-b',name:'Obra privada de respuesta anterior'},canPlanSchedule:false,tasks:[{...baseTask(),title:'Tarea privada de respuesta anterior'}],totalTasks:1,nextCursor:null})}).catch(()=>{});\n"
           },
           {
-            "currentOffsetCharacters": 200162,
+            "currentOffsetCharacters": 204310,
             "currentText": "  projectReadPhase='FRESH_ACCOUNT';await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,projectReadsAtAccessLoss,'No project-page GET after access loss or during explicit fresh account lookup');assert.equal(projectRequestLedger.filter(row=>row.projectId==='p-b').length,action==='project'?1:0,'Concurrent project-B action dispatches once, schedule/token never select B');assert.ok(projectRequestLedger.every(row=>row.scope===scope&&['p-a','p-b'].includes(row.projectId)&&!['ACCESS_UNAVAILABLE','FRESH_ACCOUNT'].includes(row.phase)),'Every retained project-page request belongs to the original scope before access loss');assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,projectReads,projectRequestLedger,projectAReads:projectRequestLedger.filter(row=>row.projectId==='p-a').length,projectBReads:projectRequestLedger.filter(row=>row.projectId==='p-b').length,nativeCurrentBeforeRace:true,nativeCurrentBeforeScheduleOrToken:action!=='project',noProjectReadsAfterAccessLoss:true,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n",
             "previousText": "  await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n"
           },
           {
-            "currentOffsetCharacters": 203794,
+            "currentOffsetCharacters": 207942,
             "currentText": "   for(const width of [320,390,768,1280]){await workbenchScenario(width);await workbenchCanonicalPaginationScenario(width);}\n",
             "previousText": "   for(const width of [320,390,768,1280])await workbenchScenario(width);\n"
           },
           {
-            "currentOffsetCharacters": 205343,
+            "currentOffsetCharacters": 209491,
             "currentText": " if([undefined,'post-progress'].includes(process.env.WORKSPACE_UI_SCENARIO)){\n",
             "previousText": " if(!process.env.WORKSPACE_UI_SCENARIO){\n"
+          },
+          {
+            "currentOffsetCharacters": 209896,
+            "currentText": " }\n if([undefined,'post-progress','post-conflicts'].includes(process.env.WORKSPACE_UI_SCENARIO)){\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 210346,
+            "currentText": " }\n if([undefined,'post-progress','post-conflicts','post-creation'].includes(process.env.WORKSPACE_UI_SCENARIO)){\n",
+            "previousText": ""
           }
         ]
       },
