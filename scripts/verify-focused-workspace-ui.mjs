@@ -35,14 +35,14 @@ export const FOCUSED_WORKSPACE_TASK_PAGING_CHECKS=Object.freeze([
 export const FOCUSED_WORKSPACE_UI_VERSION=4;
 export const FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT=45;
 export const HOME_DECISIONS_WIDTHS=Object.freeze([320,390,768,1440]);
-export const HOME_DECISIONS_NEGATIVES=Object.freeze(['denied','500','missing','foreign-scope','foreign-project','negative','invalid-date','capability']);
+export const HOME_DECISIONS_NEGATIVES=Object.freeze(['denied','500','missing','foreign-scope','foreign-project','negative','invalid-date','capability','missing-evidence','negative-evidence']);
 export const HOME_DECISIONS_CHECKS=Object.freeze([
  ...HOME_DECISIONS_WIDTHS.map(width=>'home-decisions-auto-scoped-read-and-queues-'+width),
  'home-decisions-director-390',...['WORKER','AUDITOR'].map(role=>'home-decisions-no-management-read-'+role+'-390'),
  'home-decisions-only-when-home-active-390',...HOME_DECISIONS_NEGATIVES.map(mode=>'home-decisions-no-false-zero-'+mode+'-390'),
  'home-decisions-explicit-retry-390','home-decisions-late-response-does-not-reenter-hidden-home-390'
 ]);
-export const FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT=77;
+export const FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT=79;
 const entry='src/app/(identity)/cuenta/workspace-client.js';
 const integrationFiles=['src/app/(identity)/cuenta/page.js','src/app/(identity)/cuenta/workspace-identity.js','src/app/(identity)/cuenta/onboarding-guide.js','src/lib/identity-return-path.mjs'];
 const guard=(condition,message)=>{if(!condition)throw Object.assign(new Error(message),{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'});};
@@ -143,7 +143,7 @@ export async function verifyFocusedWorkspaceUi(args=process.argv.slice(2)){
    if(url.pathname==='/api/identity/workspace')body=url.searchParams.has('projectId')?{scope,project,tasks:[task],canPlanSchedule:role==='ADMIN',totalTasks:1,nextCursor:null}:{scope,organizationName:'Empresa sintética de QA',role,roleLabel:role==='ADMIN'?'Administración de ensayo':'Consulta de ensayo',canPlanSchedule:role==='ADMIN',canConfigureProgressMeasurement:false,canManageIntegrations:['ADMIN','DIRECTOR'].includes(role),projects:mode==='empty-company'?[]:[project],projectsTruncated:false};
    else if(url.pathname==='/api/identity/operations-status'){
     assert.ok(['ADMIN','DIRECTOR'].includes(role));assert.equal(url.searchParams.size,3);assert.equal(url.searchParams.get('view'),'decisions');assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-a');homeReads++;
-    body={scope,projectId:'project-a',view:'decisions',observedAt:homeReads>1?'2026-10-18T03:00:00.000Z':'2026-10-17T16:49:23.000Z',proposals:{pending:mode==='home-late'&&homeReads>1?7:6},inventory:{canManage:true,pendingCounts:{consumptions:132,adjustments:4}}};
+    body={scope,projectId:'project-a',view:'decisions',observedAt:homeReads>1?'2026-10-18T03:00:00.000Z':'2026-10-17T16:49:23.000Z',evidence:{pending:mode==='home-late'&&homeReads>1?3:2},proposals:{pending:mode==='home-late'&&homeReads>1?7:6},inventory:{canManage:true,pendingCounts:{consumptions:132,adjustments:4}}};
     if(mode==='home-denied'||mode==='home-retry'&&homeReads===1){status=403;body={code:'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'};}
     if(mode==='home-500'){status=500;body={code:'OPERATIONS_STATUS_UNAVAILABLE'};}
     if(mode==='home-missing')delete body.inventory.pendingCounts;
@@ -152,6 +152,8 @@ export async function verifyFocusedWorkspaceUi(args=process.argv.slice(2)){
     if(mode==='home-negative')body.proposals.pending=-1;
     if(mode==='home-invalid-date')body.observedAt='fecha inválida';
     if(mode==='home-capability')body.inventory.canManage=false;
+    if(mode==='home-missing-evidence')delete body.evidence;
+    if(mode==='home-negative-evidence')body.evidence.pending=-1;
     if(mode==='home-late'&&homeReads===1){homeReady();await new Promise(resolve=>{releaseHome=resolve;});}
    }
    else if(url.pathname==='/api/identity/participants')body={scope,projectId:'project-a',records:mode==='wizard'?[{id:'worker-other',name:'Otra ficha sintética primero en la lista',active:true,self:false,status:'ACTIVE',accountLinked:true,revision:'2026-10-16T12:00:00.000000',kycChatChallenge:null,invitation:null,kyc:{status:'NOT_SUBMITTED',images:[],review:null,processing:null,ocrConsent:{allowed:false},biometricConsent:{allowed:false}},permissions:{attendance:false,report:false}}, {id:'worker-self',name:'Perfil propio sintético segundo en la lista',active:true,self:true,status:'ACTIVE',accountLinked:true,revision:'2026-10-16T12:00:00.000000',kycChatChallenge:null,invitation:null,kyc:{status:'NOT_SUBMITTED',images:[],review:null,processing:null,ocrConsent:{allowed:false},biometricConsent:{allowed:false}},permissions:{attendance:false,report:false}}]:[],existingAccounts:[],canManage:role==='ADMIN',canInvite:false,
@@ -240,14 +242,27 @@ export async function verifyFocusedWorkspaceUi(args=process.argv.slice(2)){
   assert.deepEqual(errors,[]);assert.ok(requests.every(request=>request.mode==='wizard'||request.method==='GET'));assert.equal(requests.filter(request=>request.method==='POST').length,2);
   await runFocusedWorkspaceTaskPagingCases({browser,origin,scope,check,checks,requests,errors,snapshot,visible});
   const homeFacts=item=>requests.filter(row=>row.width===item.width&&row.role===item.role&&row.mode===item.mode&&row.path==='/api/identity/operations-status');
-  const homeReady=async(item,pending=6)=>{await item.page.waitForFunction(pending=>document.querySelector('[aria-labelledby="home-decisions-title"] article>strong')?.textContent===String(pending),{},pending);assert.deepEqual(await item.page.$$eval('[aria-labelledby="home-decisions-title"] dd',nodes=>nodes.map(node=>node.textContent)),['132','4']);};
+  // Each queue is read by its own label; no check depends on card order or on the first article.
+  const homeQueues=item=>item.page.$$eval('[aria-labelledby="home-decisions-title"] article',nodes=>nodes.map(node=>({label:node.querySelector(':scope>p')?.textContent??null,count:node.querySelector(':scope>strong')?.textContent??null,materials:[...node.querySelectorAll('dd')].map(value=>value.textContent),links:[...node.querySelectorAll('a')].map(link=>({text:link.textContent.trim(),href:link.getAttribute('href')}))})));
+  const homeReady=async(item,{evidence=2,progress=6}={})=>{
+   await item.page.waitForFunction(({evidence,progress})=>{const cards=[...document.querySelectorAll('[aria-labelledby="home-decisions-title"] article')],count=label=>cards.find(card=>card.querySelector(':scope>p')?.textContent===label)?.querySelector(':scope>strong')?.textContent;return count('Evidencias')===String(evidence)&&count('Avances de obra')===String(progress);},{},{evidence,progress});
+   const queues=await homeQueues(item),queue=label=>{const found=queues.filter(value=>value.label===label);assert.equal(found.length,1,'One '+label+' queue');return found[0];};
+   assert.deepEqual(queues.map(value=>value.label).sort(),['Avances de obra','Evidencias','Materiales']);
+   assert.equal(queue('Evidencias').count,String(evidence));assert.deepEqual(queue('Evidencias').materials,[]);assert.deepEqual(queue('Evidencias').links,[{text:'Revisar evidencias',href:'#field-title'}]);
+   assert.equal(queue('Avances de obra').count,String(progress));assert.deepEqual(queue('Avances de obra').materials,[]);assert.deepEqual(queue('Avances de obra').links,[{text:'Revisar avances',href:'#field-title'}]);
+   assert.equal(queue('Materiales').count,null);assert.deepEqual(queue('Materiales').materials,['132','4']);assert.deepEqual(queue('Materiales').links,[{text:'Revisar materiales',href:'#inventory-title'}]);
+   return queues;
+  };
+  const openQueue=async(item,label)=>{const link=await item.page.evaluateHandle(label=>[...document.querySelectorAll('[aria-labelledby="home-decisions-title"] article')].find(card=>card.querySelector(':scope>p')?.textContent===label)?.querySelector('a')??null,label),element=link.asElement();assert.ok(element,'Queue link for '+label);await element.click();};
   for(const width of HOME_DECISIONS_WIDTHS)await check('home-decisions-auto-scoped-read-and-queues-'+width,async()=>{
    const item=await context(width,'ADMIN','?obra=project-a','home-normal');try{
     await visible(item,'inicio');await homeReady(item);assert.equal(homeFacts(item).length,1);assert.ok(await item.page.$eval('[aria-labelledby="home-decisions-title"]',node=>node.innerText.includes('hora de Argentina')&&node.innerText.includes('13:49:23')),'Home afternoon must use the Argentina h23 clock');
     await item.page.$eval('[aria-labelledby="home-decisions-title"] button',node=>{node.click();node.click();});await homeReady(item);assert.equal(homeFacts(item).length,2,'Refresh dispatches one bounded GET even before React flushes');assert.ok(await item.page.$eval('[aria-labelledby="home-decisions-title"]',node=>node.innerText.includes('00:00:00')&&!node.innerText.includes('24:00:00')),'Home midnight must render 00:00 in Argentina');await snapshot(item,'home-pending-decisions');
-    await item.page.evaluate(()=>{window.__homeQueueEvents=[];for(const name of ['obrasaas:progress-pending','obrasaas:inventory-pending'])window.addEventListener(name,event=>window.__homeQueueEvents.push({name,detail:event.detail}));});
-    await item.page.click('[aria-labelledby="home-decisions-title"] a[href="#field-title"]');await visible(item,'actividad');assert.deepEqual(await item.page.evaluate(()=>window.__homeQueueEvents),[{name:'obrasaas:progress-pending',detail:{projectId:'project-a',scope}}]);
-    await navigate(item,'workspace-home-title');await homeReady(item);assert.equal(homeFacts(item).length,3);await item.page.click('[aria-labelledby="home-decisions-title"] a[href="#inventory-title"]');await visible(item,'materiales');assert.deepEqual(await item.page.evaluate(()=>window.__homeQueueEvents),[{name:'obrasaas:progress-pending',detail:{projectId:'project-a',scope}},{name:'obrasaas:inventory-pending',detail:{projectId:'project-a',scope}}]);assert.equal(requests.filter(row=>row.mode===item.mode&&row.width===width&&row.method!=='GET').length,0);
+    await item.page.evaluate(()=>{window.__homeQueueEvents=[];for(const name of ['obrasaas:evidence-pending','obrasaas:progress-pending','obrasaas:inventory-pending'])window.addEventListener(name,event=>window.__homeQueueEvents.push({name,detail:event.detail}));});
+    const detail={projectId:'project-a',scope};
+    await openQueue(item,'Evidencias');await visible(item,'actividad');assert.deepEqual(await item.page.evaluate(()=>window.__homeQueueEvents),[{name:'obrasaas:evidence-pending',detail}]);
+    await navigate(item,'workspace-home-title');await homeReady(item);assert.equal(homeFacts(item).length,3);await openQueue(item,'Avances de obra');await visible(item,'actividad');assert.deepEqual(await item.page.evaluate(()=>window.__homeQueueEvents),[{name:'obrasaas:evidence-pending',detail},{name:'obrasaas:progress-pending',detail}]);
+    await navigate(item,'workspace-home-title');await homeReady(item);assert.equal(homeFacts(item).length,4);await openQueue(item,'Materiales');await visible(item,'materiales');assert.deepEqual(await item.page.evaluate(()=>window.__homeQueueEvents),[{name:'obrasaas:evidence-pending',detail},{name:'obrasaas:progress-pending',detail},{name:'obrasaas:inventory-pending',detail}]);assert.equal(requests.filter(row=>row.mode===item.mode&&row.width===width&&row.method!=='GET').length,0);
    }finally{await item.context.close();}
   });
   await check('home-decisions-director-390',async()=>{const item=await context(390,'DIRECTOR','?obra=project-a','home-director');try{await visible(item,'inicio');await homeReady(item);assert.equal(homeFacts(item).length,1);}finally{await item.context.close();}});
@@ -255,7 +270,7 @@ export async function verifyFocusedWorkspaceUi(args=process.argv.slice(2)){
   await check('home-decisions-only-when-home-active-390',async()=>{const item=await context(390,'ADMIN','?obra=project-a#inventory-title','home-inactive');try{await visible(item,'materiales');assert.equal(homeFacts(item).length,0);await navigate(item,'workspace-home-title');await homeReady(item);assert.equal(homeFacts(item).length,1);}finally{await item.context.close();}});
   for(const mode of HOME_DECISIONS_NEGATIVES)await check('home-decisions-no-false-zero-'+mode+'-390',async()=>{const item=await context(390,'ADMIN','?obra=project-a','home-'+mode);try{await visible(item,'inicio');await item.page.waitForFunction(()=>document.querySelector('[aria-labelledby="home-decisions-title"] [role="status"]')?.textContent.startsWith('No '));assert.equal(await item.page.$$eval('[aria-labelledby="home-decisions-title"] article',nodes=>nodes.length),0);assert.equal(homeFacts(item).length,1);assert.equal(await item.page.$eval('[aria-labelledby="home-decisions-title"] button',node=>node.disabled),false);}finally{await item.context.close();}});
   await check('home-decisions-explicit-retry-390',async()=>{const item=await context(390,'ADMIN','?obra=project-a','home-retry');try{await item.page.waitForFunction(()=>document.querySelector('[aria-labelledby="home-decisions-title"] [role="status"]')?.textContent.startsWith('No '));assert.equal(homeFacts(item).length,1);await item.page.click('[aria-labelledby="home-decisions-title"] button');await homeReady(item);assert.equal(homeFacts(item).length,2);}finally{await item.context.close();}});
-  await check('home-decisions-late-response-does-not-reenter-hidden-home-390',async()=>{const item=await context(390,'ADMIN','?obra=project-a','home-late');try{await visible(item,'inicio');await item.homeWaiting;await navigate(item,'inventory-title');await visible(item,'materiales');item.releaseHome();await navigate(item,'workspace-home-title');await homeReady(item,7);assert.equal(homeFacts(item).length,2);assert.equal(await item.page.$eval('[aria-labelledby="home-decisions-title"] article>strong',node=>node.textContent),'7');}finally{item.releaseHome();await item.context.close();}});
+  await check('home-decisions-late-response-does-not-reenter-hidden-home-390',async()=>{const item=await context(390,'ADMIN','?obra=project-a','home-late');try{await visible(item,'inicio');await item.homeWaiting;await navigate(item,'inventory-title');await visible(item,'materiales');item.releaseHome();await navigate(item,'workspace-home-title');const late=await homeReady(item,{evidence:3,progress:7});assert.equal(homeFacts(item).length,2);assert.deepEqual(late.map(value=>[value.label,value.count]).sort(),[['Avances de obra','7'],['Evidencias','3'],['Materiales',null]]);}finally{item.releaseHome();await item.context.close();}});
   assert.equal(checks.length,FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT);assert.deepEqual(checks.slice(FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT+FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.length),HOME_DECISIONS_CHECKS);
 
  }catch(error){failure=error;if(browser){const pages=await browser.pages().catch(()=>[]);const last=pages.at(-1);if(last)await last.screenshot({path:path.join(output,'failure.png'),fullPage:true}).catch(()=>{});}}finally{

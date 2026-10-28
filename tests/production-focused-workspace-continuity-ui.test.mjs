@@ -12,14 +12,14 @@ test('continuity matrix preserves baseline widths and explicitly appends all con
   ...['field','inventory'].map(consumer=>'account-task-pages-404-revoked-clear-'+consumer+'-390')
  ]);
  assert.equal(new Set(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS).size,14);
- assert.deepEqual(HOME_DECISIONS_WIDTHS,[320,390,768,1440]);assert.deepEqual(HOME_DECISIONS_NEGATIVES,['denied','500','missing','foreign-scope','foreign-project','negative','invalid-date','capability']);
+ assert.deepEqual(HOME_DECISIONS_WIDTHS,[320,390,768,1440]);assert.deepEqual(HOME_DECISIONS_NEGATIVES,['denied','500','missing','foreign-scope','foreign-project','negative','invalid-date','capability','missing-evidence','negative-evidence']);
  assert.deepEqual(HOME_DECISIONS_CHECKS,[
   ...[320,390,768,1440].map(width=>'home-decisions-auto-scoped-read-and-queues-'+width),
   'home-decisions-director-390',...['WORKER','AUDITOR'].map(role=>'home-decisions-no-management-read-'+role+'-390'),
-  'home-decisions-only-when-home-active-390',...['denied','500','missing','foreign-scope','foreign-project','negative','invalid-date','capability'].map(mode=>'home-decisions-no-false-zero-'+mode+'-390'),
+  'home-decisions-only-when-home-active-390',...['denied','500','missing','foreign-scope','foreign-project','negative','invalid-date','capability','missing-evidence','negative-evidence'].map(mode=>'home-decisions-no-false-zero-'+mode+'-390'),
   'home-decisions-explicit-retry-390','home-decisions-late-response-does-not-reenter-hidden-home-390'
  ]);
- assert.equal(HOME_DECISIONS_CHECKS.length,18);assert.equal(new Set(HOME_DECISIONS_CHECKS).size,18);assert.equal(FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,45+14+18);
+ assert.equal(HOME_DECISIONS_CHECKS.length,20);assert.equal(new Set(HOME_DECISIONS_CHECKS).size,20);assert.equal(FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,45+14+20);
  for(const mode of ['list-role','list-scope','list-missing','list-401','list-403','list-500','project-401','project-403','project-500','project-scope','project-id','project-null'])assert.ok(FOCUSED_WORKSPACE_REFRESH_NEGATIVES.includes(mode));
  for(const width of [320,390,1440]){assert.ok(FOCUSED_WORKSPACE_CONTINUITY_CHECKS.includes('fresh-list-project-preserves-section-no-POST-'+width));assert.ok(FOCUSED_WORKSPACE_CONTINUITY_CHECKS.includes('bootstrap-ready-receipt-compact-disclosure-trial-no-POST-'+width));}
 });
