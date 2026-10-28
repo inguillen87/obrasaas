@@ -131,3 +131,27 @@ test('missing noncanonical and impossible check instants never display epoch tim
  const hostile={toString(){throw Error('No coercion of an unconfirmed instant');}};
  for(const value of [undefined,null,0,NaN,hostile,'','not-an-instant','2026-02-30T21:59:13.000Z','2026-10-20T18:59:13.000-03:00','2026-10-20T21:59:13Z'])assert.equal(worksiteLiveCheckedAtLabel(value),'Fecha y hora sin confirmar');
 });
+
+// Regression: a read cancelled by our own transient lock (for example a sibling panel's
+// initial GET marking the workspace busy) is not an observation. Unlocking must retry at
+// once instead of waiting out the five-second spacing, but repeated cancellation is
+// still spaced so lock flapping cannot become a GET storm.
+test('a read cancelled by a transient lock retries once at unlock; repeated cancellation keeps the five-second spacing',async()=>{
+ const pending=[];let reads=0;
+ const f=fixture({read:signal=>new Promise((resolve,reject)=>{reads++;pending.push(resolve);signal.addEventListener('abort',()=>reject(new DOMException('Consulta cancelada.','AbortError')),{once:true});})});
+ const lock=async(run)=>{f.spec.blocked=true;f.controller.pause();assert.equal(await run,false);f.spec.blocked=false;};
+ const first=f.controller.check();assert.equal(reads,1);await lock(first);
+ f.setTime(150);const second=f.controller.check();assert.equal(reads,2,'The first unlock retries immediately');assert.equal(f.timers.size,1,'Only the 30-second request timeout is armed');
+ await lock(second);f.setTime(150);assert.equal(await f.controller.check(),false);assert.equal(reads,2,'A second cancellation in a row is spaced');assert.deepEqual(f.delays(),[5000]);
+ const third=f.fireNext();assert.equal(reads,3);pending.at(-1)({taskProgress:25});await third;assert.equal(f.counts.apply,1);assert.equal(f.states.at(-1).state,'CURRENT');
+ // A completed observation restores one immediate retry for the next transient lock.
+ f.setTime(6000);const fourth=f.controller.check({manual:true});assert.equal(reads,4);await lock(fourth);f.setTime(100);const fifth=f.controller.check();assert.equal(reads,5);
+ pending.at(-1)({taskProgress:30});assert.equal(await fifth,true);assert.equal(f.counts.apply,2);f.controller.dispose();
+});
+
+test('a request timeout is not a transient lock: the next check keeps the five-second spacing',async()=>{
+ let reads=0;const f=fixture({read:signal=>new Promise((resolve,reject)=>{reads++;signal.addEventListener('abort',()=>reject(new DOMException('Tiempo agotado.','AbortError')),{once:true});})});
+ const run=f.controller.check();assert.equal(reads,1);const timeout=[...f.timers.entries()].find(([,value])=>value.delay===30000);assert.ok(timeout);f.timers.delete(timeout[0]);f.setTime(30000);timeout[1].fn();assert.equal(await run,false);
+ f.timers.clear();f.setTime(-29000);assert.equal(await f.controller.check(),false);assert.equal(reads,1);assert.ok(f.delays().every(delay=>delay>0&&delay<=5000));f.controller.dispose();
+});
+

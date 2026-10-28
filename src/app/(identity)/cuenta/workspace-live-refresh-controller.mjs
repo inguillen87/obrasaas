@@ -3,13 +3,16 @@ export function worksiteLiveRefreshPresentation(status,{contextKey,viewKey='',en
  return status.contextKey===contextKey&&(status.viewKey===viewKey||['LIMITED','ACCESS'].includes(status.state))?status:{state:enabled?'PAUSED':'IDLE',checkedAt:null,updates:false};
 }
 export function createWorksiteLiveRefreshController({contextKey,getCurrent,onState,setTimer=setTimeout,clearTimer=clearTimeout,now=Date.now,random=Math.random,isVisible=()=>true,isOnline=()=>true}){
- let disposed=false,timer=null,active=null,lastStart=null,failures=0,lastChecked=null,limited=false;
+ let disposed=false,timer=null,active=null,lastStart=null,failures=0,lastChecked=null,limited=false,settledStart=null,lockRetry=true;
  const jitter=base=>Math.round(base*(.9+random()*.2));
  const same=()=>!disposed&&getCurrent()?.contextKey===contextKey;
  const eligible=()=>same()&&getCurrent().enabled===true&&!getCurrent().blocked&&isVisible()&&isOnline();
  const publish=value=>{if(same())onState({contextKey,viewKey:getCurrent().viewKey||'',checkedAt:lastChecked,updates:false,...value});};
  const stopTimer=()=>{if(timer!==null)clearTimer(timer);timer=null;};
- const pause=()=>{stopTimer();active?.abort();publish({state:'PAUSED'});};
+ // A read cancelled by this client's own lock is not an observation: the first such
+ // cancellation releases its start from the spacing, so unlocking retries at once.
+ // A second consecutive cancellation keeps the spacing and cannot become a GET storm.
+ const pause=()=>{stopTimer();if(active&&!active.signal.aborted&&lockRetry){lockRetry=false;lastStart=settledStart;}active?.abort();publish({state:'PAUSED'});};
  function schedule(delay=45000){stopTimer();if(same()&&getCurrent().enabled&&!limited)timer=setTimer(run,jitter(Math.max(5000,delay)));}
  async function run(){
   timer=null;
@@ -18,15 +21,17 @@ export function createWorksiteLiveRefreshController({contextKey,getCurrent,onSta
   if(active)return false;
   const remaining=lastStart===null?0:5000-(now()-lastStart);
   if(remaining>0){schedule(remaining);return false;}
-  const captured=getCurrent(),authorityStamp=captured.getAuthorityStamp?.(),abort=new AbortController();active=abort;lastStart=now();
+  const captured=getCurrent(),authorityStamp=captured.getAuthorityStamp?.(),abort=new AbortController(),startedAt=now();active=abort;lastStart=startedAt;
+  const settle=()=>{if(!abort.signal.aborted&&active===abort){settledStart=startedAt;lockRetry=true;}};
   const timeout=setTimer(()=>abort.abort(),30000);
   publish({state:'CONSULTING'});
   try{
-   const value=await captured.read(abort.signal);
+   const value=await captured.read(abort.signal);settle();
    if(!same()||active!==abort||abort.signal.aborted||!eligible()||captured.isCurrent?.(authorityStamp)===false)return false;
    const accepted=captured.apply(value);if(accepted===false)return false;
    failures=0;lastChecked=new Date(now()).toISOString();publish({state:'CURRENT',updates:accepted?.updates===true,message:accepted?.message||''});return true;
   }catch(error){
+   settle();
    if(!same()||active!==abort)return false;
    const denied=error?.status===401||error?.status===403||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE','FIELD_REVIEW_CURSOR_UNAVAILABLE'].includes(error?.code);
    if(denied){
