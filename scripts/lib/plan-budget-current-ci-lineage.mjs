@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {PLAN_BUDGET_CURRENT_REVISION as reviewed} from './plan-budget-current-ci-reviewed.mjs';
+import {PLAN_BUDGET_CURRENT_REVISION as reviewedExport} from './plan-budget-current-ci-reviewed.mjs';
 export {PLAN_BUDGET_CURRENT_REVISION} from './plan-budget-current-ci-reviewed.mjs';
 export const PLAN_BUDGET_CURRENT_SECTION='planBudgetCurrentRevision';
 export const PLAN_BUDGET_CI_KIND='UI_PLAN_BUDGET_SOURCE';
@@ -13,6 +13,54 @@ const reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Budget current 
 const exact=(value,names,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...names].sort()),reason);
 const sorted=files=>reject(Array.isArray(files)&&files.every(safe)&&same(files,[...new Set(files)].sort()),'SORTED_SOURCE_PATHS');
 const read=(reader,file)=>{reject(typeof reader==='function'&&safe(file),'SOURCE_READER');let bytes;try{bytes=reader(file);}catch{}reject(Buffer.isBuffer(bytes)&&Buffer.from(bytes.toString('utf8')).equals(bytes),'UTF8_SOURCE_'+file);return Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n'));};
+// ---- Own onboarding adapter rung ---------------------------------------------------------------------------------------
+// One exact additive layer above the Own runtime journal. The reviewed declaration and the published contract may carry
+// ownOnboardingAdapterAdvance: ten physical source rows, four retained authenticated dependencies and eighteen manifest
+// cells. Current physical bytes are authenticated first; only then is any history projected. The rung inverts to the
+// exact previous contract (LF 109fcc04...) and previous declaration (LF d970ee31...); every older projection is delegated,
+// unchanged, to the Own journal below. Without the key each public function behaves exactly as it did before this rung.
+const ONB_KEY='ownOnboardingAdapterAdvance',ONB_KIND='OWN_ONBOARDING_ADAPTER_SOURCE_ADVANCE',ONB_BASE_CONTRACT='109fcc04d0ad9ad37cadf71248a7b0e7fe6de57bfedb5fb23d5d994081eb7c36',ONB_BASE_REVIEWED='d970ee314d6e72906c2768bb67c776e7b9fe25b42443700c417fd6c0310fd163',ONB_PREVIOUS_MANIFEST='460f70d5571933477f16df413a7ffff94ded70b5d6384857f5628e6f4bab407d';
+const ONB_SOURCE_PATHS=["scripts/lib/plan-budget-current-ci-lineage.mjs","scripts/verify-participant-onboarding-delivery-postgres.mjs","src/lib/meta-customer-provider.mjs","src/lib/participant-onboarding-authority.mjs","src/lib/participant-onboarding-delivery.mjs","tests/fixtures/own-participant-onboarding-memory.mjs","tests/fixtures/participant-onboarding-authority-memory.mjs","tests/production-own-participant-onboarding.test.mjs","tests/production-own-runtime-source-advance.test.mjs","tests/production-participant-onboarding-authority.test.mjs"];
+const ONB_RETAINED_DEPENDENCIES=[{"path":"src/lib/company-onboarding-policy.mjs","sha256":"cf557c7837d6264c78207028c668f8f8a2218f9632a8092cfcb8692ef11053d1","bytes":8048},{"path":"src/lib/company-phone-format.mjs","sha256":"67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209","bytes":377},{"path":"src/lib/meta-channel-binding.mjs","sha256":"0ba9e9de3b6dcca46524ab2df22236dbbcd5be5e6cef571df1ec47a01633672e","bytes":1491},{"path":"src/lib/meta-own-company-policy.mjs","sha256":"7db3875cd0f31fec077f4d9a4f8875be1ddf4a5772acff4559069ae950ff0821","bytes":26424}];
+const ONB_METADATA_POINTERS=["/planBudgetCurrentRevision/sourceFamilies/11/currentManifest/105/sha256","/planBudgetCurrentRevision/sourceFamilies/11/currentManifest/107/sha256","/planBudgetCurrentRevision/sourceFamilies/11/currentManifest/53/sha256","/planBudgetCurrentRevision/sourceFamilies/12/currentManifest/46/sha256","/planBudgetCurrentRevision/sourceFamilies/12/currentManifest/89/sha256","/planBudgetCurrentRevision/sourceFamilies/12/currentManifest/91/sha256","/planBudgetCurrentRevision/sourceFamilies/13/currentManifest/44/sha256","/planBudgetCurrentRevision/sourceFamilies/13/currentManifest/86/sha256","/planBudgetCurrentRevision/sourceFamilies/13/currentManifest/88/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/4/sha256","/planBudgetCurrentRevision/sourceFamilies/4/currentManifest/8/sha256","/planBudgetCurrentRevision/sourceFamilies/5/currentManifest/11/sha256","/planBudgetCurrentRevision/sourceFamilies/6/currentManifest/44/sha256","/planBudgetCurrentRevision/sourceFamilies/6/currentManifest/84/sha256","/planBudgetCurrentRevision/sourceFamilies/6/currentManifest/86/sha256","/planBudgetCurrentRevision/sourceFamilies/9/currentManifest/46/sha256","/planBudgetCurrentRevision/sourceFamilies/9/currentManifest/86/sha256","/planBudgetCurrentRevision/sourceFamilies/9/currentManifest/88/sha256"];
+// The reviewed export is frozen only shallowly. Before anything is compiled or cached this module takes a private deep snapshot
+// of it and deeply freezes the snapshot. Every rung path reads `reviewedCurrent` (the snapshot) and never the live export, so
+// the source rows, inverse hunks, retained rows and metadata patches cannot be redirected by mutating the export after import.
+function onbDeepFreeze(value){if(value!==null&&typeof value==='object'){for(const key of Reflect.ownKeys(value))onbDeepFreeze(value[key]);Object.freeze(value);}return value;}
+const reviewedCurrent=onbDeepFreeze(structuredClone(reviewedExport));
+let onbCompiled,onbCurrentJson,onbCurrentText,onbPreviousText;
+function onbState(){
+ if(onbCompiled!==undefined)return onbCompiled;
+ if(!Object.hasOwn(reviewedCurrent,ONB_KEY))return onbCompiled=null;
+ const a=reviewedCurrent[ONB_KEY];
+ exact(a,['version','kind','previousContractSha256','previousReviewedSha256','sourceChanges','retainedDependencies','metadataInverse'],'ONB_ADVANCE_KEYS');
+ reject(a.version===1&&a.kind===ONB_KIND&&a.previousContractSha256===ONB_BASE_CONTRACT&&a.previousReviewedSha256===ONB_BASE_REVIEWED,'ONB_ADVANCE_ANCHOR');
+ reject(Array.isArray(a.sourceChanges)&&same(a.sourceChanges.map(s=>s.path),ONB_SOURCE_PATHS),'ONB_SOURCE_PATHS');
+ const sources=new Map();
+ for(const s of a.sourceChanges){
+  exact(s,['path','status','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'ONB_SOURCE_KEYS');
+  reject(safe(s.path)&&hash(s.currentSha256)&&Number.isSafeInteger(s.currentBytes)&&s.currentBytes>0&&Number.isSafeInteger(s.previousBytes)&&s.previousBytes>=0,'ONB_SOURCE_PIN');
+  reject(s.status==='ADDED'?s.previousSha256===null&&s.previousBytes===0:s.status==='MODIFIED'&&hash(s.previousSha256)&&s.previousBytes>0,'ONB_SOURCE_STATUS');
+  ownCheckHunks(s.inverseHunks);sources.set(s.path,s);
+ }
+ reject(sha(JSON.stringify(a.sourceChanges.map(s=>({path:s.path,sha256:s.previousSha256,bytes:s.previousBytes}))))===ONB_PREVIOUS_MANIFEST,'ONB_PREVIOUS_MANIFEST');
+ reject(same(a.retainedDependencies,ONB_RETAINED_DEPENDENCIES)&&a.retainedDependencies.every(row=>!sources.has(row.path)),'ONB_RETAINED_DEPENDENCY');
+ reject(Array.isArray(a.metadataInverse)&&same(a.metadataInverse.map(p=>p.pointer),ONB_METADATA_POINTERS),'ONB_REQUIRED_METADATA_PATCH');
+ // Every current manifest cell of a modified rung source must be patched, and only those cells.
+ const owned=[];reviewedCurrent.sourceFamilies.forEach((family,f)=>family.currentManifest.forEach((ref,m)=>{if(sources.get(ref.path)?.status==='MODIFIED')owned.push('/'+PLAN_BUDGET_CURRENT_SECTION+'/sourceFamilies/'+f+'/currentManifest/'+m+'/sha256');}));
+ reject(same(owned.sort(),ONB_METADATA_POINTERS),'ONB_MANIFEST_CELL_SET');
+ const previous=structuredClone(reviewedCurrent);delete previous[ONB_KEY];const holder={[PLAN_BUDGET_CURRENT_SECTION]:previous};
+ for(const p of [...a.metadataInverse].reverse()){
+  exact(p,['pointer','before','after'],'ONB_METADATA_PATCH');
+  const at=ownPointer(holder,p.pointer),ref=previous.sourceFamilies[Number(p.pointer.split('/')[3])].currentManifest[Number(p.pointer.split('/')[5])],s=sources.get(ref?.path);
+  reject(hash(p.before)&&hash(p.after)&&p.before!==p.after&&at.value===p.after&&s?.status==='MODIFIED'&&p.before===s.previousSha256&&p.after===s.currentSha256,'ONB_METADATA_SOURCE_PIN');
+  at.owner[at.key]=p.before;
+ }
+ for(const dep of a.retainedDependencies){const refs=previous.sourceFamilies.flatMap(family=>family.currentManifest.filter(ref=>ref.path===dep.path));reject(refs.length>0&&refs.every(ref=>ref.sha256===dep.sha256),'ONB_RETAINED_PIN_JOIN');}
+ reject(sha(declaration(previous))===ONB_BASE_REVIEWED,'ONB_WHOLE_REVIEWED_INVERSE');
+ return onbCompiled={advance:a,sources,retained:new Map(a.retainedDependencies.map(row=>[row.path,row])),previous:onbDeepFreeze(previous)};
+}
+const reviewed=onbState()?.previous??reviewedCurrent;
 const expected=structuredClone(reviewed);let compiled=null,ownCompiled=null;
 const OWN_KEY='ownRuntimeDiagnosticAdvance',OWN_BASE_CONTRACT='75140c878ebd4792bf59da6aa4dbc0f2db082963c8518acf867cffc7f78f5ac0',OWN_BASE_REVIEWED='f0c0c1e40171f3ed6d2af16bed2504eaf640ce9dff9995b33bd4c76d90b664da';
 const OWN_WORKSPACE={"path":"src/app/(identity)/cuenta/workspace-client.js","physicalPreviousSha256":"f9acac2e8589afce076c51e07ef2bd4c3a67360faa9970b2cbbd447502c98bc0","metadataPreviousSha256":"2fe5a56a7caf7d46f11e4292d2e145e3e72072198a09f9951ace42c2613e8db9","currentSha256":"e6e3dd6a8a2b4e4e1fb1fd638dcb286c9d5c3844179b6a8a697511556ceb06c2","legacyPins":["f9acac2e8589afce076c51e07ef2bd4c3a67360faa9970b2cbbd447502c98bc0","2fe5a56a7caf7d46f11e4292d2e145e3e72072198a09f9951ace42c2613e8db9","4143cf960157d8bd5f642842ee1672a3555c0e415c3dc4579763e2e8eabf84fb","4f3ccde7f433c98e63f0ada92cd1346f0757bea06ea8bf93abf9ac0ff62b79f8","75ae3226996571c43e5a03f47df2241dc28425a00b804f8eb86600b0ea528858","7f9612e2f92d582b1318c39d542060a9ab3d41df72e20511d659235601f10cb8","943f71658a65f113b98ba4e900be95e1020858ba4d85a4431f1a51926ef597fa","e53ad474a3677243fbcaff6ce526c0983514d42e78c6daf60e73ba06d6f63bec"]},OWN_REUSED_SOURCE_PATHS=["src/app/(identity)/cuenta/participant-kyc-capture.module.css","src/app/(identity)/cuenta/participant-kyc-preanalysis-view.mjs","src/lib/participant-admission.mjs","src/lib/procurement-quantity.js","src/lib/progress-measurement-quantity.js","src/lib/task-progress-measurement.js"],OWN_METADATA_POINTERS=["/evidenceProducers/57/producerSha256","/evidenceProducers/58/producerSha256","/evidenceProducers/60/producerSha256","/evidenceProducers/63/producerSha256","/evidenceProducers/72/producerSha256","/evidenceProducers/73/producerSha256","/extension/proofs/0/sourceFiles","/extension/proofs/1/producerSha256","/extension/proofs/1/sourceFiles","/extension/proofs/13/sourceFiles","/extension/proofs/14/sourceFiles","/extension/proofs/15/sourceFiles","/extension/proofs/18/sourceFiles","/extension/proofs/19/producerSha256","/extension/proofs/19/sourceFiles","/extension/proofs/2/producerSha256","/extension/proofs/2/sourceFiles","/extension/proofs/20/producerSha256","/extension/proofs/20/sourceFiles","/extension/proofs/3/sourceFiles","/extension/proofs/4/producerSha256","/extension/proofs/4/sourceFiles","/extension/proofs/5/producerSha256","/extension/proofs/5/sourceFiles","/extension/proofs/6/producerSha256","/extension/proofs/6/sourceFiles","/extension/proofs/7/producerSha256","/extension/proofs/7/sourceFiles","/packageLockSha256","/planBudgetCurrentRevision/sourceFamilies/0/currentFiles","/planBudgetCurrentRevision/sourceFamilies/0/currentManifest","/planBudgetCurrentRevision/sourceFamilies/1/currentManifest/0/sha256","/planBudgetCurrentRevision/sourceFamilies/1/currentManifest/1/sha256","/planBudgetCurrentRevision/sourceFamilies/1/currentManifest/35/sha256","/planBudgetCurrentRevision/sourceFamilies/1/currentManifest/39/sha256","/planBudgetCurrentRevision/sourceFamilies/1/currentManifest/42/sha256","/planBudgetCurrentRevision/sourceFamilies/1/currentManifest/43/sha256","/planBudgetCurrentRevision/sourceFamilies/10/currentFiles","/planBudgetCurrentRevision/sourceFamilies/10/currentManifest","/planBudgetCurrentRevision/sourceFamilies/11/currentFiles","/planBudgetCurrentRevision/sourceFamilies/11/currentManifest","/planBudgetCurrentRevision/sourceFamilies/12/currentFiles","/planBudgetCurrentRevision/sourceFamilies/12/currentManifest","/planBudgetCurrentRevision/sourceFamilies/13/currentFiles","/planBudgetCurrentRevision/sourceFamilies/13/currentManifest","/planBudgetCurrentRevision/sourceFamilies/14/currentManifest/26/sha256","/planBudgetCurrentRevision/sourceFamilies/14/currentManifest/29/sha256","/planBudgetCurrentRevision/sourceFamilies/14/currentManifest/30/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/0/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/1/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/13/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/2/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/39/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/4/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/43/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/44/sha256","/planBudgetCurrentRevision/sourceFamilies/15/currentManifest/45/sha256","/planBudgetCurrentRevision/sourceFamilies/2/currentFiles","/planBudgetCurrentRevision/sourceFamilies/2/currentManifest","/planBudgetCurrentRevision/sourceFamilies/3/currentFiles","/planBudgetCurrentRevision/sourceFamilies/3/currentManifest","/planBudgetCurrentRevision/sourceFamilies/4/currentFiles","/planBudgetCurrentRevision/sourceFamilies/4/currentManifest","/planBudgetCurrentRevision/sourceFamilies/5/currentFiles","/planBudgetCurrentRevision/sourceFamilies/5/currentManifest","/planBudgetCurrentRevision/sourceFamilies/6/currentFiles","/planBudgetCurrentRevision/sourceFamilies/6/currentManifest","/planBudgetCurrentRevision/sourceFamilies/7/currentManifest/11/sha256","/planBudgetCurrentRevision/sourceFamilies/7/currentManifest/14/sha256","/planBudgetCurrentRevision/sourceFamilies/7/currentManifest/15/sha256","/planBudgetCurrentRevision/sourceFamilies/9/currentFiles","/planBudgetCurrentRevision/sourceFamilies/9/currentManifest"];
@@ -178,10 +226,10 @@ function compile(){
 function section(contract,required=false){reject(plain(contract),'CONTRACT');if(!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){reject(!required,'BUDGET_COMPANION_REQUIRED');return null;}compile();if(same(contract[PLAN_BUDGET_CURRENT_SECTION],expected))return expected;const own=ownState();reject(own&&same(contract[PLAN_BUDGET_CURRENT_SECTION],own.previousQ)&&sha(JSON.stringify(contract,null,2)+'\n')===OWN_BASE_CONTRACT,'IMMUTABLE_COMPANION');return own.previousQ;}
 function previousFiles(files,row){sorted(files);reject(files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256&&row.additions.every(file=>files.includes(file)),'CURRENT_SOURCE_SET_'+row.family);const old=files.filter(file=>!row.additions.includes(file));reject(old.length===row.previousCount&&sha(JSON.stringify(old))===row.previousPathsSha256,'PREVIOUS_SOURCE_SET_'+row.family);return old;}
 // Readonly whole-own projection; physical current authority is authenticated before returning0707 metadata.
-export function restoreOwnRuntimeDiagnosticPreviousContract(contract,readSource){section(contract,true);reject(ownActive(contract),'OWN_ADVANCE_REQUIRED');return ownSourceFrame(contract,readSource,()=>{verifyPlanBudgetCurrentSources(contract,readSource);return ownPreviousContract(contract);});}
+function restoreOwnRuntimeDiagnosticPreviousContract(contract,readSource){section(contract,true);reject(ownActive(contract),'OWN_ADVANCE_REQUIRED');return ownSourceFrame(contract,readSource,()=>{verifyPlanBudgetCurrentSources(contract,readSource);return ownPreviousContract(contract);});}
 // Pure source-history projection only. This authenticates supplied text against
 // the compiled Own journal, never a filesystem or current native/browser proof.
-export function restoreOwnRuntimeDiagnosticPreviousSourceText(contract,path,text){
+function restoreOwnRuntimeDiagnosticPreviousSourceText(contract,path,text){
  if(!ownActive(contract))return text;section(contract,true);ownPreviousContract(contract);
  const source=ownState().sources.get(path);if(!source)return text;
  reject(typeof text==='string'&&Buffer.from(text).toString('utf8')===text,'OWN_SOURCE_TEXT_UTF8');const normalized=text.replaceAll('\r\n','\n');
@@ -190,7 +238,7 @@ export function restoreOwnRuntimeDiagnosticPreviousSourceText(contract,path,text
  reject(Buffer.byteLength(normalized)===source.currentBytes&&sha(normalized)===source.currentSha256,'OWN_SOURCE_TEXT_CURRENT');
  const restored=ownInverseText(normalized,source.inverseHunks);reject(previous(restored),'OWN_SOURCE_TEXT_PREVIOUS');return restored;
 }
-export function restorePlanBudgetPreviousContract(contract){
+function restorePlanBudgetPreviousContract(contract){
  const v=section(contract);if(!v)return contract;const out=structuredClone(ownPreviousContract(contract)),o=v.ownership;delete out[PLAN_BUDGET_CURRENT_SECTION];
  const remove=(array,wanted,reason)=>{reject(Array.isArray(array)&&same(array.at(-1),wanted)&&array.filter(row=>same(row,wanted)).length===1,reason);array.pop();};
  remove(out.blocks,o.block,'BLOCK_APPEND');remove(out.lanes.plans.blocks,66,'LANE_BLOCK_APPEND');remove(out.artifactPatterns,o.retainedArtifact,'GLOBAL_ARTIFACT_APPEND');remove(out.lanes.plans.artifacts,o.retainedArtifact,'LANE_ARTIFACT_APPEND');remove(out.lanes.plans.requiredRetainedEvidence,o.retainedArtifact,'REQUIRED_ARTIFACT_APPEND');remove(out.evidenceProducers,o.producer,'PRODUCER_APPEND');remove(out.extension.proofs,o.proof,'PROOF_APPEND');
@@ -199,9 +247,9 @@ export function restorePlanBudgetPreviousContract(contract){
 }
 // Pin aliases read only the immutable reviewed index. Full contract validation
 // remains mandatory at validate/verify/restore boundaries; caller data is never an oracle.
-export function planBudgetCurrentSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;exact(ref,['path','sha256'],'SOURCE_PIN');const input=ownInputPin(contract,ref.path,ref.sha256),row=compile().refs.get(ref.path);if(row)reject([row.previousSha256,row.currentSha256].filter(Boolean).includes(input),'EXACT_PREVIOUS_CURRENT_PIN_'+ref.path);return ownCurrentPin(contract,ref.path,row?row.currentSha256:input);}
-export function planBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;const input=ownInputPin(contract,ref.path,ref.sha256),row=compile().refs.get(ref.path);return row?.previousSha256&&input===row.currentSha256?row.previousSha256:input;}
-export function restorePlanBudgetSourceSet(contract,family,files){
+function planBudgetCurrentSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;exact(ref,['path','sha256'],'SOURCE_PIN');const input=ownInputPin(contract,ref.path,ref.sha256),row=compile().refs.get(ref.path);if(row)reject([row.previousSha256,row.currentSha256].filter(Boolean).includes(input),'EXACT_PREVIOUS_CURRENT_PIN_'+ref.path);return ownCurrentPin(contract,ref.path,row?row.currentSha256:input);}
+function planBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;const input=ownInputPin(contract,ref.path,ref.sha256),row=compile().refs.get(ref.path);return row?.previousSha256&&input===row.currentSha256?row.previousSha256:input;}
+function restorePlanBudgetSourceSet(contract,family,files){
  if(!section(contract))return files;const row=compile().sets.get(family);
  if(ownActive(contract)){if(!row){const rule=OWN_SOURCE_SET_ADVANCES.find(rule=>rule.family===family),patch=ownState().advance.metadataInverse.find(p=>p.pointer===rule?.pointer);if(patch)reject(same(files,patch.before)||same(files,patch.after),'OWN_TYPED_SOURCE_SET');}files=ownUiSources(family,files).files;}
  if(!row)return files;if(files.length===row.previousCount&&sha(JSON.stringify(files))===row.previousPathsSha256)return[...files];return previousFiles(files,row);
@@ -219,10 +267,159 @@ export function planBudgetProofSourceAdditions(spec){
   const owned=ownUiSources(kind,files);reject(same(owned.files,patch.before)&&same(owned.added,rule.additions),'OWN_TYPED_SOURCE_SET');return [...owned.added].sort();
  }
  sorted(spec.sourceFiles);const owned=ownUiSources(spec.kind,spec.sourceFiles),files=owned.files;if(files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256){previousFiles(files,row);return [...row.additions,...owned.added].sort();}if(files.length===row.previousCount&&sha(JSON.stringify(files))===row.previousPathsSha256)return[];reject(files.length<row.previousCount&&!row.additions.some(file=>files.includes(file)),'UNKNOWN_EARLIER_SOURCE_SET');return[];}
-export function verifyPlanBudgetCurrentSources(contract,readSource){const v=section(contract,true);return ownSourceFrame(contract,readSource,()=>{restorePlanBudgetPreviousContract(contract);reject(read(readSource,anchor).toString()===(ownActive(contract)?compile().text:declaration(v)),'DECLARATION_BYTES');for(const row of v.references)reject(sha(read(readSource,row.path))===ownCurrentPin(contract,row.path,row.currentSha256),'CURRENT_SOURCE_'+row.path);return {completePreviousContractRestored:true,previousContractSha256:previousHash,referenceCount:v.references.length,nativeOrBrowserAcceptance:false};});}
-export function verifyPlanBudgetActualClosure(contract,family,closure,readSource){section(contract,true);return ownSourceFrame(contract,readSource,()=>{restorePlanBudgetPreviousContract(contract);const row=ownCurrentFamily(contract,family);reject(Boolean(row),'EXPLICIT_FAMILY');exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of row.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===(ownActive(contract)?compile().text:declaration(section(contract,true))):sha(bytes)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(row.currentFiles)),nativeOrBrowserAcceptance:false};});}
-export function restorePlanBudgetClosure(contract,family,closure){if(!section(contract))return closure;const row=ownCurrentFamily(contract,family);reject(Boolean(row),'EXPLICIT_FAMILY');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');const previous=compile().families.get(family);return {files:[...previous.previousFiles],externalImports:[...previous.previousExternalImports]};}
-export function planBudgetValidationFiles(contract){const v=section(contract);if(!v)return[];const state=ownActive(contract)?ownState():null;return[...new Set([anchor,...v.references.map(row=>row.path),...(state?[...state.advance.sourceChanges.map(row=>row.path),...state.advance.retainedDependencies.map(row=>row.path),...state.reused.keys()]:[])])].sort();}
-export function planBudgetCurrentBrowserBinding(contract,fallback){const v=section(contract);return v?{...fallback,producerLfSha256:v.browser.producerLfSha256,investmentSourceCount:v.browser.investmentSourceCount,investmentSourcePathsSha256:v.browser.investmentSourcePathsSha256}:fallback;}
-export function planBudgetCompiledProof(contract){const v=section(contract,true);restorePlanBudgetPreviousContract(contract);return structuredClone(v.ownership.proof);}
-export function planBudgetRetainedScreenshotPaths(contract){const v=section(contract,true);return v.browser.retainedScreenshots.map(row=>row.path);}
+function verifyPlanBudgetCurrentSources(contract,readSource){const v=section(contract,true);return ownSourceFrame(contract,readSource,()=>{restorePlanBudgetPreviousContract(contract);reject(read(readSource,anchor).toString()===(ownActive(contract)?compile().text:declaration(v)),'DECLARATION_BYTES');for(const row of v.references)reject(sha(read(readSource,row.path))===ownCurrentPin(contract,row.path,row.currentSha256),'CURRENT_SOURCE_'+row.path);return {completePreviousContractRestored:true,previousContractSha256:previousHash,referenceCount:v.references.length,nativeOrBrowserAcceptance:false};});}
+function verifyPlanBudgetActualClosure(contract,family,closure,readSource){section(contract,true);return ownSourceFrame(contract,readSource,()=>{restorePlanBudgetPreviousContract(contract);const row=ownCurrentFamily(contract,family);reject(Boolean(row),'EXPLICIT_FAMILY');exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of row.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===(ownActive(contract)?compile().text:declaration(section(contract,true))):sha(bytes)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(row.currentFiles)),nativeOrBrowserAcceptance:false};});}
+function restorePlanBudgetClosure(contract,family,closure){if(!section(contract))return closure;const row=ownCurrentFamily(contract,family);reject(Boolean(row),'EXPLICIT_FAMILY');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');const previous=compile().families.get(family);return {files:[...previous.previousFiles],externalImports:[...previous.previousExternalImports]};}
+function planBudgetValidationFiles(contract){const v=section(contract);if(!v)return[];const state=ownActive(contract)?ownState():null;return[...new Set([anchor,...v.references.map(row=>row.path),...(state?[...state.advance.sourceChanges.map(row=>row.path),...state.advance.retainedDependencies.map(row=>row.path),...state.reused.keys()]:[])])].sort();}
+function planBudgetCurrentBrowserBinding(contract,fallback){const v=section(contract);return v?{...fallback,producerLfSha256:v.browser.producerLfSha256,investmentSourceCount:v.browser.investmentSourceCount,investmentSourcePathsSha256:v.browser.investmentSourcePathsSha256}:fallback;}
+function planBudgetCompiledProof(contract){const v=section(contract,true);restorePlanBudgetPreviousContract(contract);return structuredClone(v.ownership.proof);}
+function planBudgetRetainedScreenshotPaths(contract){const v=section(contract,true);return v.browser.retainedScreenshots.map(row=>row.path);}
+
+// ---- Own onboarding adapter facade ---------------------------------------------------------------------------------------
+// The public Budget functions delegate to the unchanged functions above after exact rung handling. Pure metadata calls use the
+// compiled previous declaration once the caller's section is proven identical to the reviewed current one. Calls that read
+// sources authenticate the current RAW bytes first (and again before returning), then hand the Own journal the exact previous
+// contract and a reader exposing the exact previous text of the rung sources. Without the key each function is a pass-through.
+const onbActive=contract=>plain(contract?.[PLAN_BUDGET_CURRENT_SECTION])&&Object.hasOwn(contract[PLAN_BUDGET_CURRENT_SECTION],ONB_KEY);
+function onbSection(contract){
+ const state=onbState();reject(Boolean(state),'ONB_ADVANCE_REQUIRED');
+ onbCurrentJson??=JSON.stringify(reviewedCurrent);
+ reject(JSON.stringify(contract[PLAN_BUDGET_CURRENT_SECTION])===onbCurrentJson,'IMMUTABLE_COMPANION');
+ return state;
+}
+// Pin calls compute only from the private snapshot and never read the caller's section; the previous layers' pins never compared it
+// either. They still reject any active variation of what this rung declares: its exact rung JSON and each of its eighteen manifest
+// cells (path and pin). Every other light call (text restoration, enumeration, source sets, closures, proof DTOs) and every exact call
+// keeps the full section comparison, exactly as the previous layers do. A textual comparison of the 3.5 MB section on each of the
+// thousands of pin calls of the outer verifiers made them several times slower.
+const onbSame=(a,b)=>{
+ if(a===b)return true;
+ if(a===null||b===null||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
+ const ka=Object.keys(a),kb=Object.keys(b);if(ka.length!==kb.length)return false;
+ for(let i=0;i<ka.length;i++)if(ka[i]!==kb[i]||!onbSame(a[ka[i]],b[kb[i]]))return false;
+ return true;
+};
+let onbCells;
+function onbLightSection(contract){
+ const state=onbState();reject(Boolean(state),'ONB_ADVANCE_REQUIRED');
+ const value=contract[PLAN_BUDGET_CURRENT_SECTION];
+ onbCells??=state.advance.metadataInverse.map(p=>{const [,,,f,,m]=p.pointer.split('/');return {f:Number(f),m:Number(m),path:reviewedCurrent.sourceFamilies[Number(f)].currentManifest[Number(m)].path,after:p.after};});
+ reject(onbSame(value[ONB_KEY],reviewedCurrent[ONB_KEY])&&Array.isArray(value.sourceFamilies)&&onbCells.every(c=>{const ref=value.sourceFamilies[c.f]?.currentManifest?.[c.m];return ref?.path===c.path&&ref.sha256===c.after;}),'IMMUTABLE_COMPANION');
+ return state;
+}
+function onbLight(contract,pin=false){return{state:pin?onbLightSection(contract):onbSection(contract),contract:{...contract,[PLAN_BUDGET_CURRENT_SECTION]:expected}};}
+const onbLightOr=contract=>onbActive(contract)?onbLight(contract).contract:contract;
+// The exact previous contract is a single value: once a caller contract has produced it, the identical caller contract (same JSON)
+// yields a fresh copy of the same value without repeating the clone, inverse and whole-contract hash. Any other contract is checked
+// in full, so the result and every rejection reason are unchanged.
+let onbExactKey=null,onbExactJson=null;
+function onbExact(contract,state){
+ const key=JSON.stringify(contract);if(key===onbExactKey)return JSON.parse(onbExactJson);
+ state??=onbSection(contract);
+ const out=structuredClone(contract);delete out[PLAN_BUDGET_CURRENT_SECTION][ONB_KEY];
+ for(const p of [...state.advance.metadataInverse].reverse()){const at=ownPointer(out,p.pointer);reject(at.value===p.after,'ONB_METADATA_CURRENT');at.owner[at.key]=p.before;}
+ reject(sha(JSON.stringify(out,null,2)+'\n')===ONB_BASE_CONTRACT,'OWN_WHOLE_CONTRACT_INVERSE');
+ onbExactKey=key;onbExactJson=JSON.stringify(out);
+ return out;
+}
+const onbLf=raw=>raw.toString('utf8').replaceAll('\r\n','\n');
+function onbRaw(readSource,file,reason){let raw;try{raw=readSource(file);}catch{}reject(Buffer.isBuffer(raw)&&raw.equals(Buffer.from(raw.toString('utf8'))),reason+file);return raw;}
+function onbVerify(readSource,state){
+ const rows=[];
+ for(const s of state.advance.sourceChanges){
+  const raw=onbRaw(readSource,s.path,'ONB_SOURCE_BYTES_'),text=onbLf(raw);
+  reject(Buffer.byteLength(text)===s.currentBytes&&sha(text)===s.currentSha256,'ONB_SOURCE_CURRENT_'+s.path);
+  const prior=ownInverseText(text,s.inverseHunks);reject(Buffer.byteLength(prior)===s.previousBytes&&(s.previousSha256===null?prior==='':sha(prior)===s.previousSha256),'ONB_SOURCE_PREVIOUS_'+s.path);
+  rows.push({path:s.path,raw:Buffer.from(raw)});
+ }
+ for(const r of state.advance.retainedDependencies){const raw=onbRaw(readSource,r.path,'ONB_RETAINED_BYTES_'),text=onbLf(raw);reject(Buffer.byteLength(text)===r.bytes&&sha(text)===r.sha256,'ONB_RETAINED_CURRENT_'+r.path);rows.push({path:r.path,raw:Buffer.from(raw)});}
+ const raw=onbRaw(readSource,anchor,'ONB_DECLARATION_BYTES_');onbCurrentText??=declaration(reviewedCurrent);reject(onbLf(raw)===onbCurrentText,'ONB_DECLARATION_CURRENT');rows.push({path:anchor,raw:Buffer.from(raw)});
+ return rows;
+}
+function onbReader(state,readSource){
+ return file=>{
+  if(file===anchor){onbPreviousText??=declaration(reviewed);return Buffer.from(onbPreviousText);}
+  const source=state.sources.get(file);if(!source||source.status!=='MODIFIED')return readSource(file);
+  let raw;try{raw=readSource(file);}catch{return null;}
+  return Buffer.isBuffer(raw)&&raw.equals(Buffer.from(raw.toString('utf8')))?Buffer.from(ownInverseText(onbLf(raw),source.inverseHunks)):raw;
+ };
+}
+function onbFrame(contract,readSource,run){
+ if(!onbActive(contract))return run(contract,readSource);
+ const state=onbSection(contract),beforeMetadata=JSON.stringify(contract),before=onbVerify(readSource,state);
+ try{return run(onbExact(contract,state),onbReader(state,readSource));}
+ finally{
+  let after,failure;try{after=onbVerify(readSource,state);}catch(error){failure=error;}
+  reject(JSON.stringify(contract)===beforeMetadata,'OWN_CALLER_METADATA_CHANGED');if(failure)throw failure;
+  reject(before.length===after.length&&before.every((row,i)=>row.path===after[i].path&&row.raw.equals(after[i].raw)),'OWN_SOURCE_CHANGED_DURING_CALL');
+ }
+}
+// A retained dependency is authenticated, not advanced, by this rung: Current and Previous accept only its exact declared pin
+// (no alias, no pass-through to the previous layers) and return that same pin.
+function onbRetainedPin(state,ref){
+ exact(ref,['path','sha256'],'SOURCE_PIN');const row=state.retained.get(ref.path);
+ reject(ref.sha256===row.sha256,'ONB_RETAINED_PIN_'+ref.path);return row.sha256;
+}
+// The current pin of a rung path is its rung endpoint. Every input the previous layers accept for that path (and the endpoint
+// itself) joins through the exact previous rung pin, so no alias becomes a direct current pin and no new alias appears.
+function onbCurrentPin(contract,ref){
+ if(!onbActive(contract))return planBudgetCurrentSourcePin(contract,ref);
+ exact(ref,['path','sha256'],'SOURCE_PIN');const{state,contract:prior}=onbLight(contract,true),s=state.sources.get(ref.path);
+ if(!s)return state.retained.has(ref.path)?onbRetainedPin(state,ref):planBudgetCurrentSourcePin(prior,ref);
+ if(s.status==='ADDED'){reject(ref.sha256===s.currentSha256,'ONB_CURRENT_PIN_JOIN');return s.currentSha256;}
+ reject(planBudgetCurrentSourcePin(prior,{path:ref.path,sha256:ref.sha256===s.currentSha256?s.previousSha256:ref.sha256})===s.previousSha256,'ONB_CURRENT_PIN_JOIN');
+ return s.currentSha256;
+}
+function onbPreviousPin(contract,ref){
+ if(!onbActive(contract))return planBudgetPreviousSourcePin(contract,ref);
+ const{state,contract:prior}=onbLight(contract,true),s=state.sources.get(ref?.path);
+ if(!s)return state.retained.has(ref?.path)?onbRetainedPin(state,ref):planBudgetPreviousSourcePin(prior,ref);
+ if(s.status==='ADDED'){reject(ref.sha256===s.currentSha256,'ONB_PREVIOUS_PIN_JOIN');return ref.sha256;}
+ const input=ref.sha256===s.currentSha256?s.previousSha256:ref.sha256;
+ // A path first owned by this rung has no older journal: only its exact previous or current pin is an input.
+ if(!ownState().sources.has(s.path)){reject(input===s.previousSha256,'ONB_PREVIOUS_PIN_JOIN');return s.previousSha256;}
+ return planBudgetPreviousSourcePin(prior,{...ref,sha256:input});
+}
+// Pure source-history projection of a rung path: current text -> exact previous rung text -> older Own journal text.
+function onbRestoreText(contract,path,text){
+ if(!onbActive(contract))return restoreOwnRuntimeDiagnosticPreviousSourceText(contract,path,text);
+ const{state,contract:prior}=onbLight(contract),source=state.sources.get(path);
+ if(!source)return restoreOwnRuntimeDiagnosticPreviousSourceText(prior,path,text);
+ reject(typeof text==='string'&&Buffer.from(text).toString('utf8')===text,'OWN_SOURCE_TEXT_UTF8');
+ const normalized=text.replaceAll('\r\n','\n'),current=Buffer.byteLength(normalized)===source.currentBytes&&sha(normalized)===source.currentSha256;
+ if(source.status==='ADDED'){reject(normalized===''||current,'OWN_SOURCE_TEXT_CURRENT');return'';}
+ const input=current?ownInverseText(normalized,source.inverseHunks):normalized;
+ if(ownState().sources.has(path))return restoreOwnRuntimeDiagnosticPreviousSourceText(prior,path,input);
+ reject(Buffer.byteLength(input)===source.previousBytes&&sha(input)===source.previousSha256,'OWN_SOURCE_TEXT_CURRENT');return input;
+}
+function onbValidationFiles(contract){
+ if(!onbActive(contract))return planBudgetValidationFiles(contract);
+ const{state,contract:prior}=onbLight(contract);
+ return[...new Set([...planBudgetValidationFiles(prior),...state.sources.keys(),...state.retained.keys()])].sort();
+}
+const onbRestorePreviousContract=contract=>restorePlanBudgetPreviousContract(onbActive(contract)?onbExact(contract):contract);
+const onbRestoreOwnContract=(contract,readSource)=>onbFrame(contract,readSource,(prior,reader)=>restoreOwnRuntimeDiagnosticPreviousContract(prior,reader));
+const onbVerifyCurrent=(contract,readSource)=>onbFrame(contract,readSource,(prior,reader)=>verifyPlanBudgetCurrentSources(prior,reader));
+const onbVerifyClosure=(contract,family,closure,readSource)=>onbFrame(contract,readSource,(prior,reader)=>verifyPlanBudgetActualClosure(prior,family,closure,reader));
+const onbRestoreSourceSet=(contract,family,files)=>restorePlanBudgetSourceSet(onbLightOr(contract),family,files);
+const onbRestoreClosure=(contract,family,closure)=>restorePlanBudgetClosure(onbLightOr(contract),family,closure);
+const onbBrowserBinding=(contract,fallback)=>planBudgetCurrentBrowserBinding(onbLightOr(contract),fallback);
+const onbCompiledProof=contract=>planBudgetCompiledProof(onbLightOr(contract));
+const onbScreenshotPaths=contract=>planBudgetRetainedScreenshotPaths(onbLightOr(contract));
+// Exact previous contract (LF 109fcc04...) once the current rung bytes are authenticated; the Own journal is not applied here.
+export function restoreOwnOnboardingAdapterPreviousContract(contract,readSource){reject(onbActive(contract),'ONB_ADVANCE_REQUIRED');return onbFrame(contract,readSource,prior=>prior);}
+export{
+ onbRestoreOwnContract as restoreOwnRuntimeDiagnosticPreviousContract,
+ onbRestoreText as restoreOwnRuntimeDiagnosticPreviousSourceText,
+ onbRestorePreviousContract as restorePlanBudgetPreviousContract,
+ onbCurrentPin as planBudgetCurrentSourcePin,
+ onbPreviousPin as planBudgetPreviousSourcePin,
+ onbRestoreSourceSet as restorePlanBudgetSourceSet,
+ onbVerifyCurrent as verifyPlanBudgetCurrentSources,
+ onbVerifyClosure as verifyPlanBudgetActualClosure,
+ onbRestoreClosure as restorePlanBudgetClosure,
+ onbValidationFiles as planBudgetValidationFiles,
+ onbBrowserBinding as planBudgetCurrentBrowserBinding,
+ onbCompiledProof as planBudgetCompiledProof,
+ onbScreenshotPaths as planBudgetRetainedScreenshotPaths
+};
