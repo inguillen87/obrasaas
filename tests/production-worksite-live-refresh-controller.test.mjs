@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from '../src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs';
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
-function fixture(overrides={}){
+function fixture(overrides={},options={}){
  let time=1800000000000,next=0,visible=true,online=true,source=1,authorityEpoch=0;
  const timers=new Map(),states=[],counts={read:0,apply:0,deny:0};
  const capturedSource=source;
@@ -12,7 +12,7 @@ function fixture(overrides={}){
   isCurrent:stamp=>!spec.blocked&&source===capturedSource&&stamp===authorityEpoch,isAuthorityCurrent:stamp=>source===capturedSource&&stamp===authorityEpoch,
   onAccessRejected:()=>{counts.deny++;spec.enabled=false;},...overrides};
  const controller=createWorksiteLiveRefreshController({contextKey:spec.contextKey,getCurrent:()=>spec,onState:value=>states.push(value),
-  setTimer:(fn,delay)=>{const id=++next;timers.set(id,{fn,due:time+delay,delay});return id;},clearTimer:id=>timers.delete(id),now:()=>time,random:()=>.5,isVisible:()=>visible,isOnline:()=>online});
+  setTimer:(fn,delay)=>{const id=++next;timers.set(id,{fn,due:time+delay,delay});return id;},clearTimer:id=>timers.delete(id),now:()=>time,random:()=>.5,isVisible:()=>visible,isOnline:()=>online,...(options.observedNow?{observedAt:time}:{})});
  return {controller,spec,states,counts,timers,setTime:ms=>{time+=ms;},setVisible:value=>{visible=value;},setOnline:value=>{online=value;},newCanonicalSource:()=>{source++;},bumpAuthorityEpoch:()=>{authorityEpoch++;},
   async fireNext(){const first=[...timers.entries()].sort((a,b)=>a[1].due-b[1].due)[0];if(!first)return;timers.delete(first[0]);time=first[1].due;await first[1].fn();},
   delays:()=>[...timers.values()].map(t=>t.delay)};
@@ -130,4 +130,82 @@ test('completed check formatting remains Argentine and24 hour under three differ
 test('missing noncanonical and impossible check instants never display epoch time or a normalized date',()=>{
  const hostile={toString(){throw Error('No coercion of an unconfirmed instant');}};
  for(const value of [undefined,null,0,NaN,hostile,'','not-an-instant','2026-02-30T21:59:13.000Z','2026-10-20T18:59:13.000-03:00','2026-10-20T21:59:13Z'])assert.equal(worksiteLiveCheckedAtLabel(value),'Fecha y hora sin confirmar');
+});
+
+// Regression: a read cancelled by our own transient lock (for example a sibling panel's
+// initial GET marking the workspace busy) is not an observation. Unlocking must retry at
+// once instead of waiting out the five-second spacing, but repeated cancellation is
+// still spaced so lock flapping cannot become a GET storm.
+test('a read cancelled by a transient lock retries once at unlock; repeated cancellation keeps the five-second spacing',async()=>{
+ const pending=[];let reads=0;
+ const f=fixture({read:signal=>new Promise((resolve,reject)=>{reads++;pending.push(resolve);signal.addEventListener('abort',()=>reject(new DOMException('Consulta cancelada.','AbortError')),{once:true});})});
+ const lock=async(run)=>{f.spec.blocked=true;f.controller.pause();assert.equal(await run,false);f.spec.blocked=false;};
+ const first=f.controller.check();assert.equal(reads,1);await lock(first);
+ f.setTime(150);const second=f.controller.check();assert.equal(reads,2,'The first unlock retries immediately');assert.equal(f.timers.size,1,'Only the 30-second request timeout is armed');
+ await lock(second);f.setTime(150);assert.equal(await f.controller.check(),false);assert.equal(reads,2,'A second cancellation in a row is spaced');assert.deepEqual(f.delays(),[5000]);
+ const third=f.fireNext();assert.equal(reads,3);pending.at(-1)({taskProgress:25});await third;assert.equal(f.counts.apply,1);assert.equal(f.states.at(-1).state,'CURRENT');
+ // A completed observation restores one immediate retry for the next transient lock.
+ f.setTime(6000);const fourth=f.controller.check({manual:true});assert.equal(reads,4);await lock(fourth);f.setTime(100);const fifth=f.controller.check();assert.equal(reads,5);
+ pending.at(-1)({taskProgress:30});assert.equal(await fifth,true);assert.equal(f.counts.apply,2);f.controller.dispose();
+});
+
+test('a request timeout is not a transient lock: the next check keeps the five-second spacing',async()=>{
+ let reads=0;const f=fixture({read:signal=>new Promise((resolve,reject)=>{reads++;signal.addEventListener('abort',()=>reject(new DOMException('Tiempo agotado.','AbortError')),{once:true});})});
+ const run=f.controller.check();assert.equal(reads,1);const timeout=[...f.timers.entries()].find(([,value])=>value.delay===30000);assert.ok(timeout);f.timers.delete(timeout[0]);f.setTime(30000);timeout[1].fn();assert.equal(await run,false);
+ f.timers.clear();f.setTime(-29000);assert.equal(await f.controller.check(),false);assert.equal(reads,1);assert.ok(f.delays().every(delay=>delay>0&&delay<=5000));f.controller.dispose();
+});
+
+
+// Regression: a context that was just read canonically (the schedule after loading or refreshing
+// the obra) must not be read again by the live controller when it activates; the canonical read
+// is the first observation and the first live check keeps the five-second spacing from it.
+test('a context just read canonically is the first observation: activation does not repeat the read',async()=>{
+ const f=fixture({},{observedNow:true});f.controller.start();assert.deepEqual(f.delays(),[5000]);
+ assert.equal(await f.controller.check(),false);assert.equal(f.counts.read,0,'Activation right after the canonical read does not GET again');assert.deepEqual(f.delays(),[5000]);
+ // A transient lock and unlock right after the canonical read still does not repeat it.
+ f.setTime(1200);f.spec.blocked=true;f.controller.pause();f.spec.blocked=false;assert.equal(await f.controller.check(),false);assert.equal(f.counts.read,0);assert.deepEqual(f.delays(),[5000]);
+ await f.fireNext();assert.equal(f.counts.read,1,'The first live check runs once the spacing from the canonical read has elapsed');assert.equal(f.counts.apply,1);assert.deepEqual(f.delays(),[45000]);
+ // Without a canonical observation the activation check is immediate (Decisions has no canonical read).
+ const g=fixture();g.controller.start();assert.equal(await g.controller.check(),true);assert.equal(g.counts.read,1);f.controller.dispose();g.controller.dispose();
+});
+
+
+// Amend regressions: the twenty exact420 tests above remain byte-identical.
+test('slow canonical loading does not consume initial spacing or report a fresh live check',async()=>{
+ const f=fixture({blocked:true},{observedNow:true});f.controller.start();assert.equal(f.timers.size,0);f.setTime(6000);f.spec.blocked=false;assert.equal(await f.controller.check(),false);assert.equal(f.counts.read,0);assert.deepEqual(f.delays(),[5000]);assert.ok(f.states.every(state=>state.state!=='CURRENT'&&state.checkedAt===null));await f.fireNext();assert.equal(f.counts.read,1);assert.equal(f.counts.apply,1);assert.deepEqual(f.delays(),[45000]);f.controller.dispose();
+});
+
+test('unlock before abort settlement queues one retry after releasing in-flight without overlap',async()=>{
+ const pending=[];let reads=0,inflight=0,maximum=0;
+ const f=fixture({read:()=>{reads++;inflight++;maximum=Math.max(maximum,inflight);const value=deferred();pending.push({resolve:body=>{inflight--;value.resolve(body);},reject:error=>{inflight--;value.reject(error);}});return value.promise;}});
+ const first=f.controller.check();f.spec.blocked=true;f.controller.pause();f.spec.blocked=false;await f.controller.check();await f.controller.check();assert.equal(reads,1,'An aborted but unsettled request still owns the flight');pending[0].reject(new DOMException('Controlled delayed abort','AbortError'));await first;assert.equal(reads,2,'The queued retry starts only after the previous promise settles');assert.equal(maximum,1);pending[1].resolve({taskProgress:25});await Promise.resolve();await Promise.resolve();assert.equal(f.counts.apply,1);assert.deepEqual(f.delays(),[45000]);f.controller.dispose();
+});
+
+test('a second queued cancellation keeps spacing and a completed observation restores only one recovery',async()=>{
+ const pending=[];let reads=0;const f=fixture({read:()=>{reads++;const value=deferred();pending.push(value);return value.promise;}});
+ const first=f.controller.check();f.spec.blocked=true;f.controller.pause();f.spec.blocked=false;await f.controller.check();pending[0].reject(new DOMException('First delayed abort','AbortError'));await first;assert.equal(reads,2);
+ f.setTime(100);f.spec.blocked=true;f.controller.pause();f.spec.blocked=false;await f.controller.check();pending[1].reject(new DOMException('Second delayed abort','AbortError'));await Promise.resolve();await Promise.resolve();assert.equal(reads,2);assert.deepEqual(f.delays(),[5000]);
+ const third=f.fireNext();assert.equal(reads,3);pending[2].resolve({taskProgress:25});await third;assert.equal(f.counts.apply,1);assert.deepEqual(f.delays(),[45000]);f.controller.dispose();
+});
+
+test('a queued retry never outruns a current403 received while the old flight settles',async()=>{
+ const pending=deferred();let reads=0;const f=fixture({read:()=>{reads++;return pending.promise;}});const first=f.controller.check();f.spec.blocked=true;f.controller.pause();f.spec.blocked=false;await f.controller.check();pending.reject(Object.assign(new Error('Current revoked access'),{status:403}));await first;assert.equal(reads,1);assert.equal(f.counts.deny,1);assert.equal(f.counts.apply,0);assert.equal(f.timers.size,0);assert.equal(f.states.at(-1).state,'ACCESS');f.controller.dispose();
+});
+
+test('queued abort retries disappear after dispose context rotation or a newly blocked draft',async()=>{
+ for(const mode of ['dispose','context','draft']){const pending=deferred();let reads=0;const f=fixture({read:()=>{reads++;return pending.promise;}});const first=f.controller.check();f.spec.blocked=true;f.controller.pause();f.spec.blocked=false;await f.controller.check();if(mode==='dispose')f.controller.dispose();if(mode==='context')f.spec.contextKey='new-scope:project:generation';if(mode==='draft')f.spec.blocked=true;pending.reject(new DOMException('Controlled late abort','AbortError'));await first;assert.equal(reads,1,mode);assert.equal(f.counts.apply,0,mode);assert.equal(f.timers.size,0,mode);f.controller.dispose();}
+});
+
+test('a queued explicit check after timeout keeps the normal start clock rather than lock-recovery credit',async()=>{
+ const pending=deferred();let reads=0;const f=fixture({read:()=>{reads++;return pending.promise;}});const first=f.controller.check();const entry=[...f.timers.entries()].find(([,timer])=>timer.delay===30000);assert.ok(entry);f.timers.delete(entry[0]);f.setTime(30000);entry[1].fn();f.setTime(-29000);await f.controller.check({manual:true});pending.reject(new DOMException('Controlled delayed timeout','AbortError'));await first;assert.equal(reads,1);assert.deepEqual(f.delays(),[5000]);assert.equal(f.counts.apply,0);f.controller.dispose();
+});
+
+
+test('accepted403 closes queued and scheduled polls before an asynchronous React owner updates enabled',async()=>{
+ const pending=deferred();let reads=0,denials=0;const f=fixture({read:()=>{reads++;return pending.promise;},onAccessRejected:()=>{denials++;}});const first=f.controller.check();f.spec.blocked=true;f.controller.pause();f.spec.blocked=false;await f.controller.check();pending.reject(Object.assign(new Error('Revoked before owner commit'),{status:403}));await first;await Promise.resolve();assert.equal(f.spec.enabled,true,'This fixture deliberately models the pre-commit React window');assert.equal(reads,1);assert.equal(denials,1);assert.equal(f.counts.apply,0);assert.equal(f.timers.size,0);assert.equal(f.states.at(-1).state,'ACCESS');for(let i=0;i<3;i++){f.controller.environmentChanged();await f.controller.check({manual:true});}f.controller.start();f.controller.pause();assert.equal(reads,1,'Manual and focus cannot reopen accepted access before the owner commits');assert.equal(f.timers.size,0);assert.equal(f.states.at(-1).state,'ACCESS');f.controller.dispose();const next=fixture();assert.equal(await next.controller.check({manual:true}),true,'A new controller instance may observe its own current context');next.controller.dispose();
+});
+
+
+test('a superseded authority denial or rejected owner callback never latches ACCESS for the current context',async()=>{
+ for(const mode of ['stale-authority','owner-rejected']){const pending=deferred();let reads=0;const f=fixture({read:()=>{reads++;return pending.promise;},isAuthorityCurrent:()=>mode!=='stale-authority',onAccessRejected:()=>false});const first=f.controller.check();pending.reject(Object.assign(new Error('Not a current accepted denial'),{status:403}));await first;assert.ok(f.states.every(state=>state.state!=='ACCESS'));f.spec.isAuthorityCurrent=()=>true;f.spec.read=async()=>{reads++;return{taskProgress:30};};f.setTime(6000);assert.equal(await f.controller.check({manual:true}),true,mode);assert.equal(reads,2);assert.equal(f.counts.apply,1);f.controller.dispose();}
 });

@@ -120,7 +120,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  useLayoutEffect(()=>{onboardingContext.current=account&&view?{scope:account.scope,projectId:view.project.id,generation:observationEpoch,canManageIntegrations:account.canManageIntegrations===true}:null;return()=>{onboardingContext.current=null;};},[account,view,observationEpoch]);
  const channelObserved=useCallback(value=>{const context=onboardingContext.current;if(!context||value.scope!==context.scope||value.projectId!==context.projectId||value.observedGeneration!==context.generation)return;setChannelSnapshot(value.snapshot?{...value.snapshot,observedGeneration:value.observedGeneration}:null);},[]);
  const navigateOnboarding=useCallback(value=>{identityNavigation.current=null;identityNavigationEpoch.current++;const id=participantOnboardingNavigationTarget(value,onboardingContext.current);if(!id)return;revealWorkspaceDestination(id);const target=document.getElementById(id);if(!target?.getClientRects().length)return;target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});},[]);
- const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
+ const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({}),[moduleReported,setModuleReported]=useState({});
  const [taskPageReadSnapshot,setTaskPageReadSnapshot]=useState(null);
  const taskPager=useRef(null),taskPageContext=useRef(null),taskReadBusy=useRef({});
  const taskReadKey=[account?.scope||'',view?.project?.id||'',account?.role||'',observationEpoch].join(':');
@@ -134,7 +134,13 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  const planReadbackMatches=Boolean(planReadback&&planReadback.scope===account?.scope&&planReadback.projectId===view?.project.id);
  const planReadbackPending=planReadbackMatches&&planReadback.status==='pending';
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
- const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending||taskPageRead.loading;
+ // These panels start with their own read and report it from an effect, one render after they mount.
+ // Until the mounted panel has reported, it counts as pending: otherwise a live read starts in that
+ // render and the lock cancels it in the next one, which costs a second GET once it unlocks.
+ const preparationPanelKey=view&&['ADMIN','DIRECTOR'].includes(account?.role)?`project-preparation:${account.scope}:${view.project.id}:${observationEpoch}`:'';
+ const creationPanelKey=view&&account?.role==='ADMIN'?`project-creation:${account.scope}:${view.project.id}:${observationEpoch}`:'';
+ const modulesUnreported=Boolean(preparationPanelKey&&moduleReported.projectPreparation!==preparationPanelKey||creationPanelKey&&moduleReported.projectCreation!==creationPanelKey);
+ const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending||taskPageRead.loading||modulesUnreported;
  const inventoryInteractionBlocked=loading||saving||Boolean(attempt)||creatingTask||Boolean(draft)||planReadbackPending||taskPageRead.loading||Object.entries(modulePending).some(([name,pending])=>name!=='inventory'&&pending);
  // Publish before paint so the global organization selector respects this lock.
  useLayoutEffect(()=>()=>onContextPending?.(false),[onContextPending]);
@@ -191,9 +197,9 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  const planPending=useCallback(value=>setModulePending(old=>old.plan===value?old:{...old,plan:value}),[]);
  const planMeasurementPending=useCallback(value=>setModulePending(old=>old.planMeasurement===value?old:{...old,planMeasurement:value}),[]);
  const baselinePending=useCallback(value=>setModulePending(old=>old.baseline===value?old:{...old,baseline:value}),[]);
- const projectPreparationPending=useCallback(value=>setModulePending(old=>old.projectPreparation===value?old:{...old,projectPreparation:value}),[]);
+ const projectPreparationPending=useCallback(value=>{setModuleReported(old=>old.projectPreparation===preparationPanelKey?old:{...old,projectPreparation:preparationPanelKey});setModulePending(old=>old.projectPreparation===value?old:{...old,projectPreparation:value});},[preparationPanelKey]);
  const officePending=useCallback(value=>setModulePending(old=>old.office===value?old:{...old,office:value}),[]);
- const projectCreationPending=useCallback(value=>setModulePending(old=>old.projectCreation===value?old:{...old,projectCreation:value}),[]);
+ const projectCreationPending=useCallback(value=>{setModuleReported(old=>old.projectCreation===creationPanelKey?old:{...old,projectCreation:creationPanelKey});setModulePending(old=>old.projectCreation===value?old:{...old,projectCreation:value});},[creationPanelKey]);
  const projectCreated=useCallback(result=>{
   if(!mounted.current||projectCreationReceiptOutcome(result,result)?.state!=='RECORDED')return;
   setAccount(previous=>previous?.scope===result.scope&&previous.role==='ADMIN'&&previous.officeReviewOnly!==true&&previous.projects.some(project=>project.id===result.projectId)&&result.newProject.status==='ACTIVE'?{...previous,projects:[...previous.projects.filter(project=>project.id!==result.newProject.id),result.newProject].sort((a,b)=>a.id.localeCompare(b.id))}:previous);
@@ -272,6 +278,8 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  useLayoutEffect(()=>{scheduleLiveContext.current={account,view,generation:observationEpoch,blocked:contextLocked||loading,section:activeSection};});
  const scheduleLive=useWorksiteLiveRefresh({
   contextKey:[account?.scope||'',view?.project.id||'',observationEpoch,'schedule'].join(':'),
+  // Keep initial live spacing after this canonical context first becomes eligible, including slow readback.
+  canonicalRead:true,
   enabled:Boolean(view&&account?.officeReviewOnly!==true&&['inicio','cronograma'].includes(activeSection)),
   blocked:contextLocked||loading,
   read:async signal=>{
