@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,restoreOwnRuntimeDiagnosticPreviousContract,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePilotCompletionPreviousSourceSet,PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,restoreOwnRuntimeDiagnosticPreviousContract,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -19,16 +19,17 @@ function assertCurrentNativeGraph(family,close){
   const {priorCount,publishedCount}=reviewed,actual=close(read),value=contract(),before=JSON.stringify(actual),delta=value[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family);
   assert.equal(delta.previousCount,priorCount);assert.equal(delta.currentCount,priorCount+1);assert.deepEqual(delta.additions,['src/lib/field-hours-report.mjs']);
   verifyPlanBudgetCurrentSources(value,read);
+  assert.equal(verifyWorksiteLiveHoursActualClosure(value,family,actual,read).nativeOrBrowserAcceptance,false);
+  const pilotPreviousFiles=restorePilotCompletionPreviousSourceSet(value,family,actual.files);
   const budgetDelta=value[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family),beforeBudget=restorePlanBudgetSourceSet(value,family,actual.files);
   assert.deepEqual(budgetDelta.additions,['src/lib/plan-budget-source.mjs']);
   const ownBase=restoreOwnRuntimeDiagnosticPreviousContract(value,read),beforeOwn=ownBase[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family).currentFiles,git67=[...beforeOwn,'src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'].sort();
-  assert.equal(beforeOwn.length,reviewed.beforeOwnCount);assert.equal(git67.length,reviewed.baselineCount);assert.equal(sha(JSON.stringify(git67)),reviewed.baselineHash);assert.deepEqual(actual.files,[...git67,...reviewed.additions].sort());assert.equal(actual.files.length,reviewed.currentCount);assert.equal(sha(JSON.stringify(actual.files)),reviewed.currentHash);
+  assert.equal(beforeOwn.length,reviewed.beforeOwnCount);assert.equal(git67.length,reviewed.baselineCount);assert.equal(sha(JSON.stringify(git67)),reviewed.baselineHash);assert.deepEqual(pilotPreviousFiles,[...git67,...reviewed.additions].sort());assert.equal(pilotPreviousFiles.length,reviewed.currentCount);assert.equal(sha(JSON.stringify(pilotPreviousFiles)),reviewed.currentHash);
   for(const file of reviewed.additions){const row=value[PLAN_BUDGET_CURRENT_SECTION].ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);assert.equal(sha(read(file).toString('utf8').replaceAll('\r\n','\n')),row.currentSha256);}
   assert.equal(beforeOwn.length,budgetDelta.currentCount);assert.equal(sha(JSON.stringify(beforeOwn)),budgetDelta.currentPathsSha256);assert.deepEqual(beforeOwn,[...beforeBudget,...budgetDelta.additions].sort());
   assert.equal(beforeBudget.length,delta.currentCount);assert.equal(sha(JSON.stringify(beforeBudget)),delta.currentPathsSha256);
   const previous=restoreWorksiteLiveHoursSourceSet(value,family,actual.files);assert.equal(previous.length,priorCount);assert.equal(sha(JSON.stringify(previous)),delta.previousPathsSha256);assert.deepEqual([...previous,...delta.additions].sort(),beforeBudget);
   assert.equal(participantPreanalysisConsumerSourceFiles(family,actual.files,read).length,publishedCount);
-  assert.equal(verifyWorksiteLiveHoursActualClosure(value,family,actual,read).nativeOrBrowserAcceptance,false);
   assert.throws(()=>close(file=>file===reviewed.missing?null:read(file)),error=>error?.code===reviewed.missingCode&&error.message===reviewed.missingMessage);
   const changed=Buffer.concat([read(reviewed.missing),Buffer.from('\n// changed current KYC dependency\n')]);rejected(()=>verifyWorksiteLiveHoursActualClosure(value,family,actual,file=>file===reviewed.missing?changed:read(file)));
   const foreign='src/lib/foreign-current-kyc.mjs';rejected(()=>verifyWorksiteLiveHoursActualClosure(value,family,{...actual,files:[...actual.files,foreign].sort()},file=>file===foreign?read(reviewed.missing):read(file)));

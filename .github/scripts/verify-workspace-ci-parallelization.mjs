@@ -1033,6 +1033,23 @@ function planBaselineSelftest(workflow,contract,root){
  }
  return checks;
 }
+// Only the authenticated complete current identity spec may select its predecessor's metadata.
+// The caller still enumerates and hashes the actual current producer and fixture graph.
+export function identityProducerPredecessorSpec(spec,readSource){
+ if(typeof readSource!=='function'||!isIdentity(spec)||spec.id!=='identity-only-ui'||spec.producer!=='scripts/verify-workspace-identity-only-ui.mjs')deny('PROOF_IDENTITY_CURRENT_SPEC');
+ const rawMetadata=readSource(contractPath),rawProducer=readSource(spec.producer);
+ if(!Buffer.isBuffer(rawMetadata)||!Buffer.isBuffer(rawProducer))deny('PROOF_IDENTITY_CURRENT_SOURCE');
+ const metadata=Buffer.from(rawMetadata),producer=Buffer.from(rawProducer),before=canonical(spec);
+ let contract;try{contract=JSON.parse(metadata.toString('utf8'));}catch{deny('PROOF_IDENTITY_CURRENT_SPEC');}
+ const current=contract.extension?.proofs?.find(row=>row.id===spec.id&&row.kind===spec.kind);
+ equal(spec,current,'PROOF_IDENTITY_CURRENT_SPEC');
+ verifyPlanBudgetCurrentSources(contract,readSource);
+ const previous=restorePilotCompletionPreviousProofSpec(spec);
+ if(canonical(spec)!==before)deny('PROOF_IDENTITY_CURRENT_SPEC');
+ const afterMetadata=readSource(contractPath),afterProducer=readSource(spec.producer);
+ if(!Buffer.isBuffer(afterMetadata)||!Buffer.isBuffer(afterProducer)||!afterMetadata.equals(metadata)||!afterProducer.equals(producer))deny('PROOF_IDENTITY_CURRENT_SOURCE');
+ return previous;
+}
 export function currentProducerSourceFiles(spec,root){
  if(spec.kind===PLAN_BUDGET_CI_KIND)return planBudgetUiSourceBinding(file=>readFileSync(path.join(root,file))).sourceManifest.map(row=>row.path);
  if(spec.kind==='PG_COMPANY_KYC'){
@@ -1055,10 +1072,15 @@ export function currentProducerSourceFiles(spec,root){
  };
  if(spec.kind==='UNIT')return bankUnitSourceFiles(root);
  if(isIdentity(spec)){
-  const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);const destination=spec.producerSha256===IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.producerDelta.currentProducerSha256;equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs',...(destination?IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.copyGraphAdditions:[])],'PROOF_IDENTITY_SOURCE_ROOTS');
+  const readCurrent=file=>readFileSync(path.join(root,file)),previousSpec=identityProducerPredecessorSpec(spec,readCurrent);
+  if(readCurrent(spec.producer).toString('utf8')!==text)deny('PROOF_IDENTITY_CURRENT_SOURCE');
+  const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);const destination=previousSpec.producerSha256===IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.producerDelta.currentProducerSha256;equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs',...(destination?IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.copyGraphAdditions:[])],'PROOF_IDENTITY_SOURCE_ROOTS');
   assert.equal(text.split("import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';").length,2,'One explicit closed subscription fixture import');
   assert.equal(text.split("pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');").length,2,'One exact closed subscription fixture dependency graph');
-  return walk([...seeds,COMPANY_SUBSCRIPTION_UI_FIXTURE]);
+  const files=walk([...seeds,COMPANY_SUBSCRIPTION_UI_FIXTURE]);
+  identityProducerPredecessorSpec(spec,readCurrent);
+  if(readCurrent(spec.producer).toString('utf8')!==text)deny('PROOF_IDENTITY_CURRENT_SOURCE');
+  return files;
  }
  if(spec.kind==='PORTFOLIO_UNIT')return portfolioUnitSourceFiles(root);
  if(['UI_PORTFOLIO','UI_PREPARATION','UI_INTAKE'].includes(spec.kind)){assert.equal(text.split("from './lib/plan-document-curve-fixture-copy.mjs'").length,2,'One actual reviewed copier helper import');assert.equal(text.split('copyPlanDocumentCurveFixture({').length,2,'One actual reviewed copier call');}

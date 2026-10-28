@@ -76,7 +76,7 @@ function KycPhotoPreparationInner({kind,disabled,active=true,onChange}){
  const editing=<><button type="button" disabled={disabled||phase==='USING'} onClick={()=>prepare(original.current,(photo.rotation+90)%360)}>Girar 90°</button><button type="button" disabled={disabled||phase==='USING'} onClick={reset}>Descartar fotografía</button></>;
  return <fieldset className={styles.photo} aria-label={title}>
   <legend>{title}</legend>
-  <p>{documentPhoto?'Fotografiá el '+(kind==='back'?'dorso':'frente')+' completo, con luz pareja y sin reflejos. Revisá que se lean los datos.':'Mirando a la cámara, con luz de frente y el rostro completo. Esta foto se presenta para revisión humana.'}</p>
+  <p>{documentPhoto?'Fotografiá el '+(kind==='back'?'dorso':'frente')+' sobre un fondo que contraste. Mostrá sus cuatro bordes completos y dejá un pequeño margen de fondo alrededor, sin recortar. Usá luz pareja y sin reflejos. Revisá que se lean los datos.':'Mirando a la cámara, con luz de frente y el rostro completo. Esta foto se presenta para revisión humana.'}</p>
   {phase!=='ACCEPTED'&&picker}
   <div className={styles.cameraBox} hidden={!cameraOpen} aria-label={'Cámara: '+title.toLowerCase()}>
    <div className={styles.cameraViewport}><video ref={video} autoPlay playsInline muted className={styles.cameraVideo} data-mirrored={!documentPhoto} aria-label={'Vista previa de cámara: '+title.toLowerCase()}/><span className={documentPhoto?styles.cameraDocumentFrame:styles.cameraFaceFrame} aria-hidden="true"/></div>

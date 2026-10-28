@@ -6,6 +6,7 @@ import {createServer} from 'node:net';
 import {spawn,execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+import {PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION} from '../src/lib/participant-analysis-consent.mjs';
 import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
 
 // Actual account/private identity components, isolated synthetic session/API.
@@ -48,7 +49,7 @@ function pinFixtureGraph(relative){
   assert.ok(resolved,'Missing fixture source dependency '+match[1]);pinFixtureGraph(path.relative(root,resolved));
  }
 }
-pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');
+pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');pinFixtureGraph('src/lib/participant-analysis-consent.mjs');
 function copyGraph(relative){
  relative=relative.split(/[\\/]/).join('/');
  if(copied.has(relative))return;assert.ok(relative.startsWith('src'+path.sep)||relative.startsWith('src/'));
@@ -184,17 +185,17 @@ async function createPage(width,current,sharedContext=null,{initialPath=''}={}){
    }
    if(url.pathname==='/api/identity/participants'){
     assert.equal(scope,scopeA);assert.ok(['p-a','p-a2'].includes(projectId));
-    if(projectId==='p-a2'){assert.equal(request.method(),'GET');assert.equal(url.searchParams.has('operationId'),false);return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[{...current.row,id:'worker-second',name:'Perfil propio de segunda obra',kyc:current.secondKycApproved?current.row.kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}});}
+    if(projectId==='p-a2'){assert.equal(request.method(),'GET');assert.equal(url.searchParams.has('operationId'),false);return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[{...current.row,id:'worker-second',name:'Perfil propio de segunda obra',kyc:current.secondKycApproved?current.row.kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},privateBiometricNotice:{version:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,text:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE}});}
     if(current.mode==='revoked-own')return answer(request,403,{code:'PARTICIPANT_ACCESS_REQUIRED'});
     if(request.method()==='POST'){
-     assert.equal(payload.action,undefined);assert.equal(payload.scope,scopeA);assert.equal(payload.workerId,'worker-fixture');assert.equal(payload.consent,true);assert.match(payload.front,/^data:image\/png;base64,/);assert.match(payload.selfie,/^data:image\/png;base64,/);
+     assert.equal(payload.action,undefined);assert.equal(payload.scope,scopeA);assert.equal(payload.workerId,'worker-fixture');assert.equal(payload.consent,true);assert.equal(payload.noticeVersion,PARTICIPANT_NOTICE_VERSION);assert.equal(payload.biometricNoticeVersion,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION);assert.equal(payload.biometricMode,'MANUAL');assert.equal(payload.biometricConsent,false);assert.notEqual(payload.ocrConsent,true);assert.match(payload.front,/^data:image\/png;base64,/);assert.match(payload.selfie,/^data:image\/png;base64,/);
      current.posts.push(payload);current.row={...current.row,kyc:{...current.row.kyc,status:'PENDING_REVIEW',submissionId:'kyc-fixture',submittedAt:'2026-10-07T12:00:00Z'}};
      current.receipts.set(payload.operationId,{scope,projectId,state:'RECORDED',saved:true,replayed:true,receiptId:'participant_'+payload.operationId,participant:current.row});
      return answer(request,503,{code:'PARTICIPANT_OPERATION_UNCONFIRMED'});
     }
     if(url.searchParams.has('operationId')){const id=url.searchParams.get('operationId');current.receiptQueries.push(id);assert.ok(current.receipts.has(id));return answer(request,200,current.receipts.get(id));}
     if(current.destinationHoldProfile===true)await new Promise(resolve=>(current.destinationHeldProfile??=[]).push(resolve));
-    return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[current.row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}});
+    return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[current.row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},privateBiometricNotice:{version:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,text:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE}});
    }
    if(url.pathname==='/api/identity/portfolio-overview')return answer(request,200,{scope,records:[],nextCursor:null});
    // No operational module may fetch during the private-only state.
@@ -212,16 +213,21 @@ function safeReferences(value,expected){
 async function waitRecordedTask(page,label){
  await page.waitForFunction(text=>document.querySelector('[data-schedule-workbench]')?.textContent.includes(text),{timeout:15000},label);
 }
-async function prepareOwn(page,{consult=true}={}){
+async function prepareOwn(page,{consult=true,current}={}){
+ assert.ok(current,'An own presentation fixture requires its controlled request ledger');const beforePosts=current.posts.length;
  if(consult)await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');
  for(const [title,label]of [['Frente del documento','Usar documento revisado'],['Fotografía del rostro','Usar fotografía revisada']]){
   const selector='fieldset[aria-label="'+title+'"]';await (await page.$(selector+' input[type=file]')).uploadFile(picturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());await click(page,label);
   await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Imagen revisada y lista'),{},title);
   if(title==='Frente del documento'){await click(page,'Continuar al dorso');await click(page,'Continuar sin dorso');}
  }
- await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo presentar estas imágenes')).querySelector('input').click());
+ const capture='[data-kyc-capture-step="3"]',labels=['Enviar para verificar','Solicitar revisión sin comparación facial'];
+ const choices=await page.$eval(capture,(root,labels)=>({requiredChecks:root.querySelectorAll('input[type=checkbox][required]').length,radios:root.querySelectorAll('input[type=radio]').length,buttons:labels.map(label=>{const button=[...root.querySelectorAll('button')].find(node=>node.textContent.trim()===label);return button?{label,type:button.type,disabled:button.disabled}:null;})}),labels);
+ assert.deepEqual(choices,{requiredChecks:0,radios:0,buttons:labels.map(label=>({label,type:'button',disabled:false}))});assert.equal(current.posts.length,beforePosts,'Preparing photos never chooses or submits a final action');
+ const previews=await page.$$eval('form fieldset img',nodes=>nodes.map(node=>node.src));
+ await page.$eval('[aria-labelledby="participant-title"] form',form=>form.requestSubmit());await waitText(page,'Elegí una de las dos opciones de envío para presentar las imágenes.');assert.equal(current.posts.length,beforePosts,'Implicit form submission must not authorize identity or comparison');assert.deepEqual(await page.$$eval('form fieldset img',nodes=>nodes.map(node=>node.src)),previews);
 }
-async function presentOwn(page){await prepareOwn(page);await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');
+async function presentOwn(page,current){await prepareOwn(page,{current});await click(page,'Solicitar revisión sin comparación facial');await waitText(page,'El resultado quedó sin confirmar');
 }
 async function privateFlow(width,{reload=false,director=false}={}){
  const current=newState(director?'director':'pending'),{context,page}=await createPage(width,current);
@@ -229,7 +235,7 @@ async function privateFlow(width,{reload=false,director=false}={}){
  const privateScreenshot=path.join(evidence,'identity-private-'+width+(reload?'-reload':director?'-director':'')+'.png');await page.screenshot({path:privateScreenshot,fullPage:true});screenshots.push(path.relative(root,privateScreenshot).split(path.sep).join('/'));
  assert.deepEqual(current.requests.map(row=>row.path),['/api/identity/workspace','/api/identity/workspace','/api/identity/participants']);
  assert.deepEqual(current.requests.at(-1),{path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null});
- await presentOwn(page);await identityOnly(page);safeReferences(await references(page),1);assert.equal(current.posts.length,1);
+ await presentOwn(page,current);await identityOnly(page);safeReferences(await references(page),1);assert.equal(current.posts.length,1);
  assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/participants'].includes(row.path)));
  if(reload){await page.reload({waitUntil:'networkidle0'});assert.equal(current.acceptedReloadWarning,true);await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await identityOnly(page);await waitText(page,'Comprobar el mismo intento');assert.equal(current.receiptQueries.length,0);safeReferences(await references(page),1);}
  await click(page,'Comprobar el mismo intento');await waitText(page,reload?'Recibo confirmado':'Operación guardada con recibo');assert.equal(current.posts.length,1);assert.deepEqual(current.receiptQueries,[current.posts[0].operationId]);safeReferences(await references(page),0);
@@ -474,10 +480,10 @@ async function destinationOperationalAppend(page,current){
 }
 
 async function destinationPrivateDraft(page,current){
- await chooseWorkspaceView(page,'participant-title');await prepareOwn(page,{consult:false});const original=await page.$('[aria-labelledby="participant-title"] form'),images=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));assert.equal(images.length,2);
- const observe=async()=>{const facts=await page.evaluate(form=>{const capture=form.querySelector('[data-kyc-capture-step]'),choice=[...capture.querySelectorAll('label')].find(node=>node.textContent.includes('Leí el aviso y autorizo presentar estas imágenes'))?.querySelector('input');return {step:Number(capture.dataset.kycCaptureStep),consent:choice?.checked===true,formMounted:form.isConnected,formVisible:form.getClientRects().length>0,sameForm:form===document.querySelector('[aria-labelledby="participant-title"] form'),imageCount:form.querySelectorAll('fieldset img').length};},original);const next=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));return {...facts,sameImages:JSON.stringify(next)===JSON.stringify(images)};};
+ await chooseWorkspaceView(page,'participant-title');await prepareOwn(page,{consult:false,current});const original=await page.$('[aria-labelledby="participant-title"] form'),images=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));assert.equal(images.length,2);
+ const observe=async()=>{const facts=await page.evaluate(form=>{const capture=form.querySelector('[data-kyc-capture-step]'),labels=['Enviar para verificar','Solicitar revisión sin comparación facial'];return {step:Number(capture.dataset.kycCaptureStep),requiredChecks:capture.querySelectorAll('input[type=checkbox][required]').length,radios:capture.querySelectorAll('input[type=radio]').length,finalActions:labels.map(label=>{const button=[...capture.querySelectorAll('button')].find(node=>node.textContent.trim()===label);return button?{label,type:button.type,disabled:button.disabled}:null;}),formMounted:form.isConnected,formVisible:form.getClientRects().length>0,sameForm:form===document.querySelector('[aria-labelledby="participant-title"] form'),imageCount:form.querySelectorAll('fieldset img').length};},original);const next=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));return {...facts,sameImages:JSON.stringify(next)===JSON.stringify(images)};};
  const before=await observe();await chooseWorkspaceView(page,'worker-channel-title');const hidden=await observe();await chooseWorkspaceView(page,'participant-title');const after=await observe();
- for(const row of [before,hidden,after]){assert.equal(row.step,3);assert.equal(row.consent,true);assert.equal(row.formMounted,true);assert.equal(row.sameForm,true);assert.equal(row.imageCount,2);assert.equal(row.sameImages,true);}assert.equal(before.formVisible,true);assert.equal(hidden.formVisible,false);assert.equal(after.formVisible,true);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);await click(page,'Cancelar');await original.dispose();await chooseWorkspaceView(page,'worker-channel-title');return {syntheticImagesOnly:true,submitted:false,before,hidden,after};
+ for(const row of [before,hidden,after]){assert.equal(row.step,3);assert.equal(row.requiredChecks,0);assert.equal(row.radios,0);assert.deepEqual(row.finalActions,['Enviar para verificar','Solicitar revisión sin comparación facial'].map(label=>({label,type:'button',disabled:false})));assert.equal(row.formMounted,true);assert.equal(row.sameForm,true);assert.equal(row.imageCount,2);assert.equal(row.sameImages,true);}assert.equal(before.formVisible,true);assert.equal(hidden.formVisible,false);assert.equal(after.formVisible,true);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);await click(page,'Cancelar');await original.dispose();await chooseWorkspaceView(page,'worker-channel-title');return {syntheticImagesOnly:true,submitted:false,before,hidden,after};
 }
 async function destinationGuideHistory(width){
  const {current,context,page}=await startPrivacy(width,'NOT_SUBMITTED');const before=destinationNetwork(current);await privacyDisclosure(page,false);

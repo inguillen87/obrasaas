@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePilotCompletionPreviousSourceSet,verifyPlanBudgetActualClosure,PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -75,8 +75,10 @@ test('a foreign old49 pin or omitted duplicate and unreviewed delta cannot resea
 });
 
 test('UI node runtime17 restores the exact old14 without altering original manifests',()=>{
- const contract=current(),files=planMeasurementUiSourceClosure(read,{runtime:true}).files,before=JSON.stringify(files),restored=restoreDocumentTaskAssociationSourceSet('MEASUREMENT_UI_RUNTIME',files,contract);
- const beforeBudget=restorePlanBudgetSourceSet(contract,'MEASUREMENT_UI_RUNTIME',files),budget=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='MEASUREMENT_UI_RUNTIME');assert.equal(beforeBudget.length,17);assert.equal(sha(JSON.stringify(beforeBudget)),budget.previousPathsSha256);assert.deepEqual(files,[...beforeBudget,...budget.additions].sort());assert.equal(restored.length,14);assert.equal(sha(JSON.stringify(restored)),measurement.runtimePreviousPathsSha256);assert.equal(JSON.stringify(files),before);
+ const contract=current(),closure=planMeasurementUiSourceClosure(read,{runtime:true}),files=closure.files,before=JSON.stringify(files);
+ assert.equal(verifyPlanBudgetActualClosure(contract,'MEASUREMENT_UI_RUNTIME',closure,read).sourceCount,files.length);
+ const pilotPreviousFiles=restorePilotCompletionPreviousSourceSet(contract,'MEASUREMENT_UI_RUNTIME',files),restored=restoreDocumentTaskAssociationSourceSet('MEASUREMENT_UI_RUNTIME',files,contract);
+ const beforeBudget=restorePlanBudgetSourceSet(contract,'MEASUREMENT_UI_RUNTIME',files),budget=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='MEASUREMENT_UI_RUNTIME');assert.equal(beforeBudget.length,17);assert.equal(sha(JSON.stringify(beforeBudget)),budget.previousPathsSha256);assert.deepEqual(pilotPreviousFiles,[...beforeBudget,...budget.additions].sort());assert.equal(restored.length,14);assert.equal(sha(JSON.stringify(restored)),measurement.runtimePreviousPathsSha256);assert.equal(JSON.stringify(files),before);
  for(const list of [restored,files.slice(1),[...files,files[0]],[...files.slice(1),'src/lib/foreign.mjs'].sort()])reject(()=>restoreDocumentTaskAssociationSourceSet('MEASUREMENT_UI_RUNTIME',list,contract));
 });
 
