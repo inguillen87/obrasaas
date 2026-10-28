@@ -260,7 +260,16 @@ export async function verifyFocusedWorkspaceUi(args=process.argv.slice(2)){
   for(const width of HOME_DECISIONS_WIDTHS)await check('home-decisions-auto-scoped-read-and-queues-'+width,async()=>{
    const item=await context(width,'ADMIN','?obra=project-a','home-normal');try{
     await visible(item,'inicio');await homeReady(item);assert.equal(homeFacts(item).length,1);assert.ok(await item.page.$eval('[aria-labelledby="home-decisions-title"]',node=>node.innerText.includes('hora de Argentina')&&node.innerText.includes('13:49:23')),'Home afternoon must use the Argentina h23 clock');
-    await item.page.$eval('[aria-labelledby="home-decisions-title"] button',node=>{node.click();node.click();});await homeReady(item);assert.equal(homeFacts(item).length,2,'Refresh dispatches one bounded GET even before React flushes');assert.ok(await item.page.$eval('[aria-labelledby="home-decisions-title"]',node=>node.innerText.includes('00:00:00')&&!node.innerText.includes('24:00:00')),'Home midnight must render 00:00 in Argentina');await snapshot(item,'home-pending-decisions');
+    // Register the next scoped response before either click. Existing cards
+    // already satisfy homeReady; they cannot acknowledge this manual refresh.
+    const nextHomeRead=item.page.waitForResponse(response=>{
+     const url=new URL(response.url());
+     return response.request().method()==='GET'&&url.origin===origin&&url.pathname==='/api/identity/operations-status'&&url.searchParams.size===3&&url.searchParams.get('projectId')==='project-a'&&url.searchParams.get('scope')===scope&&url.searchParams.get('view')==='decisions';
+    },{timeout:30000});
+    const [refreshedHome]=await Promise.all([nextHomeRead,item.page.$eval('[aria-labelledby="home-decisions-title"] button',node=>{node.click();node.click();})]);
+    assert.equal(refreshedHome.status(),200);
+    await item.page.waitForFunction(()=>{const node=document.querySelector('[aria-labelledby="home-decisions-title"]');return node?.innerText.includes('00:00:00')&&!node.innerText.includes('24:00:00');},{timeout:15000});
+    await homeReady(item);assert.equal(homeFacts(item).length,2,'Refresh dispatches one bounded GET even before React flushes');assert.ok(await item.page.$eval('[aria-labelledby="home-decisions-title"]',node=>node.innerText.includes('00:00:00')&&!node.innerText.includes('24:00:00')),'Home midnight must render 00:00 in Argentina');await snapshot(item,'home-pending-decisions');
     await item.page.evaluate(()=>{window.__homeQueueEvents=[];for(const name of ['obrasaas:evidence-pending','obrasaas:progress-pending','obrasaas:inventory-pending'])window.addEventListener(name,event=>window.__homeQueueEvents.push({name,detail:event.detail}));});
     const detail={projectId:'project-a',scope};
     await openQueue(item,'Evidencias');await visible(item,'actividad');assert.deepEqual(await item.page.evaluate(()=>window.__homeQueueEvents),[{name:'obrasaas:evidence-pending',detail}]);
