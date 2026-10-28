@@ -33,6 +33,7 @@
 @media(max-width:540px){.panel{padding:.8rem}.heading{flex-wrap:wrap}.dates{grid-template-columns:1fr}.actions button,.upload>button{width:100%}}
 
 .panel select{min-height:44px}
+.csvBudget{display:grid;gap:.6rem;min-width:0;padding:.8rem;border:1px solid #54708a;border-radius:8px;background:#132638;overflow-wrap:anywhere}.csvBudget p{margin:0;line-height:1.5}.csvBudget summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}.csvBudget summary:focus-visible{outline:3px solid #f7b94d;outline-offset:3px}.csvBudget details[open]{display:grid;gap:.6rem}.csvBudget code{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}
 
 .hierarchy{min-width:0;display:grid;gap:12px;margin:16px 0}.hierarchy ul{padding-left:20px;overflow-wrap:anywhere}.hierarchy li{margin:8px 0}.pagination{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.pagination span{flex:1;min-width:130px}.original{white-space:pre-wrap;overflow-wrap:anywhere}.distribution{padding-left:24px;overflow-wrap:anywhere}.hierarchy select{max-width:100%;min-width:0}
 

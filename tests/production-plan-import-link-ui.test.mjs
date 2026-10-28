@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import React from 'react';
 import {loadBindings,transform} from 'next/dist/build/swc/index.js';
+import {extractPlanBudgetCsvSource} from '../src/lib/plan-budget-csv-source.mjs';
+import {syntheticBudgetCsv} from './fixtures/plan-budget-csv-synthetic.mjs';
 
 const accountRoot=new URL('../src/app/(identity)/cuenta/',import.meta.url);
 const reactUrl=import.meta.resolve('react'),returnUrl=new URL('../src/lib/identity-return-path.mjs',import.meta.url).href;
@@ -55,6 +57,23 @@ function initialize({seed={},queue=[{data:listing()},{data:detail()}],extraProps
  panel.reset({open:true,recoveryReady:true,...seed});panel.configure({queue,...config});const currentProps={...props,...extraProps},tree=panel.render(currentProps);return {currentProps,tree};
 }
 async function complete(fixture){panel.flushEffects();await tick();const tree=panel.render(fixture.currentProps);panel.flushEffects();await tick();return tree;}
+
+const visibleCopy=tree=>typeof tree==='string'||typeof tree==='number'?String(tree):React.Children.toArray(tree?.props?.children).map(visibleCopy).join(' ');
+test('actual CSV selection offers private deterministic consent and read-only scope without AI consent or task decisions',async()=>{
+ const f=initialize({extraProps:{initialPlanId:''},seed:{canApprove:true},queue:[]});let tree=await complete(f);
+ fileInput(tree).props.onChange({target:{files:[new File(['synthetic'],'synthetic.CSV',{type:'application/vnd.ms-excel'})]}});tree=panel.render(f.currentProps);
+ assert.equal(panel.snapshot().file.type,'text/csv');assert.equal(panel.snapshot().spreadsheetSelection,'SOURCE_BUDGET_CSV_V1');const copy=visibleCopy(tree);assert.match(copy,/Presupuesto de obra \(lectura\)/);assert.match(copy,/códigos, cantidades, unidades, precios, importes y procedencia/);assert.doesNotMatch(copy,/OpenAI|Alcance del Excel|Apruebo|Aplicar tareas/);
+ const consent=nodes(tree,node=>node.type==='input'&&node.props.type==='checkbox');assert.equal(consent.length,1);consent[0].props.onChange({target:{checked:true}});tree=panel.render(f.currentProps);const submit=nodes(tree,node=>node.type==='button'&&node.props.type==='submit');assert.equal(submit.length,1);assert.equal(visibleCopy(submit[0]),'Leer presupuesto');assert.equal(Boolean(submit[0].props.disabled),false);assert.equal(panel.requests().length,0);panel.unmount();
+});
+
+test('existing CSV draft is consulted through GET only and shows no upload/AI or application form',async()=>{
+ const bytes=syntheticBudgetCsv({count:68}),source=extractPlanBudgetCsvSource(bytes,'text/csv'),descriptor={version:1,profile:'SOURCE_BUDGET_CSV_V1',purpose:'READ_ONLY_BUDGET_SOURCE',projectId,sourceSha256:source.sourceSha256,sourceDigest:source.sourceDigest,rowCount:source.rows.length,currency:{code:null,status:'UNKNOWN'}},saved=draft({createdAt:'2026-10-01T12:00:00.000Z',rows:[],source:{contentType:'text/csv',bytes:bytes.length,sha256:source.sourceSha256},budgetImport:true,financialSource:true,budgetDescriptor:descriptor}),full={...saved,budgetSource:source};
+ const f=initialize({queue:[{data:listing(true,[saved])},{data:{...detail(),canApprove:true,draft:full}}]});let tree=await complete(f);tree=panel.render(f.currentProps);assert.equal(panel.snapshot().draft,full);assert.equal(panel.snapshot().spreadsheetSelection,'SOURCE_BUDGET_CSV_V1');assert.deepEqual(panel.requests().map(call=>call.method),['GET','GET']);const copy=visibleCopy(tree);assert.match(copy,/Presupuesto de obra \(lectura\)/);assert.match(copy,/Lectura privada guardada/);assert.doesNotMatch(copy,/OpenAI|Extraer borrador|Autorizo enviar/);assert.equal(nodes(tree,node=>node.type==='form'||node.type==='input'&&node.props.type==='checkbox').length,0);panel.unmount();
+});
+
+test('failed or processing CSV drafts keep CSV guidance without a document/AI upload form',async()=>{
+ for(const status of ['UPLOADING','PROCESSING','FAILED']){const saved=draft({status,createdAt:'2026-10-01T12:00:00.000Z',rows:[],source:{contentType:'text/csv',bytes:30,sha256:'c'.repeat(64)},budgetImport:true,financialSource:true,budgetDescriptor:null}),f=initialize({queue:[{data:listing(true,[saved])},{data:{...detail(),canApprove:true,draft:saved}}]});let tree=await complete(f);tree=panel.render(f.currentProps);assert.equal(panel.snapshot().draft,saved);assert.equal(panel.snapshot().spreadsheetSelection,'SOURCE_BUDGET_CSV_V1');const copy=visibleCopy(tree);assert.match(copy,/Presupuesto de obra \(lectura\)/);assert.match(copy,/Consulta de presupuesto CSV registrada/);assert.doesNotMatch(copy,/OpenAI|Autorizo enviar|Extraer borrador/);assert.equal(nodes(tree,node=>node.type==='form').length,0);panel.unmount();}
+});
 
 test('actual linked panel waits for recovery and current canonical access, then reads list and exact draft with zero POST',async()=>{
  const fixture=initialize();await complete(fixture);const requests=panel.requests();assert.equal(requests.length,2);

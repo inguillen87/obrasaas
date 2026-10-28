@@ -22,7 +22,22 @@ import {planPartidaPreviewCurrentSourcePin,planPartidaPreviewPreviousSourcePin,v
 import {restoreOwnOnboardingAdapterPreviousContract,restoreOwnRuntimeDiagnosticPreviousSourceText,restoreOwnRuntimeDiagnosticPreviousContract,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,verifyPlanBudgetActualClosure,restorePlanBudgetPreviousContract,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,restorePlanBudgetSourceSet,planBudgetProofSourceAdditions} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 
 const baseHash='75140c878ebd4792bf59da6aa4dbc0f2db082963c8518acf867cffc7f78f5ac0',reviewedHash='f0c0c1e40171f3ed6d2af16bed2504eaf640ce9dff9995b33bd4c76d90b664da',parentHash='8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839';
-const read=file=>readFileSync(new URL('../'+file,import.meta.url)),hash=value=>createHash('sha256').update(value).digest('hex'),contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),section=contract.planBudgetCurrentRevision,advance=section.ownRuntimeDiagnosticAdvance,clone=structuredClone;
+// These retained tests exercise the exact Own-adapter frame from 8dd0d598. The
+// current physical tree is authenticated before that frame is exposed; current
+// pilot sources and adversarial mutations are covered by the pilot-layer suite.
+import {restorePilotCompletionPreviousContract,restorePilotCompletionPreviousSourceText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+const physicalRead=file=>readFileSync(new URL('../'+file,import.meta.url));
+const pilotContract=JSON.parse(physicalRead('.github/workspace-acceptance-contract.json'));
+const retainedContract=restorePilotCompletionPreviousContract(pilotContract,physicalRead);
+const retainedReads=new Map([
+ ['.github/workspace-acceptance-contract.json',Buffer.from(JSON.stringify(retainedContract,null,2)+'\n')],
+ ['scripts/lib/plan-budget-current-ci-reviewed.mjs',Buffer.from('// Exact budget-source CI declaration; compiler fills immutable reviewed source bindings.\nexport const PLAN_BUDGET_CURRENT_REVISION=Object.freeze('+JSON.stringify(retainedContract.planBudgetCurrentRevision,null,2)+');\n')],
+]);
+const read=file=>{
+ if(!retainedReads.has(file))retainedReads.set(file,Buffer.from(restorePilotCompletionPreviousSourceText(pilotContract,file,physicalRead(file).toString('utf8').replaceAll('\r\n','\n'))));
+ return Buffer.from(retainedReads.get(file));
+};
+const hash=value=>createHash('sha256').update(value).digest('hex'),contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),section=contract.planBudgetCurrentRevision,advance=section.ownRuntimeDiagnosticAdvance,clone=structuredClone;
 // Exact additive rung above the Own journal. It inverts to the exact previous contract and declaration (LF) before any older
 // history is projected; every literal below is test-owned and independent from the contract DTOs it is compared with.
 const iContractHash='109fcc04d0ad9ad37cadf71248a7b0e7fe6de57bfedb5fb23d5d994081eb7c36',iReviewedHash='d970ee314d6e72906c2768bb67c776e7b9fe25b42443700c417fd6c0310fd163',onb=section.ownOnboardingAdapterAdvance;

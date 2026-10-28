@@ -1,6 +1,9 @@
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {PLAN_BUDGET_CURRENT_REVISION as reviewedExport} from './plan-budget-current-ci-reviewed.mjs';
+import {PLAN_BUDGET_CURRENT_REVISION as completeReviewedExport} from './plan-budget-current-ci-reviewed.mjs';
+import {createPilotCompletionLayer} from './pilot-completion-current-ci-layer.mjs';
+const completionLayer=createPilotCompletionLayer(completeReviewedExport);
+const reviewedExport=completionLayer.previousReviewed;
 export {PLAN_BUDGET_CURRENT_REVISION} from './plan-budget-current-ci-reviewed.mjs';
 export const PLAN_BUDGET_CURRENT_SECTION='planBudgetCurrentRevision';
 export const PLAN_BUDGET_CI_KIND='UI_PLAN_BUDGET_SOURCE';
@@ -254,7 +257,7 @@ function restorePlanBudgetSourceSet(contract,family,files){
  if(ownActive(contract)){if(!row){const rule=OWN_SOURCE_SET_ADVANCES.find(rule=>rule.family===family),patch=ownState().advance.metadataInverse.find(p=>p.pointer===rule?.pointer);if(patch)reject(same(files,patch.before)||same(files,patch.after),'OWN_TYPED_SOURCE_SET');}files=ownUiSources(family,files).files;}
  if(!row)return files;if(files.length===row.previousCount&&sha(JSON.stringify(files))===row.previousPathsSha256)return[...files];return previousFiles(files,row);
 }
-export function planBudgetProofSourceAdditions(spec){
+function planBudgetProofSourceAdditions(spec){
  const fixed=compile(),kind=spec?.kind,row=fixed.sets.get(kind);
  if(!row){
   const state=ownState(),rule=OWN_SOURCE_SET_ADVANCES.find(row=>row.family===kind);
@@ -407,19 +410,68 @@ const onbBrowserBinding=(contract,fallback)=>planBudgetCurrentBrowserBinding(onb
 const onbCompiledProof=contract=>planBudgetCompiledProof(onbLightOr(contract));
 const onbScreenshotPaths=contract=>planBudgetRetainedScreenshotPaths(onbLightOr(contract));
 // Exact previous contract (LF 109fcc04...) once the current rung bytes are authenticated; the Own journal is not applied here.
-export function restoreOwnOnboardingAdapterPreviousContract(contract,readSource){reject(onbActive(contract),'ONB_ADVANCE_REQUIRED');return onbFrame(contract,readSource,prior=>prior);}
-export{
- onbRestoreOwnContract as restoreOwnRuntimeDiagnosticPreviousContract,
- onbRestoreText as restoreOwnRuntimeDiagnosticPreviousSourceText,
- onbRestorePreviousContract as restorePlanBudgetPreviousContract,
- onbCurrentPin as planBudgetCurrentSourcePin,
- onbPreviousPin as planBudgetPreviousSourcePin,
- onbRestoreSourceSet as restorePlanBudgetSourceSet,
- onbVerifyCurrent as verifyPlanBudgetCurrentSources,
- onbVerifyClosure as verifyPlanBudgetActualClosure,
- onbRestoreClosure as restorePlanBudgetClosure,
- onbValidationFiles as planBudgetValidationFiles,
- onbBrowserBinding as planBudgetCurrentBrowserBinding,
- onbCompiledProof as planBudgetCompiledProof,
- onbScreenshotPaths as planBudgetRetainedScreenshotPaths
+function onbRestoreAdapterPreviousContract(contract,readSource){reject(onbActive(contract),'ONB_ADVANCE_REQUIRED');return onbFrame(contract,readSource,prior=>prior);}
+// The pilot layer authenticates the current tree, then delegates to the complete retained Own adapter.
+const completionPublic=completionLayer.wrap({
+ restoreOwnOnboardingAdapterPreviousContract:onbRestoreAdapterPreviousContract,
+ restoreOwnRuntimeDiagnosticPreviousContract:onbRestoreOwnContract,
+ restoreOwnRuntimeDiagnosticPreviousSourceText:onbRestoreText,
+ restorePlanBudgetPreviousContract:onbRestorePreviousContract,
+ planBudgetCurrentSourcePin:onbCurrentPin,
+ planBudgetPreviousSourcePin:onbPreviousPin,
+ restorePlanBudgetSourceSet:onbRestoreSourceSet,
+ verifyPlanBudgetCurrentSources:onbVerifyCurrent,
+ verifyPlanBudgetActualClosure:onbVerifyClosure,
+ restorePlanBudgetClosure:onbRestoreClosure,
+ planBudgetValidationFiles:onbValidationFiles,
+ planBudgetCurrentBrowserBinding:onbBrowserBinding,
+ planBudgetCompiledProof:onbCompiledProof,
+ planBudgetRetainedScreenshotPaths:onbScreenshotPaths,
+ planBudgetProofSourceAdditions:planBudgetProofSourceAdditions,
+});
+const {
+ restoreOwnOnboardingAdapterPreviousContract:pilotRestoreOwnOnboardingAdapterPreviousContract,
+ restoreOwnRuntimeDiagnosticPreviousContract:pilotRestoreOwnRuntimeDiagnosticPreviousContract,
+ restoreOwnRuntimeDiagnosticPreviousSourceText:pilotRestoreOwnRuntimeDiagnosticPreviousSourceText,
+ restorePlanBudgetPreviousContract:pilotRestorePlanBudgetPreviousContract,
+ planBudgetCurrentSourcePin:pilotPlanBudgetCurrentSourcePin,
+ planBudgetPreviousSourcePin:pilotPlanBudgetPreviousSourcePin,
+ restorePlanBudgetSourceSet:pilotRestorePlanBudgetSourceSet,
+ verifyPlanBudgetCurrentSources:pilotVerifyPlanBudgetCurrentSources,
+ verifyPlanBudgetActualClosure:pilotVerifyPlanBudgetActualClosure,
+ restorePlanBudgetClosure:pilotRestorePlanBudgetClosure,
+ planBudgetValidationFiles:pilotPlanBudgetValidationFiles,
+ planBudgetCurrentBrowserBinding:pilotPlanBudgetCurrentBrowserBinding,
+ planBudgetCompiledProof:pilotPlanBudgetCompiledProof,
+ planBudgetRetainedScreenshotPaths:pilotPlanBudgetRetainedScreenshotPaths,
+ planBudgetProofSourceAdditions:pilotPlanBudgetProofSourceAdditions,
+ restorePilotCompletionPreviousContract,
+ restorePilotCompletionPreviousSourceText,
+ restorePilotCompletionPreviousSourceSet,
+ pilotCompletionNativeLibrarySources,
+ restorePilotCompletionPreviousProofSpec,
+ restorePilotCompletionPreviousFieldProof,
+}=completionPublic;
+export {
+ pilotRestoreOwnOnboardingAdapterPreviousContract as restoreOwnOnboardingAdapterPreviousContract,
+ pilotRestoreOwnRuntimeDiagnosticPreviousContract as restoreOwnRuntimeDiagnosticPreviousContract,
+ pilotRestoreOwnRuntimeDiagnosticPreviousSourceText as restoreOwnRuntimeDiagnosticPreviousSourceText,
+ pilotRestorePlanBudgetPreviousContract as restorePlanBudgetPreviousContract,
+ pilotPlanBudgetCurrentSourcePin as planBudgetCurrentSourcePin,
+ pilotPlanBudgetPreviousSourcePin as planBudgetPreviousSourcePin,
+ pilotRestorePlanBudgetSourceSet as restorePlanBudgetSourceSet,
+ pilotVerifyPlanBudgetCurrentSources as verifyPlanBudgetCurrentSources,
+ pilotVerifyPlanBudgetActualClosure as verifyPlanBudgetActualClosure,
+ pilotRestorePlanBudgetClosure as restorePlanBudgetClosure,
+ pilotPlanBudgetValidationFiles as planBudgetValidationFiles,
+ pilotPlanBudgetCurrentBrowserBinding as planBudgetCurrentBrowserBinding,
+ pilotPlanBudgetCompiledProof as planBudgetCompiledProof,
+ pilotPlanBudgetRetainedScreenshotPaths as planBudgetRetainedScreenshotPaths,
+ pilotPlanBudgetProofSourceAdditions as planBudgetProofSourceAdditions,
+ restorePilotCompletionPreviousContract,
+ restorePilotCompletionPreviousSourceText,
+ restorePilotCompletionPreviousSourceSet,
+ pilotCompletionNativeLibrarySources,
+ restorePilotCompletionPreviousProofSpec,
+ restorePilotCompletionPreviousFieldProof,
 };

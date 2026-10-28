@@ -195,6 +195,16 @@ jobs:
         run: |
           npx eslint src/lib/company-phone-format.mjs scripts/verify-company-phone-ui.mjs --max-warnings 0
           node scripts/verify-company-phone-ui.mjs
+      - name: Budget CSV import browser scenarios
+        run: node scripts/verify-plan-budget-csv-ui.mjs
+      - name: Attendance review pagination browser scenarios
+        env:
+          FIELD_UI_FOCUS: attendance-review-pages
+        run: node scripts/verify-field-operations-ui.mjs
+      - name: Consumption evidence pagination browser scenarios
+        env:
+          MATERIAL_INVENTORY_UI_FOCUS: evidence-pages
+        run: node scripts/verify-material-inventory-ui.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -220,6 +230,11 @@ jobs:
             .vercel/verified-office-onboarding-evidence/
             .vercel/office-review-evidence/
             .vercel/onboarding-guide-evidence/
+            .vercel/field-operations-evidence/
+            .vercel/material-inventory-evidence/
+            .vercel/private/plan-budget-csv-browser-*/validation.json
+            .vercel/private/plan-budget-csv-browser-*/*.png
+            .vercel/private/plan-budget-csv-browser-*/server.log
             .vercel/private/company-channel-postgres-proof.json
             .vercel/private/reactive-onboarding-postgres-*.json
           include-hidden-files: true

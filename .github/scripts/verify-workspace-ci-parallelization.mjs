@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePilotCompletionPreviousFieldProof,restorePilotCompletionPreviousProofSpec} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_BUDGET_UI_MATRIX,validatePlanBudgetUiProofBytes,planBudgetUiSourceBinding,planBudgetUiRetainedScreenshotPath} from '../../scripts/lib/plan-budget-ui-contract.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -600,7 +600,18 @@ function validateFieldHistoryPrivacy(spec,proof){
  }else if(value.sameWorkerReassigned!==true||value.newAuthorOwnShiftWithForeignPredecessorReadable!==true)deny('PROOF_FIELD_HISTORY_PRIVACY');
  return revision;
 }
+function normalizePilotCanonicalFieldProof(spec,proof){
+ try{return restorePilotCompletionPreviousFieldProof(spec,proof);}
+ catch(error){
+  if(error?.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'){
+   if(error.reason==='PILOT_FIELD_ATTENDANCE_PROOF')deny('PROOF_CHECK_NAMES');
+   if(error.reason==='PILOT_FIELD_ATTENDANCE_PROVIDER')deny('PROOF_PROVIDER_IO');
+  }
+  throw error;
+ }
+}
 function validateCanonicalFieldProof(spec,proof,readSource){
+ proof=normalizePilotCanonicalFieldProof(spec,proof);
  const fixture=proof.participantKycFixture;validateCanonicalFieldKycFixture(fixture,spec.kind==='PG_FIELD');if(proof.providerCalls!==0)deny('PROOF_PROVIDER_IO');
  const revision=validateFieldHistoryPrivacy(spec,proof),sets=canonicalFieldSourceSets(spec,readSource);
  if(spec.kind==='PG_OVERTIME'){
@@ -2395,12 +2406,13 @@ export function selftest(workflow,contract,root=process.cwd()){
   return checks;
 }
 function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],currentKycStatusChecks=[],currentWhatsappPlanChecks=[]){
- const checks=[],expectedHead=contract.extension.baseHead,cache=new Map();
+ const checks=[],attendanceSupplementChecks=[],expectedHead=contract.extension.baseHead,cache=new Map();
  const readSource=file=>{if(!cache.has(file))cache.set(file,Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n')));return cache.get(file);};
  const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure canonical field shadow fixture; no Git/PG/UI/provider execution'});};
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure canonical field shadow fixture'});};
  const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
  for(const spec of contract.extension.proofs.filter(isCanonicalField)){
+  const currentAttendance=spec.kind==='PG_FIELD'&&restorePilotCompletionPreviousProofSpec(spec)!==spec;
   const sets=canonicalFieldSourceSets(spec,readSource),map=files=>Object.fromEntries(files.map(file=>[file,hash(readSource(file))]));
   const fixture={records:[{projectId:'p-shadow',workerId:'w-shadow',submissionId:'kyc-shadow',submissionReceiptId:'participant_'+'1'.repeat(64),reviewReceiptId:'participant_'+'2'.repeat(64),actorId:'worker',reviewerActorId:'reviewer',contentHash:'3'.repeat(64),canonicalAdmissionConfirmed:true,identityCertified:false,providerCalls:0}],syntheticPrivateCalls:{privatePuts:2,privateReads:6},providerCalls:0,biometricIdentityCertified:false};
   const proof={status:'PASS',harnessSha256:spec.producerSha256,providerCalls:0,participantKycFixture:fixture};
@@ -2414,6 +2426,10 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
    proof.ownHistoryPrivacy={version:1,currentAccountKycCanonical:true,originalAuthorRestored:true,reviewerRoles:['ADMIN','DIRECTOR','SITE_MANAGER'],readBusinessWrites:0,participantKycFixture:privacyFixture};
    if(spec.kind==='PG_FIELD')Object.assign(proof.ownHistoryPrivacy,{checks:privacyRevision.addedChecks.map(value=>JSON.parse(value).name),deniedBeforePrivateRead:true,postReadAuthorityRaces:['REASSIGNED','REVOKED'],providerCalls:0});
    else Object.assign(proof.ownHistoryPrivacy,{sameWorkerReassigned:true,newAuthorOwnShiftWithForeignPredecessorReadable:true});
+  }
+  if(currentAttendance){
+   const names=[...utf8(readSource(spec.producer)).matchAll(/\battendanceReviewChecks\.push\('([^']+)'\)/g)].map(match=>match[1]);
+   Object.assign(proof,{attendanceReviewChecks:names,attendanceReviewCheckCount:4,totalChecks:71});
   }
   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   currentKycStatusChecks.push(()=>currentKycStatusClosureSelftest(spec,proof,root,validate));
@@ -2473,11 +2489,32 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
   ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));bad(spec.id+'-'+name,code,()=>gate({...input,needs:value}));}
   const changed=clone(restoreParticipantPreanalysisPreviousContract(contract));changed.evidenceProducers.find(record=>record.path===spec.path).baselineProducerGitBlobSha256=spec.producerSha256;bad(spec.id+'-historical-record-not-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
   const omitted=clone(restoreParticipantPreanalysisPreviousContract(contract));omitted.extension.proofs=omitted.extension.proofs.filter(p=>p.id!==spec.id);bad(spec.id+'-typed-proof-not-optional','EXTENSION_PROOF_COVERAGE',()=>validateContract(omitted));
+  if(currentAttendance){
+   const start=checks.length;
+   good(spec.id+'-attendance-supplement-exact-71-preserves-historical67',()=>{
+    const before=canonical(proof),expected=clone(proof);expected.totalChecks=67;delete expected.attendanceReviewChecks;delete expected.attendanceReviewCheckCount;
+    equal(normalizePilotCanonicalFieldProof(spec,proof),expected,'PROOF_CHECK_NAMES');assert.equal(canonical(proof),before);assert.equal(proof.totalChecks,71);assert.equal(proof.attendanceReviewChecks.length,4);
+   });
+   mutate('attendance-checks-omitted','PROOF_CHECK_NAMES',p=>{delete p.attendanceReviewChecks;});
+   mutate('attendance-count-omitted','PROOF_CHECK_NAMES',p=>{delete p.attendanceReviewCheckCount;});
+   mutate('attendance-count-short','PROOF_CHECK_NAMES',p=>{p.attendanceReviewCheckCount=3;});
+   mutate('attendance-count-string','PROOF_CHECK_NAMES',p=>{p.attendanceReviewCheckCount='4';});
+   mutate('attendance-row-omitted','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.pop();});
+   mutate('attendance-row-extra','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.push('foreign attendance check');});
+   mutate('attendance-name-changed','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks[0]='foreign attendance check';});
+   mutate('attendance-row-duplicated','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks[0]=p.attendanceReviewChecks[1];});
+   mutate('attendance-order-changed','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.reverse();});
+   for(const total of [67,70,72])mutate('attendance-total-'+total,'PROOF_CHECK_NAMES',p=>{p.totalChecks=total;});
+   mutate('attendance-provider-call','PROOF_PROVIDER_IO',p=>{p.attendanceReviewProviderCalls=1;});
+   bad(spec.id+'-attendance-supplement-cannot-use-legacy-spec','PROOF_CHECK_NAMES',()=>normalizePilotCanonicalFieldProof(restorePilotCompletionPreviousProofSpec(spec),proof));
+   const forged=clone(spec);forged.checkNames[0]='foreign historical check';bad(spec.id+'-attendance-supplement-cannot-use-forged-spec','PROOF_CHECK_NAMES',()=>normalizePilotCanonicalFieldProof(forged,proof));
+   attendanceSupplementChecks.push(...checks.splice(start));
+  }
   const parent=path.resolve(root,'.vercel/workspace-ci-evidence'),scratch=mkdtempSync(path.join(parent,'ci-canonical-field-selftest-'));
   try{const target=path.join(scratch,spec.path);mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,'stale canonical field proof');bad(spec.id+'-stale-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:scratch,lane:spec.lane,contract}));}
   finally{assert.equal(path.dirname(path.resolve(scratch)),parent);rmSync(scratch,{recursive:true,force:true});}
  }
- return checks;
+ return [...checks,...attendanceSupplementChecks];
 }
 function identitySelftest(workflow,contract,root,currentContinuityChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[]){
  const checks=[],expectedHead=contract.extension.baseHead,spec=contract.extension.proofs.find(isIdentity);

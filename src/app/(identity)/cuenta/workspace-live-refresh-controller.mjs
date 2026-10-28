@@ -52,3 +52,13 @@ export function createWorksiteLiveRefreshController({contextKey,getCurrent,onSta
   dispose(){disposed=true;stopTimer();active?.abort();}
  };
 }
+
+// Presentation of the browser's completed check, not a server observation or authority.
+export function worksiteLiveCheckedAtLabel(value){
+ const unknown='Fecha y hora sin confirmar';
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value))return unknown;
+ const instant=new Date(value);
+ if(!Number.isFinite(instant.getTime())||instant.toISOString()!==value)return unknown;
+ try{return new Intl.DateTimeFormat('es-AR',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(instant)+' (hora de Argentina)';}
+ catch{return unknown;}
+}

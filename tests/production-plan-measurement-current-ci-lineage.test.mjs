@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,restoreOwnRuntimeDiagnosticPreviousSourceText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,restoreOwnRuntimeDiagnosticPreviousSourceText,restorePilotCompletionPreviousContract,restorePilotCompletionPreviousSourceText,planBudgetCurrentSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {FIELD_OUTBOUND_CURRENT_REVISION,restoreFieldOutboundPreviousContract} from '../scripts/lib/field-outbound-current-ci-lineage.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
@@ -23,6 +23,8 @@ import {currentProducerSourceFiles,validateContract} from '../.github/scripts/ve
 const root=fileURLToPath(new URL('../',import.meta.url)),read=file=>readFileSync(path.join(root,file)),sha=value=>createHash('sha256').update(value).digest('hex');
 const contract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
 verifyPlanBudgetCurrentSources(contract,read);
+const pilotBContract=restorePilotCompletionPreviousContract(contract,read);
+assert.equal(sha(JSON.stringify(pilotBContract,null,2)+'\n'),'4d813ad4f40496d1355b2820607d138d899ea51d336ab176c9fb2febe6ce9a00');
 const own0707Producer=file=>Buffer.from(restoreOwnRuntimeDiagnosticPreviousSourceText(contract,file,read(file).toString('utf8')));
 const beforeBudgetContract=restorePlanBudgetPreviousContract(contract);
 assert.equal(sha(JSON.stringify(beforeBudgetContract,null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');
@@ -122,7 +124,16 @@ test('L rejects old hash matrix fallbacks and missing extra reordered or substit
  }
 });
 test('L restores only unique literal source blocks and the complete exact K producer bodies',()=>{
- for(const row of FIELD_HISTORY_PRIVACY_REVISION.producers){const raw=read(row.producer),text=raw.toString('utf8').replaceAll('\r\n','\n'),before=Buffer.from(raw),restored=restorePlanMeasurementPublishedKPrivacyProducerText(contract,row.producer,raw),patchSet=FIELD_HISTORY_PRIVACY_SOURCE_PATCHES.find(value=>value.producer===row.producer);assert.equal(sha(text),row.currentSha256);assert.equal(sha(restored),row.previousSha256);assert.equal(sha(JSON.stringify(patchSet.patches)),row.sourcePatchesSha256);assert.deepEqual(raw,before);for(const patch of patchSet.patches)assert.equal(text.split(patch.after).length,2);denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(contract,'scripts/foreign-field-privacy.mjs',raw));denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(contract,row.producer,Buffer.from(restored)));denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(contract,row.producer,Buffer.from(text+'\n// unreviewed native producer change\n')));}
+ for(const row of FIELD_HISTORY_PRIVACY_REVISION.producers){
+  const raw=read(row.producer),before=Buffer.from(raw),text=restorePilotCompletionPreviousSourceText(contract,row.producer,raw.toString('utf8')).replaceAll('\r\n','\n'),bRaw=Buffer.from(text);
+  const restored=restorePlanMeasurementPublishedKPrivacyProducerText(contract,row.producer,raw),historical=restorePlanMeasurementPublishedKPrivacyProducerText(pilotBContract,row.producer,bRaw),patchSet=FIELD_HISTORY_PRIVACY_SOURCE_PATCHES.find(value=>value.producer===row.producer);
+  assert.equal(sha(raw.toString('utf8').replaceAll('\r\n','\n')),planBudgetCurrentSourcePin(contract,{path:row.producer,sha256:row.currentSha256}));
+  assert.equal(sha(text),row.currentSha256);assert.equal(restored,historical);assert.equal(sha(restored),row.previousSha256);assert.equal(sha(JSON.stringify(patchSet.patches)),row.sourcePatchesSha256);assert.deepEqual(raw,before);
+  for(const patch of patchSet.patches)assert.equal(text.split(patch.after).length,2);
+  denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(pilotBContract,'scripts/foreign-field-privacy.mjs',bRaw));
+  denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(pilotBContract,row.producer,Buffer.from(restored)));
+  denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(pilotBContract,row.producer,Buffer.from(text+'\n// unreviewed native producer change\n')));
+ }
 });
 test('L current native producers reject changed bodies even after local metadata hashes are resealed',()=>{
  for(const row of FIELD_HISTORY_PRIVACY_REVISION.producers){const text=read(row.producer).toString('utf8').replaceAll('\r\n','\n'),replacement=text+'\n// changed native privacy producer\n',value=structuredClone(contract),edit=value=>{value.planMeasurementCurrentLineage.fieldHistoryPrivacyRevision.producers.find(ref=>ref.id===row.id).currentSha256=sha(replacement);value.extension.proofs.find(spec=>spec.id===row.id).producerSha256=sha(replacement);};edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,file=>file===row.producer?Buffer.from(replacement):read(file)));const historical=structuredClone(originalLContract);edit(historical);denied(()=>reconstructPublishedHContract(historical));denied(()=>verifyPlanMeasurementCurrentSources(contract,file=>file===row.producer?Buffer.from(replacement):read(file)));}

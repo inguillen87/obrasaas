@@ -1,5 +1,5 @@
 import historicalWeeklyRuntime from './fixtures/plan-budget-weekly-164-runtime.json' with {type:'json'};
-import {planBudgetValidationFiles,restorePlanBudgetPreviousContract,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,verifyPlanBudgetCurrentSources,planBudgetCurrentSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {planBudgetValidationFiles,restorePlanBudgetPreviousContract,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,verifyPlanBudgetCurrentSources,planBudgetCurrentSourcePin,restorePilotCompletionPreviousContract,restorePilotCompletionPreviousSourceText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursPreviousContract,restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursCurrentSourcePin,worksiteLiveHoursValidationFiles} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION as destinationExpected,IDENTITY_DESTINATION_UX_CURRENT_SECTION as destinationKey,restoreIdentityDestinationUxPreviousContract,identityDestinationUxCurrentSourcePin,identityDestinationUxPreviousSourcePin,restoreIdentityDestinationUxPreviousProducerText,identityDestinationUxProofSourceAdditions,verifyIdentityDestinationUxCurrentSources,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -46,6 +46,31 @@ function historicalWeeklySource(){
   return bytes;
  };
 }
+// Explicit historical B frame for the legacy checks below. Current source
+// verifiers, producer closures and receipts keep using current() and read().
+let historicalPilotBCache;
+function historicalPilotBFrame(){
+ if(!historicalPilotBCache){
+  const actualContract=current();
+  assert.equal(verifyPlanBudgetCurrentSources(actualContract,read).nativeOrBrowserAcceptance,false);
+  const previous=restorePilotCompletionPreviousContract(actualContract,read),contractJson=JSON.stringify(previous,null,2)+'\n';
+  assert.equal(sha(contractJson),'4d813ad4f40496d1355b2820607d138d899ea51d336ab176c9fb2febe6ce9a00');
+  const changes=new Map(actualContract.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.map(row=>[row.path,row]));
+  const cache=new Map([['.github/workspace-acceptance-contract.json',Buffer.from(contractJson)]]);
+  const readSource=file=>{
+   if(changes.get(file)?.status==='ADDED')return null;
+   if(cache.has(file))return Buffer.from(cache.get(file));
+   const actual=read(file);if(actual===null)return null;
+   const decoded=actual.toString('utf8');assert.equal(actual.equals(Buffer.from(decoded)),true,'Historical source must be UTF-8: '+file);
+   const text=changes.has(file)||file==='scripts/lib/plan-budget-current-ci-reviewed.mjs'
+    ?restorePilotCompletionPreviousSourceText(actualContract,file,decoded)
+    :decoded.replaceAll('\r\n','\n');
+   const bytes=Buffer.from(text);cache.set(file,bytes);return Buffer.from(bytes);
+  };
+  historicalPilotBCache={contractJson,readSource};
+ }
+ return {contract:JSON.parse(historicalPilotBCache.contractJson),readSource:historicalPilotBCache.readSource};
+}
 const serialize=value=>JSON.stringify(value,null,2)+'\n';
 const denied=run=>assert.throws(run,{code:'HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED'});
 // Exercise the original metadata oracle as well as the full current denial.
@@ -53,7 +78,7 @@ function historicalMutation(edit,restore){const historical=restorePlanBudgetPrev
 function historicalWeeklyInvestmentFiles(source){
  const contract=current(),previous=restorePlanBudgetPreviousContract(contract),actual=weeklyCypInvestmentUiSourceFiles(read),binding=planBudgetCurrentBrowserBinding(contract,PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser);
  assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);assert.equal(actual.length,binding.investmentSourceCount);assert.equal(sha(JSON.stringify(actual)),binding.investmentSourcePathsSha256);
- const historical=weeklyCypInvestmentUiSourceFiles(source);assert.deepEqual(actual,[...historical,'src/lib/plan-budget-source.mjs'].sort());assert.equal(historical.length,previous.weeklyCypCurrentRevision.browser.investmentSourceCount);assert.equal(sha(JSON.stringify(historical)),previous.weeklyCypCurrentRevision.browser.investmentSourcePathsSha256);return historical;
+ const b=historicalPilotBFrame(),bFiles=weeklyCypInvestmentUiSourceFiles(b.readSource),bBinding=planBudgetCurrentBrowserBinding(b.contract,PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser);assert.equal(bFiles.length,bBinding.investmentSourceCount);assert.equal(sha(JSON.stringify(bFiles)),bBinding.investmentSourcePathsSha256);const historical=weeklyCypInvestmentUiSourceFiles(source);assert.deepEqual(bFiles,[...historical,'src/lib/plan-budget-source.mjs'].sort());assert.equal(historical.length,previous.weeklyCypCurrentRevision.browser.investmentSourceCount);assert.equal(sha(JSON.stringify(historical)),previous.weeklyCypCurrentRevision.browser.investmentSourcePathsSha256);return historical;
 }
 const syntax=value=>Array.isArray(value)?value.map(syntax):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>!['start','end','loc','extra','comments','leadingComments','innerComments','trailingComments'].includes(key)).map(([key,child])=>[key,syntax(child)])):value;
 
@@ -118,7 +143,9 @@ test('all52 current native controls are required before exact historical41 proje
 });
 
 test('the exact operations read projection preserves every inherited authority HTTP guard and full read query',()=>{
- const file='src/lib/operations-status.mjs',source=read(file).toString('utf8'),project=value=>sha(JSON.stringify(syntax(homeDecisionsLegacyOperationsAst(parse(value,{sourceType:'module'})))));
+ const c=current(),file='src/lib/operations-status.mjs',raw=read(file);
+ assert.equal(verifyPlanBudgetCurrentSources(c,read).nativeOrBrowserAcceptance,false);
+ const source=restorePilotCompletionPreviousSourceText(c,file,raw.toString('utf8')),project=value=>sha(JSON.stringify(syntax(homeDecisionsLegacyOperationsAst(parse(value,{sourceType:'module'})))));
  assert.equal(project(source),expected.operationsProjection.previousAstSha256);
  for(const [before,after] of [['requireWorkspaceIdentity(session)','void session'],['workspace.integrationProject(session,context,false','workspace.integrationProject(session,context,true'],["request.method!=='GET'","request.method!=='POST'"],["canApproveProgress(member.role)","true"],["params.getAll(k).length!==1","false"]]){assert.ok(source.includes(before));assert.notEqual(project(source.replace(before,after)),expected.operationsProjection.previousAstSha256);}
 });
@@ -256,11 +283,11 @@ test('the reviewed current h23 assertions restore all201 historical instructions
 });
 
 test('weekly CyP restores the complete published0ac contract with monthly commands proofs and historical declarations intact',()=>{
- const c=current(),before=serialize(c),previous=restoreWeeklyCypPreviousContract(c);assert.equal(sha(serialize(previous)),'04db9c3dd25a41425f3b8f71f5d51ab23fcf4ad575b88710350b005dff04502b');assert.equal(Object.hasOwn(previous,weeklyKey),false);assert.equal(serialize(c),before);assert.equal(weeklyExpected.predecessorCommit,'0acac0857310e57bc717a3d734e02923a5ea83a1');
+ const c=current(),before=serialize(c),previous=restoreWeeklyCypPreviousContract(c),pilotB=historicalPilotBFrame().contract;assert.equal(sha(serialize(previous)),'04db9c3dd25a41425f3b8f71f5d51ab23fcf4ad575b88710350b005dff04502b');assert.equal(Object.hasOwn(previous,weeklyKey),false);assert.equal(serialize(c),before);assert.equal(weeklyExpected.predecessorCommit,'0acac0857310e57bc717a3d734e02923a5ea83a1');
  for(const field of ['blocks','lanes','artifactPatterns',key,phoneKey,draftKey,companyKey])assert.deepEqual(restorePlanBudgetPreviousContract(c)[field],previous[field]);assert.equal(verifyWeeklyCypCurrentSources(c,read).nativeOrBrowserAcceptance,false);
  assert.deepEqual(weeklyExpected.consumerSourceDeltas.map(row=>row.family),['CONSUMPTION_FEEDBACK_UI','ORGANIZATION_USAGE_UI','MEASUREMENT_UI']);for(const delta of weeklyExpected.consumerSourceDeltas){assert.deepEqual(delta.additions,['src/lib/plan-import-cyp-curve.mjs']);assert.equal(delta.currentCount,delta.previousCount+1);denied(()=>restoreWeeklyCypConsumerSourceSet(delta.family,[],c));}const untouched=['historical'];assert.equal(restoreWeeklyCypConsumerSourceSet('CONSUMPTION_FEEDBACK_UI',untouched,previous),untouched);
  assert.equal(weeklyExpected.reviewedSourceChanges.length,7);assert.equal(weeklyExpected.proofSourceDeltas.length,6);assert.equal(weeklyExpected.documentCurveCopy.version,2);assert.deepEqual(weeklyExpected.documentCurveCopy.dependencies,['src/lib/plan-import-document-curve.mjs','src/lib/plan-import-cyp-curve.mjs']);assert.equal(weeklyExpected.baselineNative.historicalCheckCount,16);assert.equal(weeklyExpected.baselineNative.addedCheckNames.length,7);assert.equal(weeklyExpected.baselineNative.totalCheckCount,23);
- for(const spec of c.extension.proofs){if(spec.id===planBudgetCompiledProof(c).id){assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles);assert.deepEqual(spec,planBudgetCompiledProof(c));continue;}const prior=previous.extension.proofs.find(row=>row.id===spec.id);assert.deepEqual(spec.checkNames,prior.checkNames);assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles);const delta=weeklyExpected.proofSourceDeltas.find(row=>row.id===spec.id);assert.deepEqual(weeklyCypProofSourceAdditions(spec),[...(delta?.additions||[]),...identityDestinationUxProofSourceAdditions(spec)]);assert.deepEqual(weeklyCypProofSourceAdditions(prior),[]);if(delta){assert.equal(spec.sourceFiles.length,prior.sourceFiles.length+1+identityDestinationUxProofSourceAdditions(spec).length);assert.deepEqual(delta.additions,['src/lib/plan-import-cyp-curve.mjs']);}}
+ for(const spec of c.extension.proofs){if(spec.id===planBudgetCompiledProof(c).id){assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles);assert.deepEqual(spec,planBudgetCompiledProof(c));continue;}const prior=previous.extension.proofs.find(row=>row.id===spec.id);const historicalChecks=spec.kind==='PG_INTAKE'?pilotB.extension.proofs.find(row=>row.id===spec.id).checkNames:spec.checkNames;if(spec.kind==='PG_INTAKE')assert.deepEqual(spec.checkNames.slice(0,historicalChecks.length),historicalChecks);assert.deepEqual(historicalChecks,prior.checkNames);assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles);const delta=weeklyExpected.proofSourceDeltas.find(row=>row.id===spec.id);assert.deepEqual(weeklyCypProofSourceAdditions(spec),[...(delta?.additions||[]),...identityDestinationUxProofSourceAdditions(spec)]);assert.deepEqual(weeklyCypProofSourceAdditions(prior),[]);if(delta){assert.equal(spec.sourceFiles.length,prior.sourceFiles.length+1+identityDestinationUxProofSourceAdditions(spec).length);assert.deepEqual(delta.additions,['src/lib/plan-import-cyp-curve.mjs']);}}
 });
 test('weekly CyP advances only the exact published pins and authenticates actual current bytes without relabelling history',()=>{
  const c=current(),value=c[weeklyKey],refs=[...value.reviewedSourceChanges,...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256,authenticatedPreviousAliases:row.authenticatedPreviousAliases||[]}))];
@@ -347,6 +374,11 @@ test('identity destination sixteen measured records strict append geometry netwo
 
 // These tests authenticate the physical source frame only. They do not construct
 // a synthetic native proof or replace the real PostgreSQL producer execution.
+const PILOT_COMPANY_NATIVE_ADDITIONS=[
+ 'src/lib/consumption-evidence-catalog.mjs',
+ 'src/lib/consumption-evidence-http.mjs',
+ 'src/lib/plan-budget-csv-source.mjs',
+];
 function companyNativePhysicalManifest(){
  // The Native producer scans all src/lib files; Main's PG_COMPANY_KYC
  // declaration intentionally uses a different historical238-source binding.
@@ -354,18 +386,21 @@ function companyNativePhysicalManifest(){
  function scan(relative){for(const entry of readdirSync(relative,{withFileTypes:true})){const file=relative+'/'+entry.name;if(entry.isDirectory())scan(file);else files.add(file);}}
  scan('src/lib');
  for(const file of ['scripts/lib/company-channel-disposable-fixture.mjs','scripts/lib/company-channel-migration.mjs','scripts/lib/disposable-postgres-cleanup.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','tests/fixtures/own-company-meta.mjs',...canonicalParticipantKycSourceFiles()])files.add(file);
- const paths=[...files].sort();assert.equal(paths.length,250);assert.equal(new Set(paths).size,250);
+ const paths=[...files].sort(),previousPaths=paths.filter(file=>!PILOT_COMPANY_NATIVE_ADDITIONS.includes(file));
+ assert.deepEqual(paths.filter(file=>PILOT_COMPANY_NATIVE_ADDITIONS.includes(file)),PILOT_COMPANY_NATIVE_ADDITIONS);
+ assert.equal(previousPaths.length,250);assert.equal(new Set(previousPaths).size,250);
+ assert.equal(paths.length,253);assert.equal(new Set(paths).size,253);
  return paths.map(path=>({path,sha256:sha(read(path))}));
 }
 const companyNativeDenied=error=>error?.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED';
 test('company native source frame authenticates243 physical RAW sources while preserving238 historical and54 semantic checks',()=>{
  const manifest=companyNativePhysicalManifest(),before=serialize(manifest),contractBefore=read('.github/workspace-acceptance-contract.json');
  const result=validateCompanyOnboardingUxNativeSourceManifest(manifest,read);
- assert.deepEqual(result,{status:'PASS',sourceReferences:250,historicalSourceReferences:238,sourceScope:'CURRENT_AUTHENTICATED_OWNERS',nativeOrBrowserAcceptance:false});
+ assert.deepEqual(result,{status:'PASS',sourceReferences:253,historicalSourceReferences:238,sourceScope:'CURRENT_AUTHENTICATED_OWNERS',nativeOrBrowserAcceptance:false});
  assert.equal(serialize(manifest),before);assert.deepEqual(read('.github/workspace-acceptance-contract.json'),contractBefore);
  assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.sourceCount,238);assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.totalCheckCount,54);assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.addedCheckNames.length,5);
  assert.equal(companyExpected.native.sourceCount,238);assert.equal(companyExpected.native.totalCheckCount,54);
- const historical=manifest.map(row=>row.path).filter(path=>!['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','scripts/lib/synthetic-capture-quality.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs',"src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"].includes(path)).sort();
+ const historical=manifest.map(row=>row.path).filter(path=>!['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','scripts/lib/synthetic-capture-quality.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs',"src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs",...PILOT_COMPANY_NATIVE_ADDITIONS].includes(path)).sort();
  assert.equal(historical.length,238);assert.equal(sha(JSON.stringify(historical)),COMPANY_ONBOARDING_UX_NATIVE_REVIEW.sourcePathsSha256);
 });
 test('company native source frame rejects missing foreign duplicate and corrupt source references',()=>{
@@ -373,21 +408,21 @@ test('company native source frame rejects missing foreign duplicate and corrupt 
  for(const edit of [m=>m.pop(),m=>m.push({...m[0]}),m=>{m[0]={...m[1]};},m=>{m[0].path='src/lib/foreign-native-source.mjs';},m=>{m[0].sha256='f'.repeat(64);},m=>{m[0].unreviewed=true;}]){
   const manifest=structuredClone(original);edit(manifest);assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(manifest,read),companyNativeDenied);
  }
- for(const file of ['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs']){
+ for(const file of ['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs',...PILOT_COMPANY_NATIVE_ADDITIONS]){
   assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(original,p=>p===file?null:read(p)),companyNativeDenied);
   assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(original,p=>p===file?Buffer.concat([read(p),Buffer.from('\n// corrupt RAW bytes\n')]):read(p)),companyNativeDenied);
  }
 });
 test('company native source frame rejects partial missing corrupt and foreign owner metadata',()=>{
  const manifest=companyNativePhysicalManifest();
- for(const edit of [c=>{delete c.worksiteLiveHoursCurrentRevision;},c=>{delete c.planBudgetCurrentRevision;},c=>{delete c.worksiteLiveHoursCurrentRevision;delete c.planBudgetCurrentRevision;},c=>{c.worksiteLiveHoursCurrentRevision={};},c=>{c.planBudgetCurrentRevision={};},c=>{c.planBudgetCurrentRevision.references[0].currentSha256='f'.repeat(64);}]){
+ for(const edit of [c=>{delete c.worksiteLiveHoursCurrentRevision;},c=>{delete c.planBudgetCurrentRevision;},c=>{delete c.worksiteLiveHoursCurrentRevision;delete c.planBudgetCurrentRevision;},c=>{c.worksiteLiveHoursCurrentRevision={};},c=>{c.planBudgetCurrentRevision={};},c=>{c.planBudgetCurrentRevision.references[0].currentSha256='f'.repeat(64);},c=>{delete c.planBudgetCurrentRevision.pilotCompletionAdvance;},c=>{c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges=c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.filter(row=>row.path!==PILOT_COMPANY_NATIVE_ADDITIONS[0]);}]){
   const contract=current();edit(contract);const raw=Buffer.from(serialize(contract));
   assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(manifest,p=>p==='.github/workspace-acceptance-contract.json'?raw:read(p)),companyNativeDenied);
  }
 });
 test('company native source frame detects late baseline addition and contract RAW changes and copies mutable reader buffers',()=>{
  const manifest=companyNativePhysicalManifest();
- for(const file of [manifest[0].path,'src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','.github/workspace-acceptance-contract.json']){
+ for(const file of [manifest[0].path,'src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs',...PILOT_COMPANY_NATIVE_ADDITIONS,'.github/workspace-acceptance-contract.json']){
   const original=read(file),text=original.toString('utf8'),normalized=text.replaceAll('\r\n','\n'),changed=Buffer.from(text.includes('\r\n')?normalized:normalized.replaceAll('\n','\r\n'));assert.equal(changed.equals(original),false);
   let count=0;const observed=new Set();
   assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(manifest,p=>{observed.add(p);return p===file&&++count>1?changed:read(p);}),companyNativeDenied);assert.ok(count>=2);assert.ok(observed.has(file));
@@ -403,7 +438,7 @@ test('company native source frame rejects caller manifest mutation and preserves
 });
 
 test('company native historical source-set frame preserves the238 minimum reader without declaring historical proof acceptance',()=>{
- const additions=['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','scripts/lib/synthetic-capture-quality.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs',"src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"],manifest=companyNativePhysicalManifest().filter(row=>!additions.includes(row.path)),allowed=new Set(manifest.map(row=>row.path));assert.equal(manifest.length,238);allowed.add(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer);allowed.add('.github/workspace-acceptance-contract.json');
+ const additions=['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','scripts/lib/synthetic-capture-quality.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs',"src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs",...PILOT_COMPANY_NATIVE_ADDITIONS],manifest=companyNativePhysicalManifest().filter(row=>!additions.includes(row.path)),allowed=new Set(manifest.map(row=>row.path));assert.equal(manifest.length,238);allowed.add(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer);allowed.add('.github/workspace-acceptance-contract.json');
  const outside=[];const result=validateCompanyOnboardingUxNativeSourceManifest(manifest,file=>{if(!allowed.has(file)){outside.push(file);return null;}return file==='.github/workspace-acceptance-contract.json'?Buffer.from('{}'):read(file);});
  assert.deepEqual(outside,[]);assert.deepEqual(result,{status:'PASS',sourceReferences:238,historicalSourceReferences:238,sourceScope:'HISTORICAL_SOURCE_SET',nativeOrBrowserAcceptance:false});
 });
@@ -458,7 +493,7 @@ test("native materials membership requires all three exact source owners and the
  assert.deepEqual(own.retainedDependencies.map(row=>row.path),["src/app/(identity)/cuenta/kyc-camera-session.mjs","src/app/(identity)/cuenta/participant-panel.module.css"]);
  for(const path of paths){const row=own.sourceChanges.find(r=>r.path===path);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(sha(read(path).toString('utf8').replaceAll('\r\n','\n')),row.currentSha256);const changed=structuredClone(contract);changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges=changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.filter(r=>r.path!==path);assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(manifest,p=>p==='.github/workspace-acceptance-contract.json'?Buffer.from(serialize(changed)):read(p)),companyNativeDenied);}
  const allowed=new Set([...planBudgetValidationFiles(contract),...homeDecisionsValidationFiles(contract),...worksiteLiveHoursValidationFiles(contract)]),nativePaths=new Set(manifest.map(r=>r.path));const limited=file=>allowed.has(file)||nativePaths.has(file)||file===COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer||file==='.github/workspace-acceptance-contract.json'?read(file):null;
- assert.equal(validateCompanyOnboardingUxNativeSourceManifest(manifest,limited).sourceReferences,250);
+ assert.equal(validateCompanyOnboardingUxNativeSourceManifest(manifest,limited).sourceReferences,253);
 });
 
 test('current material authority survives the closed KYC ownership expansion and denies partial resealing',()=>{
