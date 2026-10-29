@@ -1,4 +1,4 @@
-import {createSyntheticCurrent85FixtureFromSource} from '../../tests/fixtures/focused-workspace-current85-fixture.mjs';
+import {createSyntheticCurrent85FixtureFromSource,optionalCurrent85UnitSourceReader} from '../../tests/fixtures/focused-workspace-current85-fixture.mjs';
 import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePilotCompletionPreviousFieldProof,restorePilotCompletionPreviousProofSpec} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_BUDGET_UI_MATRIX,validatePlanBudgetUiProofBytes,planBudgetUiSourceBinding,planBudgetUiRetainedScreenshotPath} from '../../scripts/lib/plan-budget-ui-contract.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
@@ -2164,7 +2164,8 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
 }
 // Explicit UNIT composition, separate from expectedNeeds' strict core. Only
 // selftest callers choose this model; public/CLI acceptance never reaches it.
-function expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource){
+function expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,sourceReader){
+ const readSource=optionalCurrent85UnitSourceReader(sourceReader);
  const active=contract.extension.proofs.filter(spec=>spec.kind===CURRENT85_CI_KIND);
  if(!active.length)return expectedNeeds(contract,expectedHead,workflowSha256,readSource);
  if(active.length!==1)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
@@ -2200,7 +2201,8 @@ function expectedNeeds(contract,expectedHead,workflowSha256,readSource,suppliedF
  }));
 }
 
-export function current85TypedGateSelftest(contract,readSource){
+export function current85TypedGateSelftest(contract,sourceReader){
+ const readSource=optionalCurrent85UnitSourceReader(sourceReader);
  const specs=contract.extension.proofs.filter(spec=>spec.kind===CURRENT85_CI_KIND);if(!specs.length)return[];if(specs.length!==1)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
  const checks=[],boundary='Explicit UNIT source/Git/evidence model only; no CI, browser, provider or environment mutation';
  const good=(name,run)=>{run();checks.push({name:'current85-typed-'+name,result:'PASS',boundary});};

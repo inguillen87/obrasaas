@@ -13,6 +13,7 @@ import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs'
 import {TASK_MEASUREMENT_VERSION,publicTaskMeasurement,deriveTaskMeasurement,assertMeasurementConfiguration} from './task-progress-measurement.js';
 import {readOwnFieldReports} from './field-report-feedback.mjs';
 import {readFieldHoursReport} from './field-hours-report.mjs';
+import {createApprovedProgressCurveReader} from './approved-progress-curve-store.mjs';
 import {EXECUTION_ACTIONS} from './field-execution-policy.mjs';
 import {createFieldExecution,beforeExecutionProject} from './field-execution-store.mjs';
 
@@ -63,6 +64,7 @@ const publicProposal=row=>({id:row.id,summary:row.summary,status:row.status==='P
 export function createFieldOperations({workspace,assertParticipant,usage=null}) {
   if(usage!==null&&typeof usage.resourceProjection!=='function')throw new TypeError('Explicit field review usage port required');
   const overtime=createFieldOvertime({assertWorker:worker});
+  const progressCurve=createApprovedProgressCurveReader({workspace,canReview:canReviewField});
   const execution=createFieldExecution({assertWorker:worker,assertTask:(...args)=>task(...args),assertEvidence:(...args)=>evidence(...args),publicTask:publicMeasuredTask});
   const correlated=action=>EXECUTION_ACTIONS.includes(action)||MATERIAL_INVENTORY_ACTIONS.includes(action)||OVERTIME_ACTIONS.includes(action)||action==='CONFIGURE_PROGRESS_MEASUREMENT';
   const run=(session,context,writable,callback)=>workspace.projectOperation(session,context,writable,callback,writable&&EXECUTION_ACTIONS.includes(context.action)?(client,member)=>beforeExecutionProject(client,member,context):writable&&context.action==='ATTENDANCE'?lockPersonWorksiteJourney:writable&&OVERTIME_ACTIONS.includes(context.action)?(client,member)=>overtime.beforeProject(client,member,context):writable&&context.action==='DECIDE_STOCK_ADJUSTMENT'&&context.payload?.decision==='APPROVE'?async(client,member)=>{if(!canApproveProgress(member.role))throw new WorkspaceError('INVENTORY_MANAGE_REQUIRED',403);if(member.channelProof)throw new WorkspaceError('INVENTORY_ADJUSTMENT_WEB_ONLY',403);if(!await prior(client,member,fieldReceiptId(member.actorId,context.projectId,context.operationId)))await lockStockAdjustmentProposer(client,member,context.projectId,context.payload.proposalId);}:undefined);
@@ -161,6 +163,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
     });
   }
   return {
+    progressCurve,
     shift(session,context){return run(session,context,false,async(client,member,scope,project)=>({scope,...await overtime.readShift(client,member,session,project,context)}));},
     reviewPage(session,context) {
       const {reviewSection,reviewFilter,afterReview=null,reviewId=null,reviewAccessStamp:expectedAccess}=context;

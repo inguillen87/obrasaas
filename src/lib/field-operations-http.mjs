@@ -23,6 +23,11 @@ export function createFieldHandlers({verify,operations}) {
     const session=await identity(request,verify),params=new URL(request.url).searchParams;
     if(request.method==='POST'){if(params.size)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.save(session,await boundedBody(request)));}
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
+    if(['progressCurveTaskId','progressCurveCursor'].some(key=>params.has(key))){
+      const input=context(params,['progressCurveTaskId','progressCurveCursor']);
+      if(!workspaceId(params.get('progressCurveTaskId'))||params.has('progressCurveCursor')&&(!params.get('progressCurveCursor')||params.get('progressCurveCursor').length>1200))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return reply(await operations.progressCurve(session,{...input,taskId:params.get('progressCurveTaskId'),...(params.has('progressCurveCursor')?{cursor:params.get('progressCurveCursor')}:{})}));
+    }
     if(['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat','expectedHoursDigest'].some(key=>params.has(key))){
       const input=context(params,['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat','expectedHoursDigest']),format=params.get('hoursFormat');
       if(!['json','csv'].includes(format)||params.size!==(format==='csv'?7:6)||!['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat'].every(key=>params.has(key))||format==='json'&&params.has('expectedHoursDigest')||format==='csv'&&!/^[a-f0-9]{64}$/.test(params.get('expectedHoursDigest')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');

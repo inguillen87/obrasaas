@@ -10,6 +10,14 @@ import {CURRENT85_CLAIMS,deriveCurrent85SourceContract} from '../../scripts/lib/
 import {CURRENT85_CI_VERSION,current85Descriptor,validateFocusedWorkspaceCurrent85Ci} from '../../scripts/verify-focused-workspace-current85-ci.mjs';
 import {focusedWorkspaceUnitCases,parseFocusedWorkspaceTap} from '../../scripts/verify-focused-workspace-ci.mjs';
 
+// This adapter belongs only to the explicit UNIT model. Dependency resolvers
+// probe an extensionless candidate before the real .js/.mjs/.css file. Preserve
+// missing mandatory-source rejection and rethrow every non-ENOENT read error.
+export function optionalCurrent85UnitSourceReader(sourceReader){
+ if(typeof sourceReader!=='function')throw new TypeError('Explicit unit source reader required');
+ return file=>{try{return sourceReader(file);}catch(error){if(error?.code==='ENOENT')return null;throw error;}};
+}
+
 const repository=fileURLToPath(new URL('../../',import.meta.url));
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const output='.vercel/private/focused-workspace-ui-evidence/';
