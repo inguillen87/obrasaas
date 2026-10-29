@@ -3,6 +3,7 @@ import {WorkspaceError} from './workspace-policy.mjs';
 import {PLAN_OOXML_TYPES,extractMonthlyPlanOoxml,extractCypPlanOoxml,extractMonthlyCurveOoxml,extractCypCurveOoxml,extractCypInvestmentOoxml} from './plan-import-ooxml.mjs';
 import {PLAN_CYP_INVESTMENT_CONSENT,PLAN_CYP_INVESTMENT_PROFILE} from './plan-import-cyp-curve.mjs';
 import {PLAN_BUDGET_SOURCE_CONSENT,PLAN_BUDGET_SOURCE_PROFILE,extractPlanBudgetSource} from './plan-budget-source.mjs';
+import {PLAN_BUDGET_CSV_PROFILE,PLAN_BUDGET_CSV_CONSENT,PLAN_BUDGET_CSV_TYPE,extractPlanBudgetCsvSource} from './plan-budget-csv-source.mjs';
 import {openAiUsageFact} from './organization-usage-policy.mjs';
 import {DOCUMENT_CURVE_PROFILE,DocumentCurveError,isDocumentCurveConsent,normalizeDocumentCurveExtraction,documentCurveResponseSchema,DOCUMENT_CURVE_INSTRUCTIONS} from './plan-import-document-curve.mjs';
 import {PLAN_MEASUREMENT_PROFILE,PLAN_MEASUREMENT_DOCUMENT_SCHEMA,PLAN_MEASUREMENT_DOCUMENT_INSTRUCTIONS,isPlanMeasurementConsent,extractPlanMeasurementSource,normalizePlanMeasurementDocument} from './plan-measurement-source.mjs';
@@ -22,6 +23,9 @@ export function createPlanImportAnalyzer({environment=()=>process.env,fetchImpl=
  if(typeof fetchImpl!=='function'||typeof environment!=='function'||!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>60000)throw new TypeError('Invalid plan analyzer');
  return {async analyze(source,{profile='MONTHLY_RUBROS',consent=null,usageObserver=null}={}) {
   const documentOnly=profile===DOCUMENT_CURVE_PROFILE,measurementOnly=profile===PLAN_MEASUREMENT_PROFILE,investmentOnly=profile===PLAN_CYP_INVESTMENT_PROFILE,budgetOnly=profile===PLAN_BUDGET_SOURCE_PROFILE;
+  const csvBudgetOnly=profile===PLAN_BUDGET_CSV_PROFILE,csv=String(source?.contentType||'').split(';')[0].toLowerCase().trim()===PLAN_BUDGET_CSV_TYPE;
+  if(csvBudgetOnly!==(consent===PLAN_BUDGET_CSV_CONSENT)||csvBudgetOnly!==csv)return failure('PLAN_IMPORT_CONSENT_REQUIRED');
+  if(csvBudgetOnly){try{const file=decodePlanSource(source.bytes,source.contentType),budgetSource=extractPlanBudgetCsvSource(file.bytes,file.contentType,{sourceSha256:file.sha256});return {success:true,provider:'local-csv',model:null,requestedModel:null,rows:[],warnings:[],budgetSource};}catch(error){return failure(error instanceof WorkspaceError?error.code:'PLAN_IMPORT_BUDGET_CSV_INVALID');}}
   if(budgetOnly!==(consent===PLAN_BUDGET_SOURCE_CONSENT)||budgetOnly&&!PLAN_OOXML_TYPES[String(source?.contentType||'').split(';')[0].toLowerCase().trim()])return failure('PLAN_IMPORT_CONSENT_REQUIRED');
   if(investmentOnly!==(consent===PLAN_CYP_INVESTMENT_CONSENT)||investmentOnly&&!PLAN_OOXML_TYPES[String(source?.contentType||'').split(';')[0].toLowerCase().trim()])return failure('PLAN_IMPORT_CONSENT_REQUIRED');
   if(measurementOnly&&!isPlanMeasurementConsent(consent,String(source?.contentType||'').split(';')[0].toLowerCase().trim()))return failure('PLAN_IMPORT_CONSENT_REQUIRED');

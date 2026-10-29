@@ -1,5 +1,5 @@
 import {createHmac,createHash} from 'node:crypto';
-import {WorkspaceError} from './workspace-policy.mjs';
+import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {customerVaultConfigured} from './meta-customer-credentials.mjs';
 import {META_CUSTOMER_REQUIRED_SCOPES,hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
@@ -11,6 +11,7 @@ import {normalizeCompanyPhone} from './company-onboarding-policy.mjs';
 const pilotAudits=new WeakMap(),pilotInspections=new WeakMap();
 const ownAudits=new WeakMap(),ownInspections=new WeakMap();
 const ownTemplateAdministrations=new WeakMap();
+const ownParticipantOnboardingScopes=new WeakMap();
 // Only the internal forConnection inspection can consume this purpose. Neither
 // an exported factory option nor a copied capability/inspection can mint it.
 const ownTransportInspections=new WeakMap();
@@ -116,7 +117,7 @@ export function metaCustomerReadiness(environment=process.env){
   humanAcceptance:'NOT_VERIFIED',numberRegistration:'REQUIRES_CUSTOMER_NUMBER',signupVersion:'4',
   flows:{DEDICATED:{available,configId:gates.configuration?configId:null},BUSINESS_APP:{available:coexistence,configId:coexistence?coexistenceConfig:null,featureType:'whatsapp_business_app_onboarding'},EXISTING_API:{available:false,configId:null,requiresSharePlan:true}}};
 }
-export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now(),readiness=metaCustomerReadiness,pilotCapability=null,pilotAudit=null,ownCapability=null,ownAudit=null,ownFence=null,ownTemplateAdministration=null,ownDiagnostic=null}={}){
+export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now(),readiness=metaCustomerReadiness,pilotCapability=null,pilotAudit=null,ownCapability=null,ownAudit=null,ownFence=null,ownTemplateAdministration=null,ownDiagnostic=null,ownParticipantOnboardingScope=null}={}){
  // Embedded Signup versions govern new authorization flows. They do not
  // revoke previously granted customer transport. Retain every existing
  // transport prerequisite while requiring v4 separately for a new code.
@@ -200,7 +201,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  }
  // Runtime grants enter only through forConnection, after the canonical row
  // and credential commitments match. Public administrative import stays 4h.
- async function auditOwnCapability(capability,token,fence=null,templateAdministration=null,diagnostic=null,transportOperation=null){
+ async function auditOwnCapability(capability,token,fence=null,templateAdministration=null,diagnostic=null,transportOperation=null,onboardingScope=null){
   const current=ownCompanyTransportPolicy(capability,environment,now()),runtime=ownCompanyCapabilityKind(capability)==='RUNTIME',base=metaCustomerReadiness(environment);
   if(readiness!==metaCustomerReadiness||!['app','secret','version','vault','callback'].every(key=>base.gates[key]===true)||typeof token!=='string'||token.trim()!==token||token.length<20||token.length>8192)throw new WorkspaceError('META_OWN_COMPANY_CONFIGURATION_PENDING',503);
   if(runtime&&customerTokenDigest(token)!==current.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
@@ -220,16 +221,16 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   }
   const audit=Object.freeze({});ownAudits.set(audit,{policyDigest:current.policyDigest,tokenDigest:customerTokenDigest(token),systemUserId:String(debug.user_id),tokenExpiresAt:ownTokenExpiry(debug),dataAccessExpiresAt:ownDataAccessExpiry(debug),expiresAt:Math.min(Date.parse(current.expiresAt),debug.expires_at*1000,debug.data_access_expires_at?debug.data_access_expires_at*1000:Infinity,now()+60000)});
   if(transportOperation)ownTransportInspections.set(audit,transportOperation);
-  return createMetaCustomerProvider({environment,fetchImpl,now,readiness,ownCapability:capability,ownAudit:audit,ownFence:runtime?fence:null,ownTemplateAdministration:templateAdministration,ownDiagnostic:diagnostic});
+  return createMetaCustomerProvider({environment,fetchImpl,now,readiness,ownCapability:capability,ownAudit:audit,ownFence:runtime?fence:null,ownTemplateAdministration:templateAdministration,ownDiagnostic:diagnostic,ownParticipantOnboardingScope:onboardingScope});
  }
 
- async function ownConnectionProvider({capability,connection,token,beforeExternal},diagnostic=null){
+ async function ownConnectionProvider({capability,connection,token,beforeExternal},diagnostic=null,onboardingScope=null){
   const current=ownCompanyTransportPolicy(capability,environment,now()),canonical=ownCompanyConnectionPolicy(connection,environment,now()),runtime=Object.hasOwn(connection.metadata,'ownCompanyRuntime');
   if(current.policyDigest!==canonical?.policyDigest||ownCompanyCapabilityKind(capability)!==(runtime?'RUNTIME':'ADMIN')||runtime&&(current.connectionId!==connection.id||current.grantDigest!==canonical.grantDigest||current.tokenDigest!==customerTokenDigest(token||'')))throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
   if(runtime&&typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
   const operation=runtime?{purpose:'TRANSPORT_OP',capability,connectionId:current.connectionId,grantDigest:current.grantDigest,tokenDigest:current.tokenDigest,wabaId:current.wabaId,phoneNumberId:current.phoneNumberId,active:true,claimed:false}:null;
   try{
-   const scoped=await auditOwnCapability(capability,token,runtime?beforeExternal:null,null,diagnostic,operation),verified=await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});
+   const scoped=await auditOwnCapability(capability,token,runtime?beforeExternal:null,null,diagnostic,operation,onboardingScope),verified=await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});
    if(runtime&&(verified.registered!==true||verified.platformType!=='CLOUD_API'||await scoped.inspectSubscription({token,wabaId:connection.whatsappBusinessId})!==true))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);return scoped;
   }finally{if(operation)operation.active=false;}
  }
@@ -247,8 +248,65 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   if(frame?.capability===ownCapability&&frame.inspection?.sequence===sequence)frame.rejection={error,stage,sequence};
   throw error;
  }
+ function onboardingScope(){
+  const scope=ownParticipantOnboardingScopes.get(ownParticipantOnboardingScope);
+  if(!scope||!ownCapability||scope.capability!==ownCapability)throw new WorkspaceError('META_OWN_COMPANY_ADAPTER_UNAVAILABLE',409);
+  const current=scope.readAuthority(scope.authority,scope.phase,{environment,now:now()});
+  if(digest(current.binding)!==scope.bindingDigest||current.authorityDigest!==scope.authorityDigest)throw new WorkspaceError('PARTICIPANT_ONBOARDING_AUTHORITY_CHANGED',409);
+  return scope;
+ }
+ async function readOwnOnboardingTemplate({token,wabaId,name}){
+  const scope=onboardingScope();
+  if(customerTokenDigest(token||'')!==scope.tokenDigest||wabaId!==scope.binding.wabaId||name!==scope.definition.name)throw new WorkspaceError('META_OWN_COMPANY_ASSET_REJECTED',403);
+  const result=await request(wabaId+'/message_templates?'+new URLSearchParams({name,fields:'id,name,status,language,category,components',limit:'100'}),{token});
+  if(!Array.isArray(result.data)||result.paging?.next)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_LOOKUP_UNCONFIRMED',503);
+  const exact=result.data.filter(item=>item.name===name);
+  if(exact.length!==1||!scope.matches(exact[0],scope.definition)||String(exact[0].id)!==scope.providerId||exact[0].status!=='APPROVED'||exact[0].category!=='UTILITY')throw new WorkspaceError('PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED',409);
+  return exact[0];
+ }
  return {
   readiness:scopedReady,
+   async forOwnParticipantOnboarding({authority,phase,token,beforeExternal,envelope=null}){
+    if(ownCapability||pilotCapability||typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_ADAPTER_UNAVAILABLE',409);
+    const {readOwnParticipantOnboardingAuthority:readAuthority}=await import('./participant-onboarding-authority.mjs');
+    const {buildCustomerTemplate,customerRemoteTemplateMatches,buildParticipantInvitationMessage,buildParticipantOnboardingMessage}=await import('./meta-customer-templates.mjs');
+    const initial=readAuthority(authority,phase,{environment,now:now()}),blueprintKey=phase==='ACCOUNT_INVITATION'?'participant_invitation':'participant_onboarding_v1';
+    const definition=buildCustomerTemplate(initial.connection,blueprintKey),draft=initial.connection.metadata.ownCompanyTemplateDrafts?.[blueprintKey];
+    if(!draft||draft.grantDigest!==initial.policy.grantDigest||draft.state!=='SUBMITTED'||draft.providerStatus!=='APPROVED'||draft.providerCategory!=='UTILITY'||draft.definition?.name!==definition.name||draft.definition?.contentSha256!==definition.contentSha256||!metaAssetId(String(draft.providerId||''))||!Number.isSafeInteger(draft.observationRevision)||draft.observationRevision<1)throw new WorkspaceError('PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED',409);
+    const stamp=digest(draft),bindingDigest=digest(initial.binding),catalogDigest=digest(initial.connection.metadata.ownCompanyTemplateDrafts),organizationName=initial.member.organizationName||initial.project.organizationName;
+    let expectedMessage=null;
+    if(envelope!==null){
+     const delivery=initial.worker.metadata.participant.onboardingDelivery;
+     if(delivery.state!=='SEND_STARTED'||delivery.outboundId!==initial.correlationId)throw new WorkspaceError('PARTICIPANT_ONBOARDING_CONTEXT_CHANGED',409);
+     if(envelope.version!==3||envelope.channelPurpose!=='PARTICIPANT_ONBOARDING'||envelope.phase!==phase||digest(envelope.ownOnboarding)!==bindingDigest||envelope.authorityDigest!==initial.authorityDigest||envelope.to!==initial.worker.phone.slice(1)||envelope.channelId!==initial.connection.id||envelope.phoneNumberId!==initial.binding.phoneNumberId||envelope.wabaId!==initial.binding.wabaId||envelope.targetProjectId!==initial.project.id||envelope.workerId!==initial.worker.id||envelope.organizationId!==initial.member.organizationId||envelope.template?.providerId!==String(draft.providerId)||envelope.template?.stamp!==stamp||envelope.template?.contentSha256!==definition.contentSha256)throw new WorkspaceError('PARTICIPANT_ONBOARDING_CONTEXT_CHANGED',409);
+     expectedMessage=phase==='ACCOUNT_INVITATION'?buildParticipantInvitationMessage(initial.connection,{organizationName}):buildParticipantOnboardingMessage(initial.connection,{organizationName,invitationId:initial.worker.metadata.participant.invitation.id,code:envelope.message?.bodyParameters?.[2]});
+     if(digest(envelope.message)!==digest(expectedMessage))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID',400);
+     if(phase==='IDENTITY_START'){
+      const {metaKycChallengeDigest}=await import('./meta-kyc-challenge.mjs'),challenge=initial.worker.metadata.participant.kycChatChallenge;
+      if(challenge?.status!=='PENDING'||challenge.id!==envelope.challengeId||challenge.codeDigest!==metaKycChallengeDigest(expectedMessage.bodyParameters[2])||challenge.expiresAt!==envelope.expiresAt||Date.parse(challenge.expiresAt)<=now())throw new WorkspaceError('PARTICIPANT_ONBOARDING_CONTEXT_CHANGED',409);
+     }
+    }
+    const consumedAuthorities=new WeakSet([authority]);
+    const fence=async()=>{
+     const fresh=await beforeExternal();
+     if(consumedAuthorities.has(fresh))throw new WorkspaceError('PARTICIPANT_ONBOARDING_AUTHORITY_CHANGED',409);
+     const next=readAuthority(fresh,phase,{environment,now:now()});consumedAuthorities.add(fresh);
+     if(next.authorityDigest!==initial.authorityDigest||digest(next.binding)!==bindingDigest||digest(next.connection.metadata.ownCompanyTemplateDrafts)!==catalogDigest||digest(next.connection.metadata.ownCompanyTemplateDrafts?.[blueprintKey])!==stamp)throw new WorkspaceError('PARTICIPANT_ONBOARDING_AUTHORITY_CHANGED',409);
+    };
+    const marker=Object.freeze({});ownParticipantOnboardingScopes.set(marker,{capability:initial.capability,authority,readAuthority,phase,binding:structuredClone(initial.binding),bindingDigest,authorityDigest:initial.authorityDigest,definition,providerId:String(draft.providerId),matches:customerRemoteTemplateMatches,tokenDigest:customerTokenDigest(token||''),expectedMessage,sendClaimed:false,correlationId:initial.correlationId,to:initial.worker.phone.slice(1)});
+    const scoped=await ownConnectionProvider({capability:initial.capability,connection:initial.connection,token,beforeExternal:fence},null,marker);
+    // The returned purpose adapter has no create, OAuth or generic-send method.
+    return Object.freeze({readiness:()=>scoped.readiness(),findTemplate:input=>scoped.readOwnParticipantOnboardingTemplate(input),sendTemplate:input=>scoped.sendOwnParticipantOnboardingTemplate(input)});
+   },
+   async readOwnParticipantOnboardingTemplate(input){return readOwnOnboardingTemplate(input);},
+   async sendOwnParticipantOnboardingTemplate({token,phoneNumberId,to,message,correlationId}){
+    const scope=onboardingScope();
+    if(scope.sendClaimed||!scope.expectedMessage||customerTokenDigest(token||'')!==scope.tokenDigest||phoneNumberId!==scope.binding.phoneNumberId||to!==scope.to||correlationId!==scope.correlationId||digest(message)!==digest(scope.expectedMessage))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID',400);
+    await readOwnOnboardingTemplate({token,wabaId:scope.binding.wabaId,name:scope.definition.name});
+    if(scope.sendClaimed||digest(message)!==digest(scope.expectedMessage))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID',400);scope.sendClaimed=true;
+    const result=await request(phoneNumberId+'/messages',{token,method:'POST',body:{messaging_product:'whatsapp',recipient_type:'individual',to,...customerTemplateMessage(scope.expectedMessage),biz_opaque_callback_data:correlationId}});
+    const id=result.messages?.length===1?result.messages[0].id:null;if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(id||''))throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);return {messageId:id};
+   },
    async forOwnTemplateAdministration({capability,connection,token,beforeExternal,context,blueprintKey}){
     // The catalogue is needed only for this explicit management action. Keep
     // read-only transport/release inspection free of the template UI graph.

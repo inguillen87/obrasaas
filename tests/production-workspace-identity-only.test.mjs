@@ -5,6 +5,8 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createContext,runInContext} from 'node:vm';
 import {test} from 'node:test';
+import {currentProducerSourceFiles,identityProducerPredecessorSpec} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
+import {IDENTITY_DESTINATION_UX_CURRENT_REVISION} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {parse} from '@babel/parser';
 import {loadBindings,transform} from 'next/dist/build/swc/index.js';
 
@@ -78,4 +80,47 @@ test('actual identity producer emits and rechecks the complete fixture graph; si
  const old=execute(mutant),oldNames=old.manifest.map(ref=>ref.path).sort();assert.deepEqual(expected.filter(name=>!oldNames.includes(name)),[catalogSource]);assert.deepEqual(oldNames.filter(name=>!expected.includes(name)),[]);assert.equal(oldNames.length,expected.length-1);assert.throws(()=>assert.deepEqual(oldNames,expected));
  old.change(catalogSource);assert.doesNotThrow(old.recheck,'The former emitter also missed the catalog in its real post-browser check');
  assert.ok(actual.writes.size>0);assert.equal(actual.writes.has(catalogSource),false,'The server fixture catalog is bound without copying it into the browser bundle');
+});
+
+const identitySourceRoot=fileURLToPath(new URL('../',import.meta.url)),identityContractPath='.github/workspace-acceptance-contract.json';
+const readIdentityCurrent=file=>readFileSync(path.join(identitySourceRoot,file));
+const identityCurrentSpec=()=>JSON.parse(readIdentityCurrent(identityContractPath)).extension.proofs.find(row=>row.kind==='UI_IDENTITY_ONLY');
+const identityLineageRejected=error=>['PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED','PROOF_IDENTITY_CURRENT_SOURCE'].includes(error?.code);
+
+test('authenticated current identity spec preserves predecessor destination metadata and the complete current physical closure',()=>{
+ const spec=identityCurrentSpec(),before=JSON.stringify(spec),prior=identityProducerPredecessorSpec(spec,readIdentityCurrent);
+ assert.notEqual(prior,spec,'The finite UI_IDENTITY_ONLY whole-spec projection must be compiled');
+ assert.equal(prior.producerSha256,IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.producerDelta.currentProducerSha256);
+ assert.deepEqual(currentProducerSourceFiles(spec,identitySourceRoot),spec.sourceFiles);
+ for(const file of ['src/app/(identity)/cuenta/onboarding-guide.js','src/lib/participant-analysis-consent.mjs'])assert.equal(spec.sourceFiles.filter(path=>path===file).length,1);
+ assert.equal(JSON.stringify(spec),before);
+});
+
+test('identity predecessor selection rejects foreign or partially substituted current typed specs',()=>{
+ const spec=identityCurrentSpec();
+ for(const mutate of [value=>{value.id='foreign-proof';},value=>{value.kind='PG_FIELD';},value=>{value.producer='scripts/foreign.mjs';},value=>{value.producerSha256='e'.repeat(64);},value=>{value.sourceFiles=value.sourceFiles.slice(1);},value=>{value.unreviewed=true;}]){
+  const foreign=structuredClone(spec);mutate(foreign);
+  assert.throws(()=>identityProducerPredecessorSpec(foreign,readIdentityCurrent),{code:'PROOF_IDENTITY_CURRENT_SPEC'});
+ }
+});
+
+test('correlated identity contract and spec metadata cannot grant predecessor classification',()=>{
+ const contract=JSON.parse(readIdentityCurrent(identityContractPath));
+ contract.extension.proofs.find(row=>row.kind==='UI_IDENTITY_ONLY').producerSha256='e'.repeat(64);
+ const spec=contract.extension.proofs.find(row=>row.kind==='UI_IDENTITY_ONLY'),foreign=Buffer.from(JSON.stringify(contract,null,2)+'\n');
+ assert.throws(()=>identityProducerPredecessorSpec(spec,file=>file===identityContractPath?foreign:readIdentityCurrent(file)),identityLineageRejected);
+});
+
+test('identity predecessor selection rejects changed current producer RAW bytes and changes after its first read',()=>{
+ const spec=identityCurrentSpec(),original=readIdentityCurrent(spec.producer),changed=Buffer.concat([original,Buffer.from('\n// foreign identity producer bytes\n')]);
+ assert.throws(()=>identityProducerPredecessorSpec(spec,file=>file===spec.producer?changed:readIdentityCurrent(file)),identityLineageRejected);
+ let reads=0;
+ assert.throws(()=>identityProducerPredecessorSpec(spec,file=>file===spec.producer?(++reads===1?original:changed):readIdentityCurrent(file)),identityLineageRejected);
+ assert.ok(reads>1);assert.ok(readIdentityCurrent(spec.producer).equals(original));
+});
+
+test('identity predecessor selection rejects changed contract RAW bytes after its first read',()=>{
+ const spec=identityCurrentSpec(),original=readIdentityCurrent(identityContractPath),changed=Buffer.concat([original,Buffer.from('\n')]);let reads=0;
+ assert.throws(()=>identityProducerPredecessorSpec(spec,file=>file===identityContractPath?(++reads===1?original:changed):readIdentityCurrent(file)),identityLineageRejected);
+ assert.ok(reads>1);assert.ok(readIdentityCurrent(identityContractPath).equals(original));
 });

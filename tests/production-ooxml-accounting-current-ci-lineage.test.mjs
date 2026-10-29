@@ -1,4 +1,4 @@
-import {restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePilotCompletionPreviousSourceSet,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {PARTICIPANT_PREANALYSIS_CURRENT_REVISION,restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -38,9 +38,10 @@ const changes=[...OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges,...OOX
 // This projection authenticates the current outer set before retaining the
 // exact historical count/hash assertions belonging to the earlier CI revision.
 function assertCompactOwnSourceStages(actualFiles,files){
+ const pilotPreviousFiles=restorePilotCompletionPreviousSourceSet(contract,'COMPACT',actualFiles);
  const historical67=[...files,'src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'].sort();
  assert.equal(historical67.length,144);assert.equal(sha(JSON.stringify(historical67)),'28a9b504febaed95532993938780263453766590362baaaf8e867b26dadb59d4');
- assert.deepEqual(actualFiles,[...historical67,...["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"]].sort());
+ assert.deepEqual(pilotPreviousFiles,[...historical67,...["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"]].sort());
 }
 function historicalCompactFiles(actualFiles,contract){
  assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);

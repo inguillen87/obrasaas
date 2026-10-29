@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,restoreOwnRuntimeDiagnosticPreviousSourceText} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,restoreOwnRuntimeDiagnosticPreviousSourceText,restorePilotCompletionPreviousSourceText} from './plan-budget-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
 import {homeDecisionsLegacyOperationsAst} from './home-decisions-current-ci-lineage.mjs';
@@ -387,9 +387,9 @@ export function verifyMaterialReviewCurrentSources(contract,readSource){
   const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current material review source: '+row.path);
   const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===existingApiPlanCurrentSourcePin(contract,row),'Stale current material review source: '+row.path);
   if(row.unchangedSurfaceSha256){
-   // Only this inherited AST oracle consumes the authenticated0707 text. The
-   // original reader and every current-source pin continue to use physical bytes.
-   const inherited=own&&['src/lib/field-operations-http.mjs','src/lib/field-operations-store.mjs'].includes(row.path)?Buffer.from(ownCall(()=>restoreOwnRuntimeDiagnosticPreviousSourceText(contract,row.path,text))):bytes;
+   // Historical AST comparisons consume exact authenticated predecessor text.
+   // The original reader and every current-source pin keep physical current bytes.
+   const inherited=Buffer.from(ownCall(()=>own&&['src/lib/field-operations-http.mjs','src/lib/field-operations-store.mjs'].includes(row.path)?restoreOwnRuntimeDiagnosticPreviousSourceText(contract,row.path,text):restorePilotCompletionPreviousSourceText(contract,row.path,text)));
    reject(materialReviewUnchangedSurface(row.path,inherited)===row.unchangedSurfaceSha256,'Material review changed an inherited business surface: '+row.path);
   }
  }

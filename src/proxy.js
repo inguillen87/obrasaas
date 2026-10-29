@@ -4,6 +4,7 @@ import { identityRoute, IDENTITY_ORIGIN } from './lib/production-identity-config
 import {companySubscriptionRoute} from './lib/company-subscription-routing.mjs';
 const companyBillingRoute=(path,method)=>path==='/api/identity/company-billing'&&['GET','POST'].includes(method);
 const companyUsageRoute=(path,method)=>path==='/api/identity/company-usage'&&method==='GET';
+const consumptionEvidenceRoute=(path,method)=>path==='/api/identity/consumption-evidence'&&method==='GET';
 const planBaselineRoute=(path,method)=>path==='/api/identity/plan-baseline'&&['GET','POST'].includes(method);
 const planMeasurementRoute=(path,method)=>path==='/api/identity/plan-measurement'&&['GET','POST'].includes(method);
 const officeReviewRoute=(path,method)=>['/api/identity/office-review','/api/identity/office-join','/api/identity/project-creation'].includes(path)&&['GET','POST'].includes(method);
@@ -11,7 +12,7 @@ const verifiedWorkspaceRoutes=new Set(['/api/identity/workspace','/api/identity/
 
 export async function proxy(request) {
   const path = request.nextUrl.pathname;
-  const workspaceRoute=companySubscriptionRoute(path,request.method)||companyBillingRoute(path,request.method)||companyUsageRoute(path,request.method)||planBaselineRoute(path,request.method)||planMeasurementRoute(path,request.method)||officeReviewRoute(path,request.method)||(verifiedWorkspaceRoutes.has(path)&&(!['/api/identity/plan-import','/api/identity/project-preparation'].includes(path)||['GET','POST'].includes(request.method)));
+  const workspaceRoute=companySubscriptionRoute(path,request.method)||companyBillingRoute(path,request.method)||companyUsageRoute(path,request.method)||consumptionEvidenceRoute(path,request.method)||planBaselineRoute(path,request.method)||planMeasurementRoute(path,request.method)||officeReviewRoute(path,request.method)||(verifiedWorkspaceRoutes.has(path)&&(!['/api/identity/plan-import','/api/identity/project-preparation'].includes(path)||['GET','POST'].includes(request.method)));
   if (identityRoute(path) || workspaceRoute) {
     if (process.env.VERCEL_ENV === 'production' && request.nextUrl.origin !== IDENTITY_ORIGIN) {
       const destination = new URL(path, IDENTITY_ORIGIN);

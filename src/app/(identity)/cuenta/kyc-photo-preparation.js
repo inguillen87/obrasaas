@@ -76,23 +76,23 @@ function KycPhotoPreparationInner({kind,disabled,active=true,onChange}){
  const editing=<><button type="button" disabled={disabled||phase==='USING'} onClick={()=>prepare(original.current,(photo.rotation+90)%360)}>Girar 90°</button><button type="button" disabled={disabled||phase==='USING'} onClick={reset}>Descartar fotografía</button></>;
  return <fieldset className={styles.photo} aria-label={title}>
   <legend>{title}</legend>
-  <p>{documentPhoto?'Fotografiá el '+(kind==='back'?'dorso':'frente')+' completo, con luz pareja y sin reflejos. Revisá que se lean los datos.':'Mirando a la cámara, con luz de frente y el rostro completo. Esta foto se presenta para revisión humana.'}</p>
+  <p>{documentPhoto?'Mostrá el '+(kind==='back'?'dorso completo':'frente donde aparece tu foto')+'. Apoyá el documento sobre un fondo que contraste y dejá espacio alrededor de sus cuatro bordes. Evitá reflejos.':'Centrá tu rostro completo y mirá a la cámara, con luz de frente. No incluyas el documento ni a otra persona.'}</p>
   {phase!=='ACCEPTED'&&picker}
   <div className={styles.cameraBox} hidden={!cameraOpen} aria-label={'Cámara: '+title.toLowerCase()}>
    <div className={styles.cameraViewport}><video ref={video} autoPlay playsInline muted className={styles.cameraVideo} data-mirrored={!documentPhoto} aria-label={'Vista previa de cámara: '+title.toLowerCase()}/><span className={documentPhoto?styles.cameraDocumentFrame:styles.cameraFaceFrame} aria-hidden="true"/></div>
-   <p className={styles.cameraHint}>{cameraState.phase==='PERMISSION'?'Esperando tu permiso de cámara…':cameraState.phase==='CAPTURING'?'Tomando la fotografía…':documentPhoto?'Ubicá el documento completo dentro del marco.':'Centrala frente a tu rostro y mirá a la cámara.'}</p>
+   <p className={styles.cameraHint}>{cameraState.phase==='PERMISSION'?'Esperando tu permiso de cámara…':cameraState.phase==='CAPTURING'?'Tomando la fotografía…':documentPhoto?'Mostrá los cuatro bordes dentro de la guía, con espacio alrededor.':'Centrá tu rostro completo dentro de la guía y mirá a la cámara.'}</p>
    {cameraState.phase==='LIVE'&&<p className={styles.photoHint} role="status" aria-live="polite">{liveQuality?.message||'Comprobando luz y nitidez en este dispositivo…'}</p>}
    <p className={styles.photoHint}>La vista previa queda en este dispositivo. Después vas a revisar la fotografía antes de usarla.</p>
    <div className={styles.actions}><button type="button" disabled={disabled||!active||cameraState.phase!=='LIVE'} onClick={captureCamera}>Tomar fotografía</button><button type="button" onClick={closeCamera}>Cerrar cámara</button></div>
   </div>
-  <p role="status" aria-live="polite">{cameraState.error?cameraMessages[cameraState.error]:notice|| (phase==='PREPARING'?'Preparando una copia en este dispositivo…':phase==='USING'?'Leyendo la copia revisada… Todavía no se presentó.':phase==='ACCEPTED'?'Imagen revisada y lista para presentar.':'')}</p>
+  <p role="status" aria-live="polite">{cameraState.error?cameraMessages[cameraState.error]:notice|| (phase==='PREPARING'?'Preparando una copia en este dispositivo…':phase==='USING'?'Leyendo la copia revisada… Todavía no se presentó.':phase==='ACCEPTED'?'Foto preparada. El encuadre y la calidad se comprobarán al enviar.':'')}</p>
   {phase==='PREPARING'&&<button type="button" disabled={disabled} onClick={reset}>Cancelar preparación</button>}
   {photo&&<>
    {/* Only browser-local object URLs are shown; these images are not uploaded here. */}
    {/* eslint-disable-next-line @next/next/no-img-element */}
    <img className={styles.photoPreview} src={photo.preview} alt={'Vista previa privada: '+title.toLowerCase()}/>
    <details className={styles.photoDetails}><summary>Detalles de la imagen</summary><p className={styles.photoHint}>{photo.reduced?'Copia JPEG: '+size(photo.file.size)+' · '+photo.width+' × '+photo.height+' px. Original: '+size(photo.originalBytes)+'. '+(photo.file.size<photo.originalBytes?'Reducción de '+Math.round(100*(1-photo.file.size/photo.originalBytes))+'%.':'Se cambió la orientación; no se redujo el tamaño.'):'Se usará la imagen original: '+size(photo.file.size)+'. No fue reducida.'}</p><a className={styles.photoLink} href={photo.originalUrl} download={photo.originalName}>Conservar original</a></details>
-   {phase!=='ACCEPTED'&&<label className={styles.consent}><input ref={reviewChoice} disabled={disabled||phase==='USING'} type="checkbox" checked={reviewed} onChange={event=>setReviewed(event.target.checked)}/>{documentPhoto?'Revisé la orientación y los datos del documento se leen con claridad.':'Revisé la orientación y el rostro se ve con claridad.'}</label>}
+   {phase!=='ACCEPTED'&&<label className={styles.consent}><input ref={reviewChoice} disabled={disabled||phase==='USING'} type="checkbox" checked={reviewed} onChange={event=>setReviewed(event.target.checked)}/>{documentPhoto?'Revisé la orientación y los cuatro bordes. Los datos se leen con claridad.':'Revisé la orientación y que mi rostro se vea completo y con claridad.'}</label>}
    {phase==='ACCEPTED'?<details className={styles.photoDetails}><summary>Cambiar fotografía</summary>{picker}<div className={styles.actions}>{editing}</div></details>:<div className={styles.actions}>
     {phase==='USING'&&<button type="button" onClick={cancelAcceptance}>Cancelar lectura local</button>}
     {phase!=='ACCEPTED'&&<button ref={useButton} type="button" disabled={disabled||phase==='USING'||!reviewed} onClick={accept}>{documentPhoto?'Usar documento revisado':'Usar fotografía revisada'}</button>}

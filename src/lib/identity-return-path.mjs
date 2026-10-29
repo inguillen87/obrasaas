@@ -60,6 +60,13 @@ function invitationPath(path, searchParams) {
     const project=identityWorkspaceProjectHint(searchParams);
     return `${path}?${new URLSearchParams({seccion:section,...(project?{obra:project}:{})})}`;
   }
+  // A fixed worksite destination survives authentication without becoming
+  // membership, a field permission or an attendance command. An invitation or
+  // plan parameter, including an invalid one, keeps its original priority.
+  if(section==='actividad'&&!['participar','oficina','plan'].some(name=>hasQueryParameter(searchParams,name))){
+    const project=identityWorkspaceProjectHint(searchParams);
+    if(project)return `${path}?${new URLSearchParams({seccion:section,obra:project})}`;
+  }
   return path;
 }
 

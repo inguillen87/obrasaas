@@ -1,0 +1,20 @@
+.panel{border:1px solid #354959;border-radius:12px;padding:16px;margin-block:18px;overflow-wrap:anywhere;min-width:0}
+.panel h4{margin:0 0 10px;font-size:1.1rem}
+.panel p{line-height:1.5;max-width:78ch}
+.controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.controls label{display:flex;flex:1 1 240px;flex-direction:column;gap:6px;min-width:0}
+.panel select,.panel button{min-height:44px;max-width:100%;border:1px solid #668398;border-radius:8px;background:#112d42;color:#f2f6fa;padding:9px;font:inherit}
+.panel button{cursor:pointer}
+.panel button:disabled{opacity:.6;cursor:default}
+.panel :focus-visible{outline:3px solid #f6cc71;outline-offset:3px}
+.chart{display:block;width:100%;height:auto;max-width:850px;margin-block:18px}
+.chart line{stroke:#496070;stroke-width:1}
+.chart text{fill:currentColor;font-size:11px}
+.chart circle{fill:#84d3a2;stroke:#102431;stroke-width:2}
+.scroll{max-width:100%;overflow-x:auto;margin-block:14px}
+.panel table{border-collapse:collapse;width:100%;min-width:560px;text-align:left}
+.panel caption{text-align:left;padding-block:8px}
+.panel th,.panel td{padding:10px;border-bottom:1px solid #354959;vertical-align:top}
+.panel code{overflow-wrap:anywhere;font-size:.8rem}
+.panel details{margin-block:12px}
+.panel summary{cursor:pointer;min-height:44px;align-content:center}

@@ -188,7 +188,7 @@ const textContent=node=>node===null||node===undefined||typeof node==='boolean'?'
 const buttonText=node=>elements(node,element=>element.type==='button').map(element=>[element,textContent(element)]);
 function panelButton(tree,text){const value=buttonText(tree).find(([,label])=>label===text)?.[0];assert.ok(value,`Expected visible ${text} control`);return value;}
 async function openPanel(value,{canApprove=true,drafts=[value]}={}){
- panel.reset();let tree=panel.render(panelContext);panel.respond({data:{...panelContext,canApprove,drafts,truncated:false}});await panelButton(tree,'Importar PDF, imagen o Excel').props.onClick();
+ panel.reset();let tree=panel.render(panelContext);panel.respond({data:{...panelContext,canApprove,drafts,truncated:false}});await panelButton(tree,'Importar cronograma o presupuesto').props.onClick();
   tree=panel.render(panelContext);panel.respond({data:{...panelContext,draft:value}});await elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&textContent(node).endsWith(' tareas'))[0].props.onClick();
  panel.seed({recoveryReady:true,reason:'Revisión sintética del archivo',receipt:'receipt-synthetic',file:new File(['synthetic'],'source-synthetic.xlsx',{type:value.source.contentType}),consent:true,approved:true});
  tree=panel.render(panelContext);elements(tree,node=>node.type==='input'&&node.props.type==='file')[0].props.ref.current={value:'source-synthetic.xlsx'};

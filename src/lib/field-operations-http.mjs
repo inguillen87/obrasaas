@@ -23,6 +23,11 @@ export function createFieldHandlers({verify,operations}) {
     const session=await identity(request,verify),params=new URL(request.url).searchParams;
     if(request.method==='POST'){if(params.size)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.save(session,await boundedBody(request)));}
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
+    if(['progressCurveTaskId','progressCurveCursor'].some(key=>params.has(key))){
+      const input=context(params,['progressCurveTaskId','progressCurveCursor']);
+      if(!workspaceId(params.get('progressCurveTaskId'))||params.has('progressCurveCursor')&&(!params.get('progressCurveCursor')||params.get('progressCurveCursor').length>1200))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return reply(await operations.progressCurve(session,{...input,taskId:params.get('progressCurveTaskId'),...(params.has('progressCurveCursor')?{cursor:params.get('progressCurveCursor')}:{})}));
+    }
     if(['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat','expectedHoursDigest'].some(key=>params.has(key))){
       const input=context(params,['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat','expectedHoursDigest']),format=params.get('hoursFormat');
       if(!['json','csv'].includes(format)||params.size!==(format==='csv'?7:6)||!['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat'].every(key=>params.has(key))||format==='json'&&params.has('expectedHoursDigest')||format==='csv'&&!/^[a-f0-9]{64}$/.test(params.get('expectedHoursDigest')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
@@ -40,7 +45,7 @@ export function createFieldHandlers({verify,operations}) {
       return reply(await operations.inventoryHistory(session,{...input,inventoryFilter,...Object.fromEntries(selected.map(key=>[key,params.get(key)]))}));
     }
     if(['reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp'].some(key=>params.has(key))){
-      if([...params.keys()].some(key=>!['projectId','scope','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp'].includes(key))||!['EVIDENCE','PROGRESS'].includes(params.get('reviewSection'))||!['PENDING','ALL'].includes(params.get('reviewFilter'))||['afterReview','reviewId'].some(key=>params.has(key)&&!workspaceId(params.get(key)))||params.has('afterReview')&&params.has('reviewId')||params.has('reviewId')&&params.get('reviewFilter')!=='ALL'||['afterReview','reviewId','reviewAccessStamp'].some(key=>params.has(key))&&!/^[a-f0-9]{64}$/.test(params.get('reviewAccessStamp')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      if([...params.keys()].some(key=>!['projectId','scope','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp'].includes(key))||!['EVIDENCE','PROGRESS','ATTENDANCE'].includes(params.get('reviewSection'))||!['PENDING','ALL'].includes(params.get('reviewFilter'))||['afterReview','reviewId'].some(key=>params.has(key)&&!workspaceId(params.get(key)))||params.has('afterReview')&&params.has('reviewId')||params.has('reviewId')&&params.get('reviewFilter')!=='ALL'||['afterReview','reviewId','reviewAccessStamp'].some(key=>params.has(key))&&!/^[a-f0-9]{64}$/.test(params.get('reviewAccessStamp')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
       return reply(await operations.reviewPage(session,{...input,reviewSection:params.get('reviewSection'),reviewFilter:params.get('reviewFilter'),...(params.has('afterReview')?{afterReview:params.get('afterReview')}:{}) ,...(params.has('reviewId')?{reviewId:params.get('reviewId')}:{}) ,...(params.has('reviewAccessStamp')?{reviewAccessStamp:params.get('reviewAccessStamp')}:{})}));
     }
     if(params.has('journeyCursor')){if(params.size!==3||!params.get('journeyCursor')||params.get('journeyCursor').length>1024)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.read(session,{...input,journeyCursor:params.get('journeyCursor')}));}

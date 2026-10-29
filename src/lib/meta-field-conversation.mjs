@@ -9,6 +9,7 @@ import {startMetaPlanImportConversation,continueMetaPlanImportConversation} from
 import {voiceProgressDraftForEvidence,prepareVoiceProgressDraft,voiceProgressDraftReady,UNKNOWN_VOICE_VALUE,voiceQuantityScopeLabel,voiceProgressQuantityLabel,voiceProgressUnitLabel} from './voice-progress-draft.mjs';
 import {deriveTaskMeasurement} from './task-progress-measurement.js';
 import {planMetaFieldExecution,hasMetaFieldExecutionMandate} from './meta-field-execution-conversation.mjs';
+import {identityAccountReturnPath} from './identity-return-path.mjs';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['EXECUTION','Registrar material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU','MENÚ':'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',CRONOGRAMA:'TASKS',GANTT:'TASKS','IMPORTAR CRONOGRAMA':'PLAN_IMPORT','IMPORTAR PLAN':'PLAN_IMPORT',EVIDENCIA:'MEDIA',EVIDENCIAS:'OWN_EVIDENCE',AVANCES:'OWN_PROGRESS',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',EJECUCION:'EXECUTION','EJECUCIÓN':'EXECUTION',REPORTAR:'EXECUTION',EJECUCIONES:'OWN_EXECUTIONS',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
@@ -27,6 +28,15 @@ function journeyError(action,facts){try{fieldTransition(attendanceEvents[action]
 // Keep the old CONSUMO command and historical menu capability valid. The menu
 // leads with real authorized execution; its manual alternative stays explicit.
 const availableMenu=facts=>menuOptions.filter(([action])=>action!=='CONSUMPTION'&&(!facts.attendanceOnly||action.startsWith('ATTEND_')||action==='STATUS')).filter(([action])=>action==='PLAN_IMPORT'?permits('PLAN_IMPORT',facts):action.startsWith('ATTEND_')?permits('ATTENDANCE',facts)&&!journeyError(action,facts):action==='EXECUTION'?permits('REPORT',facts)&&Boolean(facts.inventory?.materials?.some(m=>m.active)):['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(action)?permits('REPORT',facts):true);
+// Navigation only: these facts come from the signed bridge. Cuenta still
+// resolves membership, the suggested worksite and every field permission.
+function withAttendanceWebGuidance(body,facts){
+ if(facts.attendanceOnly===true||facts.permissions?.attendance!==true||!workspaceId(facts.projectId))return body;
+ const path=identityAccountReturnPath(new URLSearchParams({seccion:'actividad',obra:facts.projectId}));
+ const hint='\n\nPara fichar con GPS y QR, abr\u00ed Jornada:\nhttps://obrasaas.com'+path+'#field-title\nEleg\u00ed Abrir operaciones y luego Entrada o Salida. Vos activ\u00e1s ubicaci\u00f3n y QR; el enlace no registra fichajes.';
+ const limit=Number.isSafeInteger(facts.replyBodyLimit)&&facts.replyBodyLimit>=0&&facts.replyBodyLimit<=1024?facts.replyBodyLimit:1024;
+ return body.length+hint.length<=limit?body+hint:body;
+}
 const progressHint='Usá el formato 25% o 2.5 / 10 M2. La base debe ser mayor que cero y la cantidad no puede superarla. Usá punto, hasta 4 decimales y hasta 14 cifras enteras, sin ceros a la izquierda. El borrador se conserva. Escribí CANCELAR para volver al menú.';
 const inputHints={INCIDENT_TITLE:'Escribí un título de 3 a 160 caracteres.',INCIDENT_DESCRIPTION:'Escribí un detalle de 8 a 2000 caracteres.',MATERIAL_NAME:'Escribí el nombre del material de 2 a 160 caracteres.',MATERIAL_QUANTITY:'Escribí una cantidad mayor que cero, por ejemplo 12 o 2.5. Usá punto, hasta 3 decimales y hasta 9 cifras enteras.',MEDIA:'Volvé a enviar la foto, audio o video con una descripción de hasta 1000 caracteres.',MEDIA_FILE:'Volvé a enviar la foto, audio o video con una descripción de hasta 1000 caracteres.'};
 function choices(state,eventId,body,rows){const nonce=digest([eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Opciones',rows:rows.map(([,title,description],i)=>({id:'obra:'+nonce+':'+i,title:title.slice(0,24),...(description?{description:description.slice(0,72)}:{})}))}]}};}
@@ -111,7 +121,7 @@ function statusReply(facts){const e=facts.latest,page=facts.ownConsumptions;let 
  if(facts.permissions.attendance===true)body+='\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso');
  if(facts.permissions.report===true)body+='\nEvidencias y avances: consultá tus informes para ver la revisión vigente, su motivo y sus recibos.';
  if(facts.permissions.report===true&&page)body+='\nConsumos informados por tu cuenta (últimos '+page.records.length+'):'+(page.records.length?'\n'+page.records.map(c=>consumptionName(c).slice(0,45)+' · '+c.quantity+' '+c.unit+' · '+consumptionState(c.state)).join('\n'):' ninguno.')+(page.nextCursor?'\nHay más informes para consultar.':'');
- return boundedReadBody(body+(facts.permissions.report===true?'\nEscribí EVIDENCIAS, AVANCES o CONSUMOS para consultar tus informes.':'\nConsultá los recibos de jornada en Mi cuenta.'),Number.isSafeInteger(facts.replyBodyLimit)?facts.replyBodyLimit:1024);
+ return withAttendanceWebGuidance(boundedReadBody(body+(facts.permissions.report===true?'\nEscribí EVIDENCIAS, AVANCES o CONSUMOS para consultar tus informes.':'\nConsultá los recibos de jornada en Mi cuenta.'),Number.isSafeInteger(facts.replyBodyLimit)?facts.replyBodyLimit:1024),facts);
 }
 function confirm(state,eventId,body){return choices({...state,step:'CONFIRM'},eventId,body,[['CONFIRM','Guardar'],['CANCEL','Cancelar']]);}
 const voiceEvidence=(state,facts)=>facts.evidence.filter(e=>e.taskId===state.taskId&&e.status==='APPROVED'&&voiceProgressDraftForEvidence(e,facts.tasks.find(t=>t.id===state.taskId))?.task.revision===facts.tasks.find(t=>t.id===state.taskId)?.revision);
@@ -167,7 +177,7 @@ export function metaFieldMediaAuthorizationValid(message,media,state){
 function authorizeMedia(state,eventId,consent){const ref=state.pendingFile;return {state:{...state,step:'MEDIA_AUTHORIZED',mediaAuthorizationStep:state.step,analysisConsent:consent,analysisConsentEventId:eventId},media:{taskId:ref.taskId,sectorId:ref.sectorId,mediaId:ref.mediaId,caption:ref.caption,contentType:ref.contentType,kind:ref.kind,analysisConsent:consent,analysisConsentEventId:eventId,sourceOrigin:ref}};}
 function start(action,eventId,facts,now){
  if(['EXECUTION','OWN_EXECUTIONS'].includes(action)||action==='CONSUMPTION'&&hasMetaFieldExecutionMandate(facts,now))return planMetaFieldExecution({eventId,facts,now,action:action==='CONSUMPTION'?'EXECUTION':action});
- if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,'ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',availableMenu(facts));
+ if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,withAttendanceWebGuidance('ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',facts),availableMenu(facts));
  if(action==='PLAN_IMPORT')return startMetaPlanImportConversation({eventId,facts,now});
  if(action==='TASKS')return chooseTask({purpose:'TASKS'},eventId,facts);
  if(action==='STATUS'){const body=statusReply(facts);return facts.permissions.report===true?{...choices({purpose:'OWN_CONSUMPTIONS',step:'OWN_CONSUMPTION_STATUS',consumptionAfter:null},eventId,body,[['OWN_EVIDENCE','Mis evidencias'],['OWN_PROGRESS','Mis avances'],...(facts.ownConsumptions?[['OWN_CONSUMPTIONS','Mis consumos']]:[]),['MENU','Volver al menú']]),consumptionRead:Boolean(facts.ownConsumptions)}:{state:null,reply:text(body)};}
