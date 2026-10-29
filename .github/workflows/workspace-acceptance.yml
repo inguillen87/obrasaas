@@ -687,10 +687,10 @@ jobs:
           node scripts/verify-workspace-identity-only-ui.mjs --expected-head "$GITHUB_SHA"
       - name: Focused worksite navigation and three-step synthetic identity browser evidence
         run: |
-          npx eslint scripts/verify-focused-workspace-ci.mjs scripts/verify-focused-workspace-ui.mjs scripts/lib/integrated-identity-current-ci-lineage.mjs tests/production-focused-workspace-ci.test.mjs tests/production-focused-workspace-ui.test.mjs tests/production-focused-workspace-navigation.test.mjs tests/production-integrated-identity-current-ci-lineage.test.mjs --max-warnings 0
+          npx eslint scripts/verify-focused-workspace-ci.mjs scripts/verify-focused-workspace-ui.mjs scripts/lib/integrated-identity-current-ci-lineage.mjs tests/production-focused-workspace-ci.test.mjs tests/production-focused-workspace-ui.test.mjs tests/production-focused-workspace-navigation.test.mjs tests/production-integrated-identity-current-ci-lineage.test.mjs scripts/verify-focused-workspace-current85-ci.mjs scripts/lib/focused-workspace-current85-evidence.mjs scripts/lib/focused-workspace-current85-spec.mjs tests/production-focused-workspace-current85-ci.test.mjs tests/fixtures/focused-workspace-current85-fixture.mjs --max-warnings 0
           node --test tests/production-integrated-identity-current-ci-lineage.test.mjs
-          node scripts/verify-focused-workspace-ci.mjs browser --expected-head "$GITHUB_SHA"
-          node scripts/verify-focused-workspace-ci.mjs verify --expected-head "$GITHUB_SHA"
+          node scripts/verify-focused-workspace-current85-ci.mjs browser --expected-head "$GITHUB_SHA"
+          node scripts/verify-focused-workspace-current85-ci.mjs verify --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane workspace-ui --expected-head "$GITHUB_SHA"

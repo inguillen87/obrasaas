@@ -1,6 +1,8 @@
 import {companyOnboardingUxHistoricalFocusedAssertions} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {verifyPlanBudgetCurrentSources,restorePilotCompletionPreviousSourceText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {focusedWorkspaceCiSourceClosure} from '../scripts/verify-focused-workspace-ci.mjs';
+import {focusedWorkspaceCurrent85CiSourceClosure} from '../scripts/verify-focused-workspace-current85-ci.mjs';
+import {restorePilotCompletionPreviousContract} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync,existsSync,lstatSync} from 'node:fs';
@@ -49,8 +51,12 @@ test('all128 historical producer assertions remain exact after projecting only a
  // before exposing a predecessor only to this historical assertion oracle.
  const contract=JSON.parse(readSource('.github/workspace-acceptance-contract.json')),producer='scripts/verify-focused-workspace-ui.mjs';
  assert.equal(verifyPlanBudgetCurrentSources(contract,readSource).nativeOrBrowserAcceptance,false);
- const specs=contract.extension.proofs.filter(row=>row.id==='focused-workspace-ui');assert.equal(specs.length,1);
- assert.deepEqual(focusedWorkspaceCiSourceClosure(readSource),specs[0].sourceFiles);
+ const active85=contract.extension.proofs.filter(row=>row.kind==='UI_FOCUSED_WORKSPACE_85');
+ if(active85.length){
+  assert.equal(active85.length,1);assert.deepEqual(focusedWorkspaceCurrent85CiSourceClosure(readSource),active85[0].sourceFiles);
+  const prior=restorePilotCompletionPreviousContract(contract,readSource),priorRead=file=>{if(file==='.github/workspace-acceptance-contract.json')return Buffer.from(JSON.stringify(prior,null,2)+'\n');const bytes=readSource(file);if(!bytes)return null;const text=restorePilotCompletionPreviousSourceText(contract,file,bytes.toString('utf8'));return text===''?null:Buffer.from(text);};
+  const specs=prior.extension.proofs.filter(row=>row.id==='focused-workspace-ui');assert.equal(specs.length,1);assert.deepEqual(focusedWorkspaceCiSourceClosure(priorRead),specs[0].sourceFiles);
+ }else{const specs=contract.extension.proofs.filter(row=>row.id==='focused-workspace-ui');assert.equal(specs.length,1);assert.deepEqual(focusedWorkspaceCiSourceClosure(readSource),specs[0].sourceFiles);}
  const raw=readSource(producer),previous=restorePilotCompletionPreviousSourceText(contract,producer,raw.toString('utf8'));
  const calls=companyOnboardingUxHistoricalFocusedAssertions(previous,contract);assert.equal(calls.length,201);
  assert.deepEqual(calls.slice(18,23),["assert.ok(['ADMIN','DIRECTOR'].includes(role))","assert.equal(url.searchParams.size,3)","assert.equal(url.searchParams.get('view'),'decisions')","assert.equal(url.searchParams.get('scope'),scope)","assert.equal(url.searchParams.get('projectId'),'project-a')"]);

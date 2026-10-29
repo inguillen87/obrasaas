@@ -1,3 +1,4 @@
+import {createSyntheticCurrent85FixtureFromSource} from '../../tests/fixtures/focused-workspace-current85-fixture.mjs';
 import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePilotCompletionPreviousFieldProof,restorePilotCompletionPreviousProofSpec} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_BUDGET_UI_MATRIX,validatePlanBudgetUiProofBytes,planBudgetUiSourceBinding,planBudgetUiRetainedScreenshotPath} from '../../scripts/lib/plan-budget-ui-contract.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
@@ -14,6 +15,7 @@ import {WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWorkspaceContinuity
 import {DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256,restoreDocumentTaskAssociationPreviousContract,verifyDocumentTaskAssociationCurrentSources} from '../../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import {createHash,randomUUID} from 'node:crypto';
 import {INTEGRATED_IDENTITY_CURRENT_REVISION,integratedIdentityCurrentSourcePin,restoreIntegratedIdentityPreviousContract,validateIntegratedIdentityWorkspaceContract,verifyIntegratedIdentityCurrentSources,validateIntegratedCompanyCurrentNative,integratedCompanyCurrentShadowFixture,integratedIdentityCurrentSelftest,integratedIdentityPreviousProofChecks} from '../../scripts/lib/integrated-identity-current-ci-lineage.mjs';
+import {CURRENT85_CI_KIND,validateFocusedWorkspaceCurrent85Ci,focusedWorkspaceCurrent85CiSourceClosure} from '../../scripts/verify-focused-workspace-current85-ci.mjs';
 import {FOCUSED_WORKSPACE_CI_KIND,validateFocusedWorkspaceCi,focusedWorkspaceCiSourceClosure} from '../../scripts/verify-focused-workspace-ci.mjs';
 import {PARTICIPANT_PREANALYSIS_KIND,restoreParticipantPreanalysisPreviousContract,validateParticipantPreanalysisWorkspaceContract,participantPreanalysisProofSourceAdditions,restoreParticipantPreanalysisSourceSet} from '../../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {validateParticipantKycPreanalysisCi,participantPreanalysisCiSourceClosure} from '../../scripts/verify-participant-kyc-preanalysis-ci.mjs';
@@ -459,7 +461,7 @@ function budgetScreenshotSummary(files){
  if(!Array.isArray(files))deny('PROOF_BUDGET_UI_SCREENSHOT_BINDING');const selected=PLAN_BUDGET_UI_MATRIX.map(row=>{const path=planBudgetUiRetainedScreenshotPath(row),matches=files.filter(file=>file.path===path);if(matches.length!==1||!sha(matches[0].sha256)||!Number.isSafeInteger(matches[0].bytes)||matches[0].bytes<=45)deny('PROOF_BUDGET_UI_SCREENSHOT_BINDING');return {path,sha256:matches[0].sha256,bytes:matches[0].bytes};});
  return {cases:23,screenshots:23,screenshotManifestSha256:hash(canonical(selected))};
 }
-function summary(spec,files=null){if(spec.kind===PLAN_BUDGET_CI_KIND)return budgetScreenshotSummary(files);return spec.kind===FIELD_TASK_PAGINATION_CI_KIND?spec.checkNames.length:spec.kind===FOCUSED_WORKSPACE_CI_KIND?spec.checkNames.length:spec.kind===PARTICIPANT_PREANALYSIS_KIND?spec.checkNames.length:spec.kind==='UI_DOCUMENT_CURVE'?DOCUMENT_CURVE_UI_CHECKS.length:spec.kind==='PG_PLAN_BASELINE'?spec.checkNames.length:isCanonicalField(spec)?spec.checkNames.length:isIdentity(spec)?IDENTITY_ONLY_CHECK_COUNT:spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:TEST_SUITES.length,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:['PG_COMPANY_KYC','PG_INTAKE'].includes(spec.kind)?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind==='UI_INTAKE'?4*INTAKE_UI_MODES.length:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
+function summary(spec,files=null){if(spec.kind===PLAN_BUDGET_CI_KIND)return budgetScreenshotSummary(files);return spec.kind===FIELD_TASK_PAGINATION_CI_KIND?spec.checkNames.length:(spec.kind===FOCUSED_WORKSPACE_CI_KIND||spec.kind===CURRENT85_CI_KIND)?spec.checkNames.length:spec.kind===PARTICIPANT_PREANALYSIS_KIND?spec.checkNames.length:spec.kind==='UI_DOCUMENT_CURVE'?DOCUMENT_CURVE_UI_CHECKS.length:spec.kind==='PG_PLAN_BASELINE'?spec.checkNames.length:isCanonicalField(spec)?spec.checkNames.length:isIdentity(spec)?IDENTITY_ONLY_CHECK_COUNT:spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:TEST_SUITES.length,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:['PG_COMPANY_KYC','PG_INTAKE'].includes(spec.kind)?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind==='UI_INTAKE'?4*INTAKE_UI_MODES.length:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
 function validateExtension(contract){
  const extension=contract.extension;exactKeys(extension,['baseHead','baselineBlocksSha256','baselineOwnershipSha256','baselineProducersSha256','proofs'],'EXTENSION_SHAPE');
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
@@ -846,7 +848,33 @@ function documentCurveCopySelftest(spec,proof,validate){
  if(proof.fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.pop();});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}
  return checks;
 }
-export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,readSource,readEvidence,runId,runAttempt,expectedRoot}){
+// This explicit dependency port belongs to the Node verifier API, never to a
+// proof, contract, environment variable or CLI option. The ordinary exports and
+// CLI keep the real Git authority. Unit models must opt in by constructing this
+// factory and passing its authority functions outside the evidence payload.
+export function createWorkspaceCiVerifier(dependencies={}){
+ if(dependencies===null||typeof dependencies!=='object'||Array.isArray(dependencies))deny('CURRENT85_VERIFIER_DEPENDENCY_INVALID');
+ exactKeys(dependencies,Object.hasOwn(dependencies,'current85GitAuthority')?['current85GitAuthority']:[],'CURRENT85_VERIFIER_DEPENDENCY_INVALID');
+ let current85GitAuthority;
+ if(dependencies.current85GitAuthority!==undefined){
+  const source=dependencies.current85GitAuthority;
+  exactKeys(source,['resolveGitTree','readGitBlob','readWorkingSource'],'CURRENT85_VERIFIER_DEPENDENCY_INVALID');
+  for(const key of ['resolveGitTree','readGitBlob','readWorkingSource'])if(typeof source[key]!=='function')deny('CURRENT85_VERIFIER_DEPENDENCY_INVALID');
+  current85GitAuthority=Object.freeze(Object.fromEntries(['resolveGitTree','readGitBlob','readWorkingSource'].map(key=>[key,source[key].bind(source)])));
+ }
+ const ports=Object.freeze({current85GitAuthority});
+ return Object.freeze({
+  validateExtensionProof:(spec,bytes,options)=>validateExtensionProofWithDependencies(spec,bytes,options,ports),
+  expectedNeeds:(contract,expectedHead,workflowSha256,readSource,fixture)=>expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture,ports),
+  gate:input=>gate(input),
+ });
+}
+
+export function validateExtensionProof(spec,bytes,options){
+ return validateExtensionProofWithDependencies(spec,bytes,options);
+}
+
+function validateExtensionProofWithDependencies(spec,bytes,{expectedHead,expectedTree,readSource,readEvidence,runId,runAttempt,expectedRoot},dependencies){
  if(spec.kind===PLAN_BUDGET_CI_KIND){
   const contract=JSON.parse(utf8(readSource('.github/workspace-acceptance-contract.json')));try{verifyPlanBudgetCurrentSources(contract,readSource);}catch{deny('PROOF_BINDING_SOURCE');}equal(spec,planBudgetCompiledProof(contract),'PROOF_BUDGET_UI_SPEC');if(hash(readSource(spec.producer))!==spec.producerSha256)deny('PROOF_HARNESS_SOURCE');
   const binding=planBudgetUiSourceBinding(readSource);equal(binding.sourceManifest.map(row=>row.path),spec.sourceFiles,'PROOF_SOURCE_MANIFEST');let result;try{result=validatePlanBudgetUiProofBytes(bytes,readSource,{expectedHead,expectedTree,expectedRoot,readEvidence});}catch(error){if(error.code==='PLAN_BUDGET_UI_REJECTED'||error.code==='PLAN_PARTIDA_PREVIEW_UI_PROOF_REJECTED')deny('PROOF_BUDGET_UI_BOUNDARY');throw error;}
@@ -857,6 +885,11 @@ export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,rea
  if(spec.kind===FIELD_TASK_PAGINATION_CI_KIND){
   let proof;try{proof=JSON.parse(utf8(bytes));}catch{deny('PROOF_JSON');}
   const result=validateFieldTaskPaginationCi(proof,{expectedHead,expectedTree,readSource,readEvidence,spec,runId,runAttempt});
+  return {id:spec.id,path:spec.path,producer:spec.producer,kind:spec.kind,result:result.status,sourceRevision:expectedHead,harnessSha256:spec.producerSha256,sourceManifestSha256:manifestDigest(proof.sourceManifest),sourceReferences:spec.sourceFiles.length,proofSha256:hash(bytes),bytes:bytes.length,checks:spec.checkNames.length};
+ }
+ if(spec.kind===CURRENT85_CI_KIND){
+  let proof;try{proof=JSON.parse(utf8(bytes));}catch{deny('PROOF_JSON');}
+  const result=validateFocusedWorkspaceCurrent85Ci(proof,{expectedHead,expectedTree,readSource,readEvidence,spec,runId,runAttempt,expectedRoot,gitAuthority:dependencies?.current85GitAuthority});
   return {id:spec.id,path:spec.path,producer:spec.producer,kind:spec.kind,result:result.status,sourceRevision:expectedHead,harnessSha256:spec.producerSha256,sourceManifestSha256:manifestDigest(proof.sourceManifest),sourceReferences:spec.sourceFiles.length,proofSha256:hash(bytes),bytes:bytes.length,checks:spec.checkNames.length};
  }
  if(spec.kind===FOCUSED_WORKSPACE_CI_KIND){
@@ -1057,6 +1090,7 @@ export function currentProducerSourceFiles(spec,root){
   if(contract.whatsappFieldContinuityCurrentRevision){const scan=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?scan(relative+'/'+entry.name):[relative+'/'+entry.name]);return whatsappFieldCompanyNativeSourceFiles(file=>readFileSync(path.join(root,file)),scan('src/lib').sort());}
  }
  if(spec.kind===FIELD_TASK_PAGINATION_CI_KIND)return fieldTaskPaginationCiSourceClosure(file=>{try{const target=path.join(root,file);return lstatSync(target).isFile()?readFileSync(target):null;}catch{return null;}});
+ if(spec.kind===CURRENT85_CI_KIND)return focusedWorkspaceCurrent85CiSourceClosure(file=>{try{const target=path.join(root,file);return lstatSync(target).isFile()?readFileSync(target):null;}catch{return null;}});
  if(spec.kind===FOCUSED_WORKSPACE_CI_KIND)return focusedWorkspaceCiSourceClosure(file=>{try{const target=path.join(root,file);return lstatSync(target).isFile()?readFileSync(target):null;}catch{return null;}});
  if(spec.kind===PARTICIPANT_PREANALYSIS_KIND)return participantPreanalysisCiSourceClosure(file=>{try{const target=path.join(root,file);return lstatSync(target).isFile()?readFileSync(target):null;}catch{return null;}});
  if(spec.kind==='UI_DOCUMENT_CURVE')return documentCurveUiSourceSets(file=>readFileSync(path.join(root,file))).combined;
@@ -1509,7 +1543,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
  // Normalize only these shadow source fixtures to Linux Git text. The actual proof validator never normalizes bytes.
  const readSource=file=>{const bytes=readFileSync(path.join(root,sourcePath(file))),text=bytes.toString('utf8');assert.ok(bytes.equals(Buffer.from(text)));return Buffer.from(text.replaceAll('\r\n','\n'));};
  const tap=names=>Buffer.from('TAP version 13\n'+names.map((name,i)=>'ok '+(i+1)+' - '+name+'\n').join('')+'1..'+names.length+'\n# tests '+names.length+'\n# pass '+names.length+'\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n');
- for(const spec of contract.extension.proofs.filter(spec=>!['PG_PLAN_BASELINE','UI_DOCUMENT_CURVE',PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
+ for(const spec of contract.extension.proofs.filter(spec=>!['PG_PLAN_BASELINE','UI_DOCUMENT_CURVE',PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
    const originalCheckCount=checks.length;
   const evidence=new Map(),base={status:spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',productionDataWritten:false,sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256};
   let proof={...base};
@@ -2128,17 +2162,78 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
  equal(records.flatMap(record=>record.blockIds).sort((a,b)=>a-b),contract.blocks.map(block=>block.id),'TOTAL_BLOCK_COVERAGE');
  return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
 }
-function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
+// Explicit UNIT composition, separate from expectedNeeds' strict core. Only
+// selftest callers choose this model; public/CLI acceptance never reaches it.
+function expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource){
+ const active=contract.extension.proofs.filter(spec=>spec.kind===CURRENT85_CI_KIND);
+ if(!active.length)return expectedNeeds(contract,expectedHead,workflowSha256,readSource);
+ if(active.length!==1)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ const fixture=createSyntheticCurrent85FixtureFromSource({readSource,expectedHead,expectedTree:'b'.repeat(40),runId:100,runAttempt:1});
+ const verifier=createWorkspaceCiVerifier({current85GitAuthority:fixture.options.gitAuthority});
+ return verifier.expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture);
+}
+
+function expectedNeeds(contract,expectedHead,workflowSha256,readSource,suppliedFixture=null,suppliedPorts=null){
+ // This helper builds UNIT needs only; provenance()/CLI never calls it.
+ const active=contract.extension.proofs.filter(spec=>spec.kind===CURRENT85_CI_KIND);
+ if(active.length>1)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ if(active.length&&!suppliedFixture)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ if(active.length&&!suppliedPorts?.current85GitAuthority)deny('CURRENT85_TEST_GIT_AUTHORITY_REQUIRED');
+ const fixture=active.length?suppliedFixture:null;
+ if(fixture&&(!fixture.syntheticFixture||fixture.fixtureBoundary!=='UNIT_SCHEMA_MODEL_ONLY_NOT_ISSUED_CI_OR_BROWSER_EVIDENCE'))deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ const ports=active.length?suppliedPorts:undefined;
+ const typedBytes=fixture?Buffer.from(JSON.stringify(fixture.proof)):null;
+ const typedBinding=fixture?validateExtensionProofWithDependencies(active[0],typedBytes,{...fixture.options,expectedHead,readSource,runId:100,runAttempt:1},ports):null;
  return Object.fromEntries(LANES.map((lane,i)=>{
   const owner=contract.lanes[lane],file=filename=>({path:filename,sha256:'1'.repeat(64),bytes:128}),files=owner.requiredRetainedEvidence.map(file);
   if(lane==='plans'&&contract.weeklyCypCurrentRevision)files.push(...WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
   if(lane==='plans'&&contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION])files.push(...PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser.retainedTableScreenshots.map(row=>file(row.path)));
   if(lane==='plans'&&contract[PLAN_BUDGET_CURRENT_SECTION])files.push(...planBudgetRetainedScreenshotPaths(contract).map(file));
   if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision)files.push(...IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
-  const record=seal({version:2,proofBindings:proofBindings(contract,lane,files,expectedHead,readSource),lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
-  return [lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];
+  if(lane==='workspace-ui'&&fixture){
+   const index=files.findIndex(row=>row.path===active[0].path);if(index<0)deny('CURRENT85_TEST_FIXTURE_REQUIRED');files[index]={path:active[0].path,sha256:hash(typedBytes),bytes:typedBytes.length};
+   for(const[path,bytes]of fixture.evidence){if(files.some(row=>row.path===path))deny('CURRENT85_TEST_FIXTURE_REQUIRED');files.push({path,sha256:hash(bytes),bytes:bytes.length});}
+  }
+  const bindings=proofBindings(contract,lane,files,expectedHead,readSource).map(row=>row.kind===CURRENT85_CI_KIND?typedBinding:row);
+  const record=seal({version:2,proofBindings:bindings,lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
+  return[lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];
  }));
 }
+
+export function current85TypedGateSelftest(contract,readSource){
+ const specs=contract.extension.proofs.filter(spec=>spec.kind===CURRENT85_CI_KIND);if(!specs.length)return[];if(specs.length!==1)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ const checks=[],boundary='Explicit UNIT source/Git/evidence model only; no CI, browser, provider or environment mutation';
+ const good=(name,run)=>{run();checks.push({name:'current85-typed-'+name,result:'PASS',boundary});};
+ const bad=(name,codes,run)=>{assert.throws(run,error=>(Array.isArray(codes)?codes:[codes]).includes(error.code));checks.push({name:'current85-typed-'+name,result:'PASS',boundary,expectedDenial:codes});};
+ const expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),fixture=createSyntheticCurrent85FixtureFromSource({readSource,expectedHead,expectedTree:'b'.repeat(40),runId:100,runAttempt:1}),spec=specs[0];
+ const verifier=createWorkspaceCiVerifier({current85GitAuthority:fixture.options.gitAuthority}),proofBytes=()=>Buffer.from(JSON.stringify(fixture.proof));
+ let binding,needs;
+ good('explicit-git-port-validates-real-dispatch85-without-fallback',()=>{binding=verifier.validateExtensionProof(spec,proofBytes(),fixture.options);assert.equal(binding.kind,CURRENT85_CI_KIND);assert.equal(binding.checks,85);assert.equal(binding.proofSha256,hash(proofBytes()));});
+ good('expectedNeeds-uses-typed-raw-png-tap-and-envelope-digests',()=>{needs=verifier.expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture);const record=JSON.parse(needs['workspace-ui'].outputs.provenance),actual=record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND);equal(actual,binding,'PROOF_BINDING_IDENTITY');for(const[path,bytes]of fixture.evidence){const retained=record.files.find(row=>row.path===path);assert(retained);assert.equal(retained.sha256,hash(bytes));assert.equal(retained.bytes,bytes.length);}});
+ const input=()=>({needs:clone(needs),contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource});
+ good('eight-lane-gate-accepts-complete-typed85-bindings',()=>{const report=verifier.gate(input());assert.equal(report.state,'PASS');assert.equal(report.lanes.length,8);assert.equal(report.lanes.find(row=>row.lane==='workspace-ui').proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).checks,85);});
+ const mutateNeeds=change=>{const value=input(),job=value.needs['workspace-ui'],record=JSON.parse(job.outputs.provenance);change(record);job.outputs.provenance=JSON.stringify(seal(unseal(record)));return value;};
+ bad('binding-omitted','PROOF_BINDINGS',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings=record.proofBindings.filter(row=>row.kind!==CURRENT85_CI_KIND);})));
+ bad('binding59-cannot-replace85','PROOF_BINDING_IDENTITY',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).checks=59;})));
+ bad('binding-source-digest-stale','PROOF_BINDING_SOURCE',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).sourceManifestSha256='f'.repeat(64);})));
+ bad('binding-head-foreign','PROOF_BINDING_IDENTITY',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).sourceRevision='f'.repeat(40);})));
+ bad('retained-envelope-missing','MISSING_REQUIRED_RETAINED_EVIDENCE',()=>verifier.gate(mutateNeeds(record=>{record.files=record.files.filter(row=>row.path!==spec.path);})));
+ bad('foreign-run-denied-before-any-git-model','CURRENT85_CI_REJECTED',()=>verifier.validateExtensionProof(spec,proofBytes(),{...fixture.options,runId:101}));
+ bad('local-envelope-is-not-ci','CURRENT85_CI_REJECTED',()=>{const proof=clone(fixture.proof);proof.sourceState='LOCAL_REVIEW_SOURCE';verifier.validateExtensionProof(spec,Buffer.from(JSON.stringify(proof)),fixture.options);});
+ bad('missing-original-png','CURRENT85_EVIDENCE_REJECTED',()=>{const missing=fixture.rawBrowserPath||fixture.proof.rawBrowser.path.replace('browser.json',fixture.raw.screenshots[0].path);verifier.validateExtensionProof(spec,proofBytes(),{...fixture.options,readEvidence:file=>file===missing?null:fixture.options.readEvidence(file)});});
+ bad('public-export-does-not-read-git-authority-from-options','CURRENT85_CI_REJECTED',()=>validateExtensionProof(spec,proofBytes(),fixture.options));
+ bad('factory-default-keeps-real-git-authority','CURRENT85_CI_REJECTED',()=>createWorkspaceCiVerifier().validateExtensionProof(spec,proofBytes(),fixture.options));
+ bad('git-port-cannot-arrive-inside-proof','CURRENT85_CI_REJECTED',()=>{const proof=clone(fixture.proof);proof.gitAuthority={synthetic:true};verifier.validateExtensionProof(spec,Buffer.from(JSON.stringify(proof)),fixture.options);});
+ bad('unknown-factory-dependency-is-not-an-injection-switch','CURRENT85_VERIFIER_DEPENDENCY_INVALID',()=>createWorkspaceCiVerifier({acceptSyntheticHead:true}));
+ bad('malformed-explicit-git-port-denied','CURRENT85_VERIFIER_DEPENDENCY_INVALID',()=>createWorkspaceCiVerifier({current85GitAuthority:{readGitBlob:()=>null}}));
+ bad('default-expectedNeeds-cannot-select-git-from-unit-fixture','CURRENT85_TEST_GIT_AUTHORITY_REQUIRED',()=>createWorkspaceCiVerifier().expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture));
+ bad('explicit-authority-cannot-autogenerate-an-omitted-fixture','CURRENT85_TEST_FIXTURE_REQUIRED',()=>verifier.expectedNeeds(contract,expectedHead,workflowSha256,readSource));
+ good('out-of-band-port-references-are-captured-before-caller-mutation',()=>{const port={...fixture.options.gitAuthority},bound=createWorkspaceCiVerifier({current85GitAuthority:port});port.readGitBlob=()=>null;assert.equal(bound.validateExtensionProof(spec,proofBytes(),fixture.options).checks,85);});
+ const sourceCodes=['CURRENT85_CI_REJECTED','CURRENT85_EVIDENCE_REJECTED','FOCUSED_WORKSPACE_CI_REJECTED'];
+ bad('live-source-reader-is-not-replaced-by-a-cached-verdict',sourceCodes,()=>verifier.validateExtensionProof(spec,proofBytes(),{...fixture.options,readSource:file=>file===spec.producer?Buffer.concat([readSource(file),Buffer.from('\n//changed\n')]):readSource(file)}));
+ return checks;
+}
+
 export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()){
  const checks=[],section=contract.kycExpiredCurrentComposition,prefix='kyc-expired-current-composition-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source/contract read; no PG/provider execution'});};
@@ -2195,18 +2290,18 @@ export function selftest(workflow,contract,root=process.cwd()){
  if(contract.workspaceContinuityCurrentRevision){
   good('workspace-continuity-complete-d5d-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWorkspaceContinuityPreviousContract(contract),null,2)+'\n'),WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('workspace-continuity-current-source-independent-of-original-proofs',()=>verifyWorkspaceContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
-  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
+  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
  }
  if(contract.whatsappFieldContinuityCurrentRevision){
   good('whatsapp-field-complete052-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWhatsappFieldContinuityPreviousContract(contract),null,2)+'\n'),WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('whatsapp-field-current-source-independent-of-local-observations',()=>verifyWhatsappFieldContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
   good('whatsapp-field-independent21st-proof-and59th-block-ID65',()=>{const proof=contract.extension.proofs.find(row=>row.kind===FIELD_TASK_PAGINATION_CI_KIND);assert.equal(proof.blockId,65);assert.equal(proof.checkNames.length,33);assert.equal(restorePlanBudgetPreviousContract(contract).blocks.length,59);assert.equal(restorePlanBudgetPreviousContract(contract).extension.proofs.length,21);assert.equal(restoreWhatsappFieldContinuityPreviousContract(contract).blocks.length,58);});
-  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
+  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
  }
  checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
- checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
- const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
+ checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource),...current85TypedGateSelftest(contract,shadowSource));
+ const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
  bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
  good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
  good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
@@ -2383,7 +2478,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(parent+path.sep)&&path.basename(resolved).startsWith('ci-gate-selftest-fixture-'));
   rmSync(resolved,{recursive:true,force:true});
  }
-  for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
+  for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
    for(const [name,code,edit] of [
     ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
     ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
@@ -2406,7 +2501,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   ]){const c=clone(historicalContractForNegativeFixtures);edit(c);bad('extension-block-'+id+'-'+name,code,()=>validateContract(c));}
   const changedBaseline=clone(historicalContractForNegativeFixtures);changedBaseline.blocks[0].step.run+='\ntrue';changedBaseline.blocks[0].commandSha256=hash(changedBaseline.blocks[0].step.run);bad('old-block-changed-with-recomputed-digest','BASELINE_BLOCKS_CHANGED',()=>validateContract(changedBaseline));
   const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
-  try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
+  try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
  const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[],currentWhatsappPlanChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentCalendarChecks));checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks,currentWhatsappPlanChecks));for(const run of currentContinuityChecks)checks.push(...run());for(const run of currentReactiveChecks)checks.push(...run());for(const run of currentTemplateChecks)checks.push(...run());
   for(const [name,image] of [
@@ -2432,7 +2527,7 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
  const readSource=file=>{if(!cache.has(file))cache.set(file,Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n')));return cache.get(file);};
  const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure canonical field shadow fixture; no Git/PG/UI/provider execution'});};
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure canonical field shadow fixture'});};
- const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
  for(const spec of contract.extension.proofs.filter(isCanonicalField)){
   const currentAttendance=spec.kind==='PG_FIELD'&&restorePilotCompletionPreviousProofSpec(spec)!==spec;
   const sets=canonicalFieldSourceSets(spec,readSource),map=files=>Object.fromEntries(files.map(file=>[file,hash(readSource(file))]));
@@ -2586,7 +2681,7 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  }
  mutate('source-duplicate','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push(clone(p.sourceManifest[0]));});mutate('source-foreign','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push({path:'src/foreign.mjs',sha256:'f'.repeat(64)});});
  mutate('source-path-unsafe','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest[0].path='../private';});mutate('source-reference-extra-key','PROOF_SOURCE_REFERENCE',p=>{p.sourceManifest[0].ignored=true;});
- const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
  good('gate-binds-103-checks',()=>assert.equal(gate(input).lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,IDENTITY_ONLY_CHECK_COUNT));
  for(const [name,code,edit] of [
   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
@@ -2671,7 +2766,7 @@ function portfolioSelftest(workflow,contract,root){
    mutate('dirty-source','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('dirty-path','PROOF_SOURCE_STATE',p=>{p.dirtyTrackedPaths=['src/lib/workspace-store.mjs'];});mutate('local-proof','PROOF_SOURCE_STATE',p=>{p.sourceState='LOCAL_REVIEW_SOURCE';});mutate('wrong-total','PROOF_CHECK_NAMES',p=>{p.totalCheckCount=0;});mutate('omitted-check','PROOF_CHECK_NAMES',p=>{p.checks.pop();});mutate('duplicated-check','PROOF_CHECK_NAMES',p=>{p.checks[0]=p.checks[1];});mutate('claims-physical-acceptance','PROOF_PROVIDER_IO',p=>{p.physicalWhatsAppTested=true;});
   }
  }
- const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
  for(const spec of specs){
   for(const [name,code,edit] of [
    ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
@@ -2699,7 +2794,7 @@ function portfolioSelftest(workflow,contract,root){
 
 // Pure source/aggregate shadows: no browser, PostgreSQL or provider evidence.
 export function planBudgetCurrentGateSelftest(workflow,contract,root=process.cwd()){
- const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\r\n','\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource};
+ const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\r\n','\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource};
  const good=(name,run)=>{run();checks.push({name:'budget-current-'+name,result:'PASS',boundary:'pure source and aggregate shadow; no browser acceptance'});},bad=(name,code,change)=>{const copy=clone(needs),record=JSON.parse(copy.plans.outputs.provenance);change(record);copy.plans.outputs.provenance=JSON.stringify(seal(unseal(record)));assert.throws(()=>gate({...input,needs:copy}),error=>error.code===code);checks.push({name:'budget-current-'+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial aggregate shadow'});};
  good('exact-corrected11-contract-inverse',()=>assert.equal(hash(JSON.stringify(restorePlanBudgetPreviousContract(contract),null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839'));
  good('all-current-sources-bound',()=>verifyPlanBudgetCurrentSources(contract,readSource));good('all23-pngs-bound-in-aggregate',()=>gate(input));
@@ -2731,21 +2826,21 @@ if(contract.planMeasurementDocumentAssociationRevision){
 if(contract.workspaceContinuityCurrentRevision){
   good('workspace-continuity-complete-d5d-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWorkspaceContinuityPreviousContract(contract),null,2)+'\n'),WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('workspace-continuity-current-source-independent-of-original-proofs',()=>verifyWorkspaceContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
-  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
+  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
  }
 if(contract.whatsappFieldContinuityCurrentRevision){
   good('whatsapp-field-complete052-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWhatsappFieldContinuityPreviousContract(contract),null,2)+'\n'),WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('whatsapp-field-current-source-independent-of-local-observations',()=>verifyWhatsappFieldContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
   good('whatsapp-field-independent21st-proof-and59th-block-ID65',()=>{const proof=contract.extension.proofs.find(row=>row.kind===FIELD_TASK_PAGINATION_CI_KIND);assert.equal(proof.blockId,65);assert.equal(proof.checkNames.length,33);assert.equal(restorePlanBudgetPreviousContract(contract).blocks.length,59);assert.equal(restorePlanBudgetPreviousContract(contract).extension.proofs.length,21);assert.equal(restoreWhatsappFieldContinuityPreviousContract(contract).blocks.length,58);});
-  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
+  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
  }
 checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
 const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
-checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
+checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource),...current85TypedGateSelftest(contract,shadowSource));
 tracker.mark("F0",11,"end");
 tracker.segments.push({phase:"F0",rows:checks.slice(phaseStart)});
 tracker.mark("F1",12);phaseStart=checks.length;
-const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
+const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
 bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
 good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
 good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
@@ -2942,7 +3037,7 @@ try{
   const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(parent+path.sep)&&path.basename(resolved).startsWith('ci-gate-selftest-fixture-'));
   rmSync(resolved,{recursive:true,force:true});
  }
-for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
+for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
    for(const [name,code,edit] of [
     ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
     ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
@@ -2968,7 +3063,7 @@ changedBaseline.blocks[0].step.run+='\ntrue';
 changedBaseline.blocks[0].commandSha256=hash(changedBaseline.blocks[0].step.run);
 bad('old-block-changed-with-recomputed-digest','BASELINE_BLOCKS_CHANGED',()=>validateContract(changedBaseline));
 const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
-try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
+try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
 tracker.mark("F1",135,"end");
 tracker.segments.push({phase:"F1",rows:checks.slice(phaseStart)});
