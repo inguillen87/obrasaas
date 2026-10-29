@@ -8,6 +8,7 @@ import {inventoryAccessDenied,inventorySnapshot,inventoryOutcome,mergeInventoryR
 import {FieldMediaPreview} from './field-media-preview';
 import {ConsumptionEvidencePicker} from './consumption-evidence-picker';
 import {ExecutionMandatePanel} from './field-execution-mandate-panel';
+import {ExecutionReportPanel} from './field-execution-report-panel';
 import styles from './material-inventory-panel.module.css';
 const endpoint='/api/identity/field-operations';
 const units=['unidad','m','m2','m3','kg','litro','bolsa'];
@@ -54,21 +55,22 @@ async function api(request,params,options,validate){
   try{return validate(await response.json());}catch(error){if(options.method==='POST'){retained=Object.assign(error,{retainAttempt:true});return;}throw error;}
  });if(retained)throw retained;return result;
 }
-export function MaterialInventoryPanel(props){return <InventoryInner key={props.scope+':'+props.projectId} {...props} ExecutionPanel={ExecutionMandatePanel}/>;}
-function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,interactionBlocked=backgroundBlocked,tasks=[],taskPaging,onLoadMoreTasks,onTaskReadBusy,onPending,getSessionToken,ExecutionPanel=null}){
+export function MaterialInventoryPanel(props){return <InventoryInner key={props.scope+':'+props.projectId} {...props} ExecutionPanel={ExecutionMandatePanel} ReportPanel={ExecutionReportPanel}/>;}
+function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,interactionBlocked=backgroundBlocked,tasks=[],taskPaging,onLoadMoreTasks,onTaskReadBusy,onPending,getSessionToken,ExecutionPanel=null,ReportPanel=null}){
  const request=useWorkspaceRequest(getSessionToken),[data,setData]=useState(null),[opened,setOpened]=useState(false),[busy,setBusy]=useState(false),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[notice,setNotice]=useState(''),[receipt,setReceipt]=useState(''),[blocked,setBlocked]=useState(false),[needsReview,setNeedsReview]=useState(false),[reviewLoaded,setReviewLoaded]=useState(false),[reviewed,setReviewed]=useState(false),[queueCurrent,setQueueCurrent]=useState(false),[pendingRequested,setPendingRequested]=useState(false);
  const alive=useRef(true),epoch=useRef(0),editor=useRef(null),abort=useRef(null),pendingNavigation=useRef(null),control=useRef(null),draftAction=draft?.action;
  const [livePageChanged,setLivePageChanged]=useState(false),[executionPending,setExecutionPending]=useState(false),[executionTaskBusy,setExecutionTaskBusy]=useState(false);
+ const [reportPending,setReportPending]=useState(false),[reportTaskBusy,setReportTaskBusy]=useState(false);
  const [recordKind,setRecordKind]=useState('consumptions'),[recordPages,setRecordPages]=useState({consumptions:0,adjustments:0}),recordHeading=useRef(null),focusRecords=useRef(false);
  const [evidenceReading,setEvidenceReading]=useState(false),[evidenceUnavailable,setEvidenceUnavailable]=useState(false);
- control.current={busy,draft,attempt,executionPending,evidenceReading,evidenceUnavailable};
+ control.current={busy,draft,attempt,executionPending:executionPending||reportPending,evidenceReading,evidenceUnavailable};
  useEffect(()=>{alive.current=true;const ref=epoch;return()=>{alive.current=false;ref.current++;abort.current?.abort();};},[]);
- useEffect(()=>{onPending?.(busy||Boolean(draft)||Boolean(attempt)||executionPending);return()=>onPending?.(false);},[busy,draft,attempt,executionPending,onPending]);
- useLayoutEffect(()=>{onTaskReadBusy?.(busy||Boolean(attempt)||executionTaskBusy||evidenceReading);return()=>onTaskReadBusy?.(false);},[busy,attempt,executionTaskBusy,evidenceReading,onTaskReadBusy]);
+ useEffect(()=>{onPending?.(busy||Boolean(draft)||Boolean(attempt)||executionPending||reportPending);return()=>onPending?.(false);},[busy,draft,attempt,executionPending,reportPending,onPending]);
+ useLayoutEffect(()=>{onTaskReadBusy?.(busy||Boolean(attempt)||executionTaskBusy||reportTaskBusy||evidenceReading);return()=>onTaskReadBusy?.(false);},[busy,attempt,executionTaskBusy,reportTaskBusy,evidenceReading,onTaskReadBusy]);
  useEffect(()=>{if(draftAction){editor.current?.focus({preventScroll:true});editor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[draftAction]);
  useEffect(()=>{if(focusRecords.current&&!busy){focusRecords.current=false;recordHeading.current?.focus({preventScroll:true});recordHeading.current?.scrollIntoView({block:'start',behavior:'auto'});}},[recordKind,recordPages,busy]);
  useEffect(()=>{const navigate=event=>{if(event.detail?.projectId===projectId&&event.detail?.scope===scope)pendingNavigation.current?.();};window.addEventListener(INVENTORY_PENDING_EVENT,navigate);return()=>window.removeEventListener(INVENTORY_PENDING_EVENT,navigate);},[projectId,scope]);
- const inventory=data?.inventory,materials=inventory?.materials.filter(m=>m.active)||[],workers=data?.selfWorkers.filter(w=>w.canReport)||[],operationDisabled=busy||Boolean(attempt)||blocked||executionPending||taskPaging?.loading===true,disabled=operationDisabled||evidenceReading;
+ const inventory=data?.inventory,materials=inventory?.materials.filter(m=>m.active)||[],workers=data?.selfWorkers.filter(w=>w.canReport)||[],operationDisabled=busy||Boolean(attempt)||blocked||executionPending||reportPending||taskPaging?.loading===true,disabled=operationDisabled||evidenceReading;
  const filter=inventory?.inventoryFilter,counts=queueCurrent?inventoryPendingCounts(inventory):null,queue=filter==='PENDING';
  const consumptionPage=inventoryVisiblePage(inventory?.consumptions||[],recordPages.consumptions),adjustmentPage=inventoryVisiblePage(inventory?.adjustments||[],recordPages.adjustments),activePage=recordKind==='consumptions'?consumptionPage:adjustmentPage,activeCursor=recordKind==='consumptions'?inventory?.nextConsumptionCursor:inventory?.nextAdjustmentCursor;
  const visibleConsumptions=inventory?.canManage?(recordKind==='consumptions'?consumptionPage.rows:[]):inventory?.consumptions||[],visibleAdjustments=inventory?.canManage&&recordKind==='adjustments'?adjustmentPage.rows:[];
@@ -168,7 +170,7 @@ function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,in
   onAccessRejected:error=>{if(!alive.current||liveInventoryContext.current.data!==data)return false;deny(error);setNotice('Tu acceso cambió. Volvé a consultar el inventario antes de continuar.');}
  });
  return <section className={styles.panel} aria-labelledby="inventory-title">
-  <div className={styles.heading}><div><p className={styles.eyebrow}>MATERIALES</p><h3 id="inventory-title">Inventario y consumo</h3></div><button type="button" disabled={busy||Boolean(attempt)||executionPending} onClick={()=>load()}>{draft?'Consultar inventario vigente':opened?'Actualizar inventario':'Abrir inventario'}</button></div>
+  <div className={styles.heading}><div><p className={styles.eyebrow}>MATERIALES</p><h3 id="inventory-title">Inventario y consumo</h3></div><button type="button" disabled={busy||Boolean(attempt)||executionPending||reportPending} onClick={()=>load()}>{draft?'Consultar inventario vigente':opened?'Actualizar inventario':'Abrir inventario'}</button></div>
   {active&&opened&&<WorksiteLiveRefreshStatus refresh={inventoryLive} paused={liveInventoryBlocked} label={recordKind==='consumptions'?'Saldos y consumos':'Saldos y existencias'} manual={()=>load()} manualLabel="Consultar inventario actual"/>}
    <p className={styles.caption}>Consultá existencias y consumos. Autorizá a tu equipo para registrar materiales dentro de los límites que definas.</p>
   <p className={styles.status} role="status" aria-live="polite">{busy?'Consultando o guardando…':notice}</p>
@@ -197,6 +199,7 @@ function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,in
    {draft.action!=='ADD_MATERIAL'&&<label>Motivo o detalle<textarea required minLength={8} maxLength={1000} disabled={disabled} value={draft.payload.reason} onChange={e=>edit('reason',e.target.value)}/></label>}
    <div className={styles.actions}><button type="submit" className={styles.primary} disabled={disabled||draft.action==='PROPOSE_CONSUMPTION'&&evidenceUnavailable||needsReview&&(!reviewed||!reviewLoaded)}>Confirmar operación</button><button type="button" disabled={disabled} onClick={()=>{setDraft(null);setNeedsReview(false);setNotice('');}}>Volver</button></div>
   </form>}
-   {ExecutionPanel&&<ExecutionPanel projectId={projectId} scope={scope} active={active} backgroundBlocked={interactionBlocked||busy||Boolean(draft)||Boolean(attempt)} tasks={tasks} taskPaging={taskPaging} onLoadMoreTasks={onLoadMoreTasks} onPending={setExecutionPending} onTaskReadBusy={setExecutionTaskBusy} getSessionToken={getSessionToken}/>}
+   {ExecutionPanel&&<ExecutionPanel projectId={projectId} scope={scope} active={active} backgroundBlocked={interactionBlocked||busy||Boolean(draft)||Boolean(attempt)||reportPending} tasks={tasks} taskPaging={taskPaging} onLoadMoreTasks={onLoadMoreTasks} onPending={setExecutionPending} onTaskReadBusy={setExecutionTaskBusy} getSessionToken={getSessionToken}/>}
+   {ReportPanel&&data&&<ReportPanel projectId={projectId} scope={scope} active={active} backgroundBlocked={interactionBlocked||busy||Boolean(draft)||Boolean(attempt)||executionPending} receiptReadBlocked={interactionBlocked||busy||Boolean(attempt)||executionPending} selfWorkers={data?.selfWorkers||[]} tasks={tasks} taskPaging={taskPaging} onLoadMoreTasks={onLoadMoreTasks} onPending={setReportPending} onTaskReadBusy={setReportTaskBusy} getSessionToken={getSessionToken}/>}
   </section>;
 }

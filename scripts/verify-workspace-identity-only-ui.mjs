@@ -218,7 +218,7 @@ async function prepareOwn(page,{consult=true,current}={}){
  if(consult)await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');
  for(const [title,label]of [['Frente del documento','Usar documento revisado'],['Fotografía del rostro','Usar fotografía revisada']]){
   const selector='fieldset[aria-label="'+title+'"]';await (await page.$(selector+' input[type=file]')).uploadFile(picturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());await click(page,label);
-  await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Imagen revisada y lista'),{},title);
+  await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Foto preparada. El encuadre y la calidad se comprobarán al enviar.'),{},title);
   if(title==='Frente del documento'){await click(page,'Continuar al dorso');await click(page,'Continuar sin dorso');}
  }
  const capture='[data-kyc-capture-step="3"]',labels=['Enviar para verificar','Solicitar revisión sin comparación facial'];

@@ -64,7 +64,7 @@ export function ParticipantKycCapture({active=true,step,onStep,captureRetakes={}
    <p>Mostrá sólo tu rostro, de frente y con buena luz. No sostengas el documento en esta foto.</p>
    <KycPhotoPreparation key={'selfie:'+(captureRetakes.selfie||0)} kind="selfie" active={active&&step===2} disabled={locked} onChange={(file,options)=>onFile('selfie',file,options)}/>
    <div className={styles.checklist} aria-label="Imágenes preparadas"><span>{value.front?'✓':'○'} Frente</span><span>{value.backConsent===true?(value.back?'✓ Dorso':'○ Dorso'):'Dorso omitido'}</span><span>{value.selfie?'✓':'○'} Selfie</span></div>
-   <p className={styles.note}>Revisaremos tus fotos en privado. «Enviar para verificar» autoriza comparar el rostro del documento con tu selfie. También podés enviarlas sin comparación facial. Esto no habilita el acceso automáticamente.</p>
+   <p className={styles.note}>Al enviar comprobamos el encuadre y la calidad antes de guardar las fotos. «Enviar para verificar» autoriza comparar el rostro del documento con tu selfie. También podés enviarlas sin comparación facial. Esto no habilita el acceso automáticamente.</p>
    <details className={styles.optional}><summary>Privacidad y opciones</summary>
     <p><strong>Presentación de imágenes</strong></p><p>{notices.privacyNotice.text}</p>
     <p>{CAPTURE_QUALITY_NOTICE}</p>

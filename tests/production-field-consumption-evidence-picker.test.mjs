@@ -78,3 +78,13 @@ test('a rejected selection stays listed until removed individually, keeps the ot
  assert.deepEqual(s.selected,['evidence-13']);assert.equal(unavailable.at(-1),false);assert.match(s.html(),/El resto de tu selección y el borrador se conservan/);assert.equal(nodes(s.render(),node=>node.props?.['data-evidence-unavailable']).length,0);
  assert.equal(s.calls.length,2);assert.ok(s.calls.every(call=>!call.options.method||call.options.method==='GET'));
 });
+
+
+test('approved-only picker offers approved own evidence and hides pending choices without another endpoint',async()=>{
+ const s=setup();s.props.approvedOnly=true;s.reply=snapshot([row(13,{status:'APPROVED'}),row(12)]);await s.button('Buscar fotos y audios guardados').props.onClick();assert.match(s.html(),/Fotos y audios aprobados para el avance/);assert.match(s.html(),/Archivo 13/);assert.doesNotMatch(s.html(),/Archivo 12/);s.choose(13);assert.deepEqual(s.selected,['evidence-13']);assert.equal(s.calls.length,1);assert.ok(s.calls.every(call=>!call.options.method||call.options.method==='GET'));
+});
+
+test('switching an existing selection to measured progress retains unapproved files visibly and blocks until edited',async()=>{
+ const s=setup(),unavailable=[];s.props.onUnavailableChange=value=>unavailable.push(value);await s.button('Buscar fotos y audios guardados').props.onClick();s.choose(13);s.choose(12);s.props.approvedOnly=true;s.reply=snapshot([row(13,{status:'APPROVED'}),row(12)]);await s.button('Actualizar esta página').props.onClick();s.render();assert.deepEqual(s.selected,['evidence-13','evidence-12']);assert.equal(unavailable.at(-1),true);assert.match(s.html(),/No está aprobado para registrar avance/);assert.equal(nodes(s.render(),node=>node.props?.['data-evidence-unavailable']==='evidence-12').length,1);
+ s.props.approvedOnly=false;s.render();assert.equal(unavailable.at(-1),false);assert.deepEqual(s.selected,['evidence-13','evidence-12']);s.props.approvedOnly=true;s.render();s.button('Quitar este archivo').props.onClick();s.render();assert.deepEqual(s.selected,['evidence-13']);assert.equal(unavailable.at(-1),false);assert.equal(s.calls.length,2);
+});
