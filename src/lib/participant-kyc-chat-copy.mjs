@@ -1,3 +1,4 @@
+import {metaInboundCommandText} from './meta-field-conversation.mjs';
 import {workspaceId} from './workspace-policy.mjs';
 
 export const PARTICIPANT_IDENTITY_PATH='/cuenta?seccion=identidad#participant-title';
@@ -18,7 +19,7 @@ export function participantKycStepReminder(step,projectId){
 // Classification only. The canonical signed resolver must still prove the
 // current person, channel, claim, prompt, consent state and original deadlines.
 export function participantKycNeutralStepCommand(message){
- return message?.type==='text'&&!Object.hasOwn(message,'context')&&typeof message.text?.body==='string'&&['HOLA','ESTADO','MENU','MENÚ'].includes(message.text.body.trim().toUpperCase());
+ return message?.type==='text'&&!Object.hasOwn(message,'context')&&typeof message.text?.body==='string'&&['HOLA','ESTADO','MENU','MENÚ'].includes(metaInboundCommandText(message.text.body));
 }
 export function participantKycStepGuidance(step,projectId){
  if(!KYC_GUIDED_STEPS.includes(step)||!workspaceId(projectId))return null;

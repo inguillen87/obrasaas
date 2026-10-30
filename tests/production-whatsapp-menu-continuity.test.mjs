@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
-import {planMetaFieldConversation,metaFieldConversationAction} from '../src/lib/meta-field-conversation.mjs';
+import {planMetaFieldConversation,metaFieldConversationAction,metaInboundCommandText} from '../src/lib/meta-field-conversation.mjs';
 import {createCompanyChannelBridge} from '../src/lib/company-channel-routing.mjs';
 import {digest} from '../src/lib/workspace-policy.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
@@ -90,6 +90,16 @@ for(const options of [{membership:false},{assigned:false}])test('accented menu k
 });
 test('extra text is not normalized into an authorized menu command',async()=>{
  assert.equal(metaFieldConversationAction('MENÚ extra'),null);const f=routingFixture({type:'text',text:{body:'MENÚ extra'}},{fieldPurpose:'MENU'}),result=await f.bridge.execute(f.context);assert.equal(result.kind,'WORKSITE_INPUT_CONTEXT_REQUIRED');assert.equal(f.io(),0);
+});
+// A greeting typed the way people write it opens the same menu as the exact HOLA; anything
+// beyond a greeting keeps its own text so free answers are never read as the menu command.
+test('everyday greetings open the menu like HOLA and nothing else is normalized',async()=>{
+ for(const body of ['HOLA','hola','Hola!','¡Hola!','hola buenas','Hola, buen día','Buenas tardes','buenos dias','Holaaa','HOLA QUÉ TAL','  hola...  '])assert.equal(metaInboundCommandText(body),'HOLA',body);
+ for(const body of ['hola juan','buenas, necesito material','HOLA MENU','hola 2','Holanda','ESTADO','menú'])assert.notEqual(metaInboundCommandText(body),'HOLA',body);
+ assert.equal(metaInboundCommandText('menú'),'MENÚ');assert.equal(metaInboundCommandText(undefined),null);assert.equal(metaInboundCommandText(42),null);
+ assert.equal(metaFieldConversationAction('Hola!'),'MENU');assert.equal(metaFieldConversationAction('hola buenas'),'MENU');assert.equal(metaFieldConversationAction('hola juan'),null);
+ for(const body of ['Hola!','hola buenas']){const f=routingFixture({type:'text',text:{body}},{fieldPurpose:'MENU',routeExpiresIn:-1000}),before=structuredClone(f.worker),result=await f.bridge.execute(f.context);assert.equal(result.kind,'WORKSITE_SELECTION_REQUIRED',body);assert.deepEqual(f.worker,before);assert.equal(f.io(),0);}
+ const f=routingFixture({type:'text',text:{body:'hola juan'}},{fieldPurpose:'MENU'}),result=await f.bridge.execute(f.context);assert.equal(result.kind,'WORKSITE_INPUT_CONTEXT_REQUIRED');assert.equal(f.io(),0);
 });
 test('confirmed company selection describes the separate identity flow without claiming KYC unavailable',async()=>{
  const f=routingFixture({type:'interactive',interactive:{list_reply:{id:'empresa:'+'3'.repeat(20)+':0'}}},{fieldPurpose:'MENU',routePhase:'CONFIRM'}),before=structuredClone(f.worker),result=await f.bridge.execute(f.context);assert.equal(result.kind,'WORKSITE_SELECTED');assert.match(result.reply.body,/La identidad tiene su recorrido separado y no concede permisos/);assert.doesNotMatch(result.reply.body,/KYC.*no están habilitados/);assert.match(result.reply.body,/Flow no está habilitado/);assert.deepEqual(f.worker,before);assert.equal(f.io(),0);

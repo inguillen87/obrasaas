@@ -1,3 +1,4 @@
+import {metaInboundCommandText} from './meta-field-conversation.mjs';
 import {participantIdentityNoticeSummary} from './participant-kyc-notice-links.mjs';
 import {digest,WorkspaceError} from './workspace-policy.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from './participant-policy.mjs';
@@ -36,7 +37,7 @@ export function planEmployeeIntakeConversation({message,state,eventId,promptConf
   return intakePrompt(state,eventId);
  }
  if(body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);
- if(['HOLA','ESTADO','AYUDA'].includes(body?.toUpperCase())||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);
+ if(['HOLA','ESTADO','AYUDA'].includes(metaInboundCommandText(body))||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);
  const next={...state};delete next.nonce;delete next.choices;
  if(state.step==='NAME'){
   try{return intakePrompt({...next,name:siteText(body,100,2),step:'JOB'},eventId);}catch{return intakePrompt(state,eventId);}

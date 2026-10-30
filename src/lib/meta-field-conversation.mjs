@@ -13,7 +13,16 @@ import {identityAccountReturnPath} from './identity-return-path.mjs';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['EXECUTION','Registrar material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU','MENÚ':'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',CRONOGRAMA:'TASKS',GANTT:'TASKS','IMPORTAR CRONOGRAMA':'PLAN_IMPORT','IMPORTAR PLAN':'PLAN_IMPORT',EVIDENCIA:'MEDIA',EVIDENCIAS:'OWN_EVIDENCE',AVANCES:'OWN_PROGRESS',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',EJECUCION:'EXECUTION','EJECUCIÓN':'EXECUTION',REPORTAR:'EXECUTION',EJECUCIONES:'OWN_EXECUTIONS',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
-export const metaFieldConversationAction=body=>typeof body==='string'?aliases[body.trim().toUpperCase()]||null:null;
+// Greetings people actually type ("Hola!", "hola buenas", "Buen día") open the menu like HOLA.
+// Only a greeting on its own is normalized; a greeting followed by anything else keeps its text,
+// so a free-text answer is never mistaken for the menu command.
+const greeting=/^(?:HOLA+|HOLIS|BUENAS|BUENAS (?:TARDES|NOCHES)|BUEN D[IÍ]A|BUENOS D[IÍ]AS|HOLA+ (?:BUENAS|BUENAS (?:TARDES|NOCHES)|BUEN D[IÍ]A|BUENOS D[IÍ]AS|QU[EÉ] TAL))$/;
+export function metaInboundCommandText(raw){
+ if(typeof raw!=='string')return null;
+ const upper=raw.trim().toUpperCase();
+ return greeting.test(upper.replace(/[!¡.,;:¿?…]+/g,' ').replace(/\s+/g,' ').trim())?'HOLA':upper;
+}
+export const metaFieldConversationAction=body=>typeof body==='string'?aliases[metaInboundCommandText(body)]||null:null;
 // A read requirement, never participant authority. The signed bridge proves
 // the recovery origin/binding and current permission before using this scope.
 export function metaFieldRecoveryCatalogRead({message,state,recovery,now,attendanceOnly=false}){
@@ -210,7 +219,7 @@ export function metaFieldMenuDisclosure(choices,base='MENU'){
 export const metaFieldPlanDisclosure=plan=>canonicalPlanDisclosures.get(plan)||null;
 function markMetaFieldDisclosure(plan,disclosure){canonicalPlanDisclosures.set(plan,disclosure);return plan;}
 function classifyPlan(input,plan){
- const {message,state,facts,now}=input,body=message.type==='text'?message.text?.body?.trim().toUpperCase():null,action=metaFieldConversationAction(body);
+ const {message,state,facts,now}=input,body=message.type==='text'?metaInboundCommandText(message.text?.body):null,action=metaFieldConversationAction(body);
  const active=state?.version===1&&Date.parse(state.expiresAt)>now.getTime()?state:null;
  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^obra:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
  const selected=active&&match&&match[1]===active.nonce?active.choices?.[Number(match[2])]?.value:null;
@@ -262,7 +271,7 @@ function planConversation({message,state,eventId,facts,now}){
  // A greeting is a read, never a replacement prompt for an open draft.
  // Keep its exact nonce, expiry and durable origin; authorization is resolved
  // by the signed bridge and purpose permissions still gate continuation.
- if(body?.toUpperCase()==='HOLA'&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};
+ if(metaInboundCommandText(body)==='HOLA'&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};
  if(alias==='STATUS'&&active&& !['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,consumptionRead:facts.permissions.report===true&&Boolean(facts.ownConsumptions),reply:text(statusReply(facts)+'\nConservamos el borrador. Para recorrer tus informes, cancelalo explícitamente con CANCELAR y abrí ESTADO → Mis evidencias, Mis avances o Mis consumos.')};
  if(alias==='OWN_CONSUMPTIONS'&&active&&!['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,reply:text('Conservamos el borrador actual. Escribí CANCELAR y abrí ESTADO → Mis consumos para consultar tus informes sin descartar un registro por accidente.')};
  if(ownReportPurposes.includes(alias)&&active&&!['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,reply:text('Conservamos el borrador actual. Escribí CANCELAR y abrí ESTADO → Mis evidencias o Mis avances para consultar tus informes sin descartar un registro por accidente.')};

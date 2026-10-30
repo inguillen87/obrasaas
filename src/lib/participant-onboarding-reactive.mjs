@@ -1,3 +1,4 @@
+import {metaInboundCommandText} from './meta-field-conversation.mjs';
 import {randomBytes} from 'node:crypto';
 import {WorkspaceError,digest,workspaceId} from './workspace-policy.mjs';
 import {metaCustomerContentDigest as durableDigest} from './meta-customer-callback.mjs';
@@ -243,7 +244,7 @@ function offer(authority,r){
 export async function planReactiveOnboarding(client,r,pref,{environment=process.env,promptConfirmed=false}={}){
  const choice=r.payload.value.interactive?.list_reply?.id||r.payload.value.interactive?.button_reply?.id;
  const previous=r.state?.reactiveOnboarding;
- const text=r.payload.value.type==='text'?r.payload.value.text?.body?.trim().toLocaleUpperCase('es'):null;
+ const text=r.payload.value.type==='text'?metaInboundCommandText(r.payload.value.text?.body):null;
  if(previous?.kind==='KYC_START'&&['HOLA','ESTADO','MENU','MENÚ'].includes(text))return planReactiveParticipantStatus(client,r,pref,{environment});
  if(!pref)return null;
  if(previous?.kind==='KYC_START')return null;

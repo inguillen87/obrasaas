@@ -5,7 +5,7 @@ import {decodeWorkerChannelProof,workerChannelCodeDigest,lockParticipantMember,a
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerOutboundId} from './meta-customer-outbound.mjs';
-import {metaFieldConversationAction,META_FIELD_MEDIA_AUTHORIZATION_VERSION} from './meta-field-conversation.mjs';
+import {metaFieldConversationAction,metaInboundCommandText,META_FIELD_MEDIA_AUTHORIZATION_VERSION} from './meta-field-conversation.mjs';
 import {createMetaFieldBridge,createCompanyMetaFieldIdentityResolver,createMetaFieldReplyAuthority,readMetaFieldConversation,inspectMetaFieldConsumptionRecovery,validateMetaFieldMediaOrigin} from './meta-field-bridge.mjs';
 import {validFieldMediaAnalysisConsent} from './field-media-privacy.mjs';
 import {siteText} from './site-register-policy.mjs';
@@ -144,7 +144,7 @@ async function selector(client,r,env){
  if(r.projection?.encryptedResult)return {done:unseal(r,'company-source-result',r.event.id,r.projection.encryptedResult,env)};
  if(r.code){await reserve(client,r,'BINDING',r.workers[0]);return {delegate:true};}
  if(r.owner.mode!=='COMPANY'||r.proof.companyRouting?.mode!=='COMPANY')fault('COMPANY_CHANNEL_SOURCE_REQUIRED');
- const rawBody=r.proof.value.type==='text'?r.proof.value.text?.body?.trim().toUpperCase():null,body=rawBody==='MENÚ'?'MENU':rawBody,state=r.route?unseal(r,'company-route',r.routeId,r.route.encryptedState,env):null,active=state&&Date.parse(state.expiresAt)>r.now.getTime(),selected=r.route&&r.workers.find(w=>w.id===r.route.workerId&&w.projectId===r.route.projectId&&w.assignmentRevision===r.route.assignmentRevision&&w.channelBinding.id===r.route.bindingId);
+ const rawBody=r.proof.value.type==='text'?metaInboundCommandText(r.proof.value.text?.body):null,body=rawBody==='MENÚ'?'MENU':rawBody,state=r.route?unseal(r,'company-route',r.routeId,r.route.encryptedState,env):null,active=state&&Date.parse(state.expiresAt)>r.now.getTime(),selected=r.route&&r.workers.find(w=>w.id===r.route.workerId&&w.projectId===r.route.projectId&&w.assignmentRevision===r.route.assignmentRevision&&w.channelBinding.id===r.route.bindingId);
  const id=r.proof.value.type==='interactive'?(r.proof.value.interactive?.list_reply?.id||r.proof.value.interactive?.button_reply?.id):null;
  const match=/^empresa:([a-f0-9]{20}):(\d{1,2})$/.exec(id||'');
  const recoveryInput=selected&&['CONSUMO','CANCELAR','OBRA','CAMBIAR OBRA'].includes(body)&&selected.metadata?.fieldConsumptionRecovery?inspectMetaFieldConsumptionRecovery({...r,worker:selected,project:r.projects.get(selected.projectId),channelBinding:selected.channelBinding,sourceProjectId:r.connection.projectId,companyProjection:{projectId:selected.projectId,workerId:selected.id,actorId:r.member.actorId,membershipId:r.member.membershipId,assignmentRevision:selected.assignmentRevision,bindingId:selected.channelBinding.id,routeId:r.routeId,routeEpoch:r.route.epoch}}):null;
