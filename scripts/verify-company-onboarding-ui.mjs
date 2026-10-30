@@ -310,7 +310,7 @@ async function companySelectorContext(width){
 }
 const organizationLockModes=['cancel','save','external-organization','external-session','denied401','denied403','stale-observation','unmount'];
 async function organizationDraftProtection(mode,width){
- const context=await browser.createBrowserContext(),page=await context.newPage(),reads=[],posts=[],unexpected=[],late=[];
+ const context=await browser.createBrowserContext(),page=await context.newPage(),reads=[],posts=[],unexpected=[],late=[],decisionReads=[];
  const names={A:'Empresa de planificación A',B:'Empresa de planificación B'},reason='Reprogramar el ingreso de materiales',draftDates={startsOn:'2026-10-12',endsOn:'2026-10-16'};
  const scope=letter=>letter.toLowerCase().repeat(64),project=letter=>({id:'selector-project-'+letter,name:'Obra de planificación '+letter,status:'ACTIVE'});
  const tasks={A:{id:'selector-task-A',title:'Actividad de planificación A',startsOn:'2026-10-02',endsOn:'2026-10-06',status:'BACKLOG',progress:0,revision:'2026-10-01T12:00:00.123456'},B:{id:'selector-task-B',title:'Actividad de planificación B',startsOn:'2026-10-03',endsOn:'2026-10-07',status:'BACKLOG',progress:0,revision:'2026-10-01T12:00:00.123456'}};
@@ -360,6 +360,12 @@ async function organizationDraftProtection(mode,width){
   if(url.pathname==='/api/identity/project-preparation'){
    assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope(letter));assert.equal(url.searchParams.get('projectId'),project(letter).id);
    return respond(request,projectPreparationSnapshot({scope:scope(letter),projectId:project(letter).id,canManage:true,revision:0,detailsDigest:'d'.repeat(64),name:project(letter).name,clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope:scope(letter),projectId:project(letter).id}));
+  }
+  if(url.pathname==='/api/identity/operations-status'){
+   // Home decisions read of the open obra: a closed synthetic snapshot bound to the same selector token, scope and project.
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','view']);assert.equal(url.searchParams.get('scope'),scope(letter));assert.equal(url.searchParams.get('projectId'),project(letter).id);assert.equal(url.searchParams.get('view'),'decisions');
+   decisionReads.push({letter,token});
+   return respond(request,{scope:scope(letter),projectId:project(letter).id,view:'decisions',observedAt:'2026-10-11T00:00:00.000Z',evidence:{pending:0},proposals:{pending:0},inventory:{canManage:true,pendingCounts:{consumptions:0,adjustments:0}}});
   }
   assert.equal(url.pathname,'/api/identity/workspace');
   if(request.method()==='POST'){

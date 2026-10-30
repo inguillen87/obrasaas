@@ -17,14 +17,14 @@ const readyJsx=source.slice(ready.consequent.argument.start,ready.consequent.arg
 // SSR verifies native disclosure markup, not browser layout or keyboard behavior.
 await loadBindings();
 const compiled=await transform(`import React,{useCallback,useEffect,useRef,useState} from ${JSON.stringify(import.meta.resolve('react'))};
-const styles={created:'created',caption:'caption'};
+const styles={created:'created',caption:'caption',notice:'notice'};
 ${source.replace(/^import .*;\r?\n/gm,'')}
-export const renderReady=({receipt,currentCompany,children})=>${readyJsx};`,{filename:'actual-company-ready-receipt.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
+export const renderReady=({receipt,currentCompany,children,notice=''})=>${readyJsx};`,{filename:'actual-company-ready-receipt.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
 const {renderReady,CompanyTrialExpiry}=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));
 const receipt=Object.freeze({companyName:'Empresa sintética',projectName:'Obra sintética',initialTaskCount:3,receiptId:'company_bootstrap_'+'a'.repeat(64)});
 const currentCompany=Object.freeze({trial:{endsOn:'2026-11-05',endsAt:'2026-11-05T18:00:00.000Z'}});
 const daily=React.createElement('main',{id:'daily-workspace'},'Panel diario sintético');
-const render=(value=receipt,company=currentCompany)=>renderReady({receipt:value,currentCompany:company,children:daily});
+const render=(value=receipt,company=currentCompany,notice='')=>renderReady({receipt:value,currentCompany:company,children:daily,notice});
 const children=node=>React.Children.toArray(node.props?.children);
 function descendants(node,predicate,result=[]){if(!node||typeof node!=='object')return result;if(predicate(node))result.push(node);for(const child of children(node))descendants(child,predicate,result);return result;}
 const text=node=>typeof node==='string'||typeof node==='number'?String(node):children(node).map(text).join('');
@@ -45,6 +45,13 @@ test('all original headings source values warnings and receipt identifier remain
 test('trial information and the daily workspace stay outside the receipt and retain their existing order',()=>{
  const fragment=render(),parts=children(fragment);assert.equal(parts.length,3);assert.equal(parts[0].type,CompanyTrialExpiry);assert.equal(parts[0].props.company,currentCompany);assert.equal(parts[1].type,'details');assert.equal(parts[2].type,'main');assert.equal(parts[2].props.id,'daily-workspace');
  const html=renderToStaticMarkup(fragment);assert.ok(html.indexOf('Prueba: vencimiento registrado')<html.indexOf('<details'));assert.ok(html.indexOf('Esta fecha no confirma un plan pago.')<html.indexOf('<details'));assert.ok(html.indexOf('</details>')<html.indexOf('<main id="daily-workspace">'));
+});
+
+test('a confirmed alta shows its status notice outside and before the collapsed receipt, and never without a receipt',()=>{
+ const notice='Alta confirmada. Podés consultar el recibo original y continuar en tu espacio.';
+ const fragment=render(receipt,currentCompany,notice),parts=children(fragment);assert.equal(parts.length,4);assert.equal(parts[0].type,CompanyTrialExpiry);assert.equal(parts[1].type,'p');assert.equal(parts[1].props.role,'status');assert.equal(parts[1].props['aria-live'],'polite');assert.equal(text(parts[1]),notice);assert.equal(parts[2].type,'details');assert.equal(parts[3].type,'main');
+ const html=renderToStaticMarkup(fragment);assert.ok(html.indexOf('Esta fecha no confirma un plan pago.')<html.indexOf('<p role="status"'));assert.ok(html.indexOf('<p role="status"')<html.indexOf('<details'));assert.equal(descendants(parts[2],node=>node.type==='p'&&node.props.role==='status').length,0);
+ assert.equal(children(render(null,currentCompany,notice)).length,2);assert.doesNotMatch(renderToStaticMarkup(render(null,currentCompany,notice)),/role="status"|Alta confirmada/);
 });
 
 test('an already configured workspace without an original receipt has no empty disclosure or hidden daily panel',()=>{
