@@ -375,6 +375,8 @@ test('identity destination sixteen measured records strict append geometry netwo
 // These tests authenticate the physical source frame only. They do not construct
 // a synthetic native proof or replace the real PostgreSQL producer execution.
 const PILOT_COMPANY_NATIVE_ADDITIONS=[
+ 'src/lib/approved-progress-curve-store.mjs',
+ 'src/lib/approved-progress-curve.mjs',
  'src/lib/consumption-evidence-catalog.mjs',
  'src/lib/consumption-evidence-http.mjs',
  'src/lib/plan-budget-csv-source.mjs',
@@ -389,14 +391,14 @@ function companyNativePhysicalManifest(){
  const paths=[...files].sort(),previousPaths=paths.filter(file=>!PILOT_COMPANY_NATIVE_ADDITIONS.includes(file));
  assert.deepEqual(paths.filter(file=>PILOT_COMPANY_NATIVE_ADDITIONS.includes(file)),PILOT_COMPANY_NATIVE_ADDITIONS);
  assert.equal(previousPaths.length,250);assert.equal(new Set(previousPaths).size,250);
- assert.equal(paths.length,253);assert.equal(new Set(paths).size,253);
+ assert.equal(paths.length,255);assert.equal(new Set(paths).size,255);
  return paths.map(path=>({path,sha256:sha(read(path))}));
 }
 const companyNativeDenied=error=>error?.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED';
 test('company native source frame authenticates243 physical RAW sources while preserving238 historical and54 semantic checks',()=>{
  const manifest=companyNativePhysicalManifest(),before=serialize(manifest),contractBefore=read('.github/workspace-acceptance-contract.json');
  const result=validateCompanyOnboardingUxNativeSourceManifest(manifest,read);
- assert.deepEqual(result,{status:'PASS',sourceReferences:253,historicalSourceReferences:238,sourceScope:'CURRENT_AUTHENTICATED_OWNERS',nativeOrBrowserAcceptance:false});
+ assert.deepEqual(result,{status:'PASS',sourceReferences:255,historicalSourceReferences:238,sourceScope:'CURRENT_AUTHENTICATED_OWNERS',nativeOrBrowserAcceptance:false});
  assert.equal(serialize(manifest),before);assert.deepEqual(read('.github/workspace-acceptance-contract.json'),contractBefore);
  assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.sourceCount,238);assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.totalCheckCount,54);assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.addedCheckNames.length,5);
  assert.equal(companyExpected.native.sourceCount,238);assert.equal(companyExpected.native.totalCheckCount,54);
@@ -493,7 +495,7 @@ test("native materials membership requires all three exact source owners and the
  assert.deepEqual(own.retainedDependencies.map(row=>row.path),["src/app/(identity)/cuenta/kyc-camera-session.mjs","src/app/(identity)/cuenta/participant-panel.module.css"]);
  for(const path of paths){const row=own.sourceChanges.find(r=>r.path===path);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(sha(read(path).toString('utf8').replaceAll('\r\n','\n')),row.currentSha256);const changed=structuredClone(contract);changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges=changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.filter(r=>r.path!==path);assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(manifest,p=>p==='.github/workspace-acceptance-contract.json'?Buffer.from(serialize(changed)):read(p)),companyNativeDenied);}
  const allowed=new Set([...planBudgetValidationFiles(contract),...homeDecisionsValidationFiles(contract),...worksiteLiveHoursValidationFiles(contract)]),nativePaths=new Set(manifest.map(r=>r.path));const limited=file=>allowed.has(file)||nativePaths.has(file)||file===COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer||file==='.github/workspace-acceptance-contract.json'?read(file):null;
- assert.equal(validateCompanyOnboardingUxNativeSourceManifest(manifest,limited).sourceReferences,253);
+ assert.equal(validateCompanyOnboardingUxNativeSourceManifest(manifest,limited).sourceReferences,255);
 });
 
 test('current material authority survives the closed KYC ownership expansion and denies partial resealing',()=>{

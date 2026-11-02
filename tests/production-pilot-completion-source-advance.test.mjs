@@ -147,9 +147,17 @@ test('mutating the shallow reviewed export cannot redirect the private compiled 
 });
 
 test('typed proof additions preserve prior sources and include the new closure layer explicitly',()=>{
- const spec=contract.extension.proofs.find(row=>row.kind==='UI_FOCUSED_WORKSPACE');
- const added=planBudgetProofSourceAdditions(spec);
- assert.ok(added.includes('scripts/lib/pilot-completion-current-ci-layer.mjs'));
+ const proofs=contract.extension.proofs.filter(row=>row.kind==='UI_FOCUSED_WORKSPACE'||row.kind==='UI_FOCUSED_WORKSPACE_85');assert.equal(proofs.length,1);const spec=proofs[0];
+ const added=planBudgetProofSourceAdditions(spec),layerPath='scripts/lib/pilot-completion-current-ci-layer.mjs';
+ if(spec.kind==='UI_FOCUSED_WORKSPACE_85'){
+  const index=contract.extension.proofs.indexOf(spec),inverse=advance.metadataInverse.filter(row=>row.pointer==='/extension/proofs/'+index),previous=restorePilotCompletionPreviousProofSpec(spec);
+  assert.equal(inverse.length,1);assert.deepEqual(inverse[0].after,spec);assert.deepEqual(inverse[0].before,previous);assert.equal(previous.kind,'UI_FOCUSED_WORKSPACE');
+  assert.deepEqual(previous,restorePilotCompletionPreviousContract(contract,read).extension.proofs[index]);
+  assert.ok(spec.sourceFiles.includes(layerPath));const physical=read(layerPath);assert.ok(Buffer.isBuffer(physical)&&physical.length>0);assert.equal(hash(physical.toString('utf8').replaceAll('\r\n','\n')),advance.sourceChanges.find(row=>row.path===layerPath).currentSha256);
+  // The legacy additions helper owns its original kinds. The whole exact85
+  // descriptor and actual source bytes above are authenticated independently.
+  assert.deepEqual(added,[]);let sourceReads=0;assert.deepEqual(planBudgetProofSourceAdditions({kind:spec.kind,get sourceFiles(){sourceReads++;throw new Error('Legacy helper must not inspect an unowned source set');}}),[]);assert.equal(sourceReads,0);
+ }else assert.ok(added.includes(layerPath));
  assert.equal(new Set(added).size,added.length);
  assert.ok(added.every(file=>spec.sourceFiles.includes(file)));
 });
@@ -234,12 +242,12 @@ test('historical source-set projection requires the complete current typed famil
  assert.throws(()=>restorePilotCompletionPreviousSourceSet(contract,'FOREIGN',[]),rejected);
 });
 
-test('company native additions require exact authenticated metadata and expose only the three new library pins',()=>{
- const expected=['src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs','src/lib/plan-budget-csv-source.mjs'];
+test('company native additions require exact authenticated metadata and expose only the five reviewed library pins',()=>{
+ const originalThree=['src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs','src/lib/plan-budget-csv-source.mjs'],expected=['src/lib/approved-progress-curve-store.mjs','src/lib/approved-progress-curve.mjs',...originalThree];
  const before=JSON.stringify(contract),rows=pilotCompletionNativeLibrarySources(contract);
- assert.deepEqual(rows.map(row=>row.path),expected);
+ assert.deepEqual(rows.map(row=>row.path),expected);assert.deepEqual(rows.map(row=>row.path).filter(file=>originalThree.includes(file)),originalThree);
  for(const row of rows)assert.equal(row.sha256,hash(read(row.path).toString('utf8').replaceAll('\r\n','\n')));
- rows[0].sha256='f'.repeat(64);rows.pop();assert.equal(pilotCompletionNativeLibrarySources(contract).length,3);
+ rows[0].sha256='f'.repeat(64);rows.pop();assert.equal(pilotCompletionNativeLibrarySources(contract).length,5);
  assert.notEqual(pilotCompletionNativeLibrarySources(contract)[0].sha256,'f'.repeat(64));
  for(const mutate of [c=>c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.pop(),c=>{c.extension.proofs[0].producerSha256='f'.repeat(64);}]){
   const forged=structuredClone(contract);mutate(forged);assert.throws(()=>pilotCompletionNativeLibrarySources(forged),rejected);

@@ -171,7 +171,7 @@ try {
   }catch(error){errors.push(error.message);if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await wait(page,'Autorizo enviar este cronograma a OpenAI');
   let initialReadTimeout;try{await Promise.race([initialReadObserved,new Promise((_,reject)=>{initialReadTimeout=setTimeout(()=>reject(Error('Initial plan snapshot was not requested')),20000);})]);}finally{clearTimeout(initialReadTimeout);}
-  await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled&&[...document.querySelectorAll('button')].some(button=>button.textContent==='Procesando…'&&button.disabled));
+  await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled&&[...document.querySelectorAll('button')].some(button=>button.textContent==='Consultando…'&&button.disabled));
   assert.equal(posts.length,0);assert.equal(await page.$eval('input[type=checkbox]',element=>element.disabled),true);
   releaseInitialRead();
   await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false&&[...document.querySelectorAll('button')].some(button=>button.textContent==='Extraer borrador'&&button.disabled));
