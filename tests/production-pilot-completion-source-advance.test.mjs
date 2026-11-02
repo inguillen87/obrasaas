@@ -242,15 +242,18 @@ test('historical source-set projection requires the complete current typed famil
  assert.throws(()=>restorePilotCompletionPreviousSourceSet(contract,'FOREIGN',[]),rejected);
 });
 
-test('company native additions require exact authenticated metadata and expose only the five reviewed library pins',()=>{
- const originalThree=['src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs','src/lib/plan-budget-csv-source.mjs'],expected=['src/lib/approved-progress-curve-store.mjs','src/lib/approved-progress-curve.mjs',...originalThree];
+test('company native additions require exact authenticated metadata and expose only nine reviewed library pins while preserving the original five',()=>{
+ const originalThree=['src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs','src/lib/plan-budget-csv-source.mjs'],originalFive=['src/lib/approved-progress-curve-store.mjs','src/lib/approved-progress-curve.mjs',...originalThree],attendanceFour=['src/lib/attendance-chronology.mjs','src/lib/attendance-closure-policy.mjs','src/lib/attendance-closure-store.mjs','src/lib/attendance-effective-store.mjs'],expected=[...originalFive,...attendanceFour].sort();
  const before=JSON.stringify(contract),rows=pilotCompletionNativeLibrarySources(contract);
- assert.deepEqual(rows.map(row=>row.path),expected);assert.deepEqual(rows.map(row=>row.path).filter(file=>originalThree.includes(file)),originalThree);
+ assert.deepEqual(rows.map(row=>row.path),expected);assert.deepEqual(rows.map(row=>row.path).filter(file=>originalThree.includes(file)),originalThree);assert.deepEqual(rows.map(row=>row.path).filter(file=>originalFive.includes(file)),originalFive);
  for(const row of rows)assert.equal(row.sha256,hash(read(row.path).toString('utf8').replaceAll('\r\n','\n')));
- rows[0].sha256='f'.repeat(64);rows.pop();assert.equal(pilotCompletionNativeLibrarySources(contract).length,5);
+ rows[0].sha256='f'.repeat(64);rows.pop();assert.equal(pilotCompletionNativeLibrarySources(contract).length,expected.length);
  assert.notEqual(pilotCompletionNativeLibrarySources(contract)[0].sha256,'f'.repeat(64));
  for(const mutate of [c=>c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.pop(),c=>{c.extension.proofs[0].producerSha256='f'.repeat(64);}]){
   const forged=structuredClone(contract);mutate(forged);assert.throws(()=>pilotCompletionNativeLibrarySources(forged),rejected);
  }
+ for(const omitted of attendanceFour){const forged=structuredClone(contract);forged.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges=forged.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.filter(row=>row.path!==omitted);assert.throws(()=>pilotCompletionNativeLibrarySources(forged),rejected);}
+ const originalFiveOnly=structuredClone(contract);originalFiveOnly.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges=originalFiveOnly.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.filter(row=>!attendanceFour.includes(row.path));assert.throws(()=>pilotCompletionNativeLibrarySources(originalFiveOnly),rejected);
+ const foreign=structuredClone(contract),foreignRow=foreign.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.find(row=>row.path===attendanceFour[0]);foreignRow.path='src/lib/foreign-attendance-helper.mjs';foreign.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.sort((a,b)=>a.path.localeCompare(b.path));assert.throws(()=>pilotCompletionNativeLibrarySources(foreign),rejected);
  assert.equal(JSON.stringify(contract),before);
 });

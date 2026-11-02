@@ -16,6 +16,7 @@ const prefix=`import React from ${JSON.stringify(import.meta.resolve('react'))};
 ${importer('createWorkspaceRequestLifecycle','workspace-request-lifecycle.mjs')}
 ${importer('collectRetainedPages,retainedRows,liveContextChanged','workspace-live-read.mjs')}
 ${importer('createWorkspaceRecoveryJournal,FIELD_OVERTIME_RECOVERY_ACTIONS','workspace-recovery-journal.mjs')}
+${importer('ATTENDANCE_CLOSURE_ACTIONS,attendanceClosureViewMatches,attendanceClosurePayload,attendanceClosureOutcome','attendance-closure-view.mjs')}
 ${importer('fieldMediaAttemptReference,fieldMediaHeldOutcome,fieldMediaHeldMessage,fieldMediaEvidenceHeld,fieldMediaReviewEligible','field-media-held-view.mjs')}
 ${importer('fieldReviewPage,mergeFieldReviewRows','field-review-page-view.mjs')}
 ${importer('taskMeasurementView,measurementProposalPreview,measurementProposalPayload,prepareMeasuredVoiceProgress,measuredQuantityLabel,measurementConfirmation,measurementConfirmationMatches','task-progress-measurement-view.mjs')}

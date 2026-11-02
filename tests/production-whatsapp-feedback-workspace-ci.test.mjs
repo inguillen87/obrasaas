@@ -1,4 +1,4 @@
-import {restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePilotCompletionPreviousContract,restorePilotCompletionPreviousSourceText,restorePilotCompletionPreviousProofSpec,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION as waRevision,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWhatsappFieldContinuityPreviousContract,whatsappFieldContinuityCurrentSourcePin} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract,restoreExistingApiPlanSourceSet} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {integratedIdentityPreviousProofChecks} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -27,10 +27,20 @@ assert.equal(sha(JSON.stringify(predecessor,null,2)+'\n'),WHATSAPP_FIELD_CONTINU
 // Only producer/check metadata is restored for the historical18 assertion.
 // The current source paths and every proof byte remain current.
 function previousCheckMetadata(spec){
+ let metadataContract=contract,producerBytes=readSource(spec.producer);
+ if(spec.kind==='PG_OVERTIME'){
+  const matches=current.filter(row=>row.id===spec.id);assert.equal(matches.length,1);const authority=matches[0],prior=restorePilotCompletionPreviousProofSpec(authority);
+  assert.equal(authority.checkNames.length,43);assert.equal(prior.checkNames.length,30);assert.deepEqual(authority.checkNames.slice(0,30),prior.checkNames);
+  assert.equal(spec.producer,authority.producer);assert.equal(spec.producerSha256,authority.producerSha256);assert.deepEqual(spec.checkNames,authority.checkNames);assert.equal(sha(producerBytes),authority.producerSha256);
+  const historicalText=restorePilotCompletionPreviousSourceText(contract,authority.producer,producerBytes.toString('utf8'));assert.equal(sha(Buffer.from(historicalText)),prior.producerSha256);
+  metadataContract=restorePilotCompletionPreviousContract(contract,readSource);assert.equal(sha(JSON.stringify(metadataContract,null,2)+'\n'),'4d813ad4f40496d1355b2820607d138d899ea51d336ab176c9fb2febe6ce9a00');
+  spec={...spec,producer:prior.producer,producerSha256:prior.producerSha256,checkNames:prior.checkNames};producerBytes=Buffer.from(historicalText);
+ }
+
   const previous=predecessor.extension.proofs.find(row=>row.id===spec.id),historicalCurrent=beforeBudgetContract.extension.proofs.find(row=>row.id===spec.id),delta=waRevision.currentProofChanges.find(row=>row.id===spec.id);assert.ok(previous);assert.ok(historicalCurrent);
   assert.equal(spec.producer,historicalCurrent.producer);assert.deepEqual(spec.checkNames,historicalCurrent.checkNames);
-  assert.equal(spec.producerSha256,whatsappFieldContinuityCurrentSourcePin(contract,{path:spec.producer,sha256:historicalCurrent.producerSha256}));
-  assert.equal(sha(readSource(spec.producer)),spec.producerSha256);
+  assert.equal(spec.producerSha256,whatsappFieldContinuityCurrentSourcePin(metadataContract,{path:spec.producer,sha256:historicalCurrent.producerSha256}));
+  assert.equal(sha(producerBytes),spec.producerSha256);
   if(delta){assert.equal(historicalCurrent.producerSha256,delta.currentProducerSha256);assert.deepEqual(historicalCurrent.checkNames,delta.currentCheckNames);assert.equal(previous.producerSha256,delta.previousProducerSha256);assert.deepEqual(previous.checkNames,delta.previousCheckNames);}else{assert.equal(historicalCurrent.producerSha256,previous.producerSha256);assert.deepEqual(historicalCurrent.checkNames,previous.checkNames);}
   return {...spec,producerSha256:previous.producerSha256,checkNames:integratedIdentityPreviousProofChecks(previous)};
 }
@@ -41,6 +51,7 @@ test('current execution graphs add only their real WhatsApp imports and preserve
   const prior=restoreParticipantPreanalysisPreviousContract(contract).extension.proofs.find(row=>row.id===spec.id);assert.equal(prior.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length+(contract.planMeasurementCurrentLineage?planMeasurementCurrentDependencies(spec.kind).length:0));assert.equal(spec.sourceFiles.length,prior.sourceFiles.length+participantPreanalysisProofSourceAdditions(spec).length);
   assert.doesNotThrow(()=>validateWhatsappFeedbackPreviousSourceLineage(previousCheckMetadata(spec)));
   assert.deepEqual(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted());
+  if(spec.kind==='PG_OVERTIME')for(const edit of [p=>{p.checkNames=p.checkNames.slice(0,30);},p=>{p.checkNames=[...p.checkNames].reverse();},p=>{p.producerSha256=beforeBudgetContract.extension.proofs.find(row=>row.id===p.id).producerSha256;}]){const changed=clone(spec);edit(changed);assert.throws(()=>previousCheckMetadata(changed),{code:'ERR_ASSERTION'});}
  }
 });
 

@@ -452,7 +452,7 @@ const EXTENSION_PROOFS=[
  ['document-curve-ui','plans',62,'.vercel/private/plan-document-curve-evidence/current-browser.json','UI_DOCUMENT_CURVE']
 ];
 function sourcePath(value){if(typeof value!=='string'||value.length>500||/[\\\x00-\x1f]/.test(value)||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'))deny('UNSAFE_SOURCE_PATH');return value;}
-function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const cache=new Map();return filename=>{sourcePath(filename);if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:8*1024*1024}));return cache.get(filename);};}
+function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const cache=new Map();return filename=>{sourcePath(filename);if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:40*1024*1024}));return cache.get(filename);};}
 function manifestDigest(references){return hash(canonical([...references].sort((a,b)=>a.path.localeCompare(b.path))));}
 function expectedSourceDigest(spec,readSource){if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');return manifestDigest(spec.sourceFiles.map(file=>{const bytes=readSource(file);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');return {path:file,sha256:hash(bytes)};}));}
 const utf8=bytes=>{if(!Buffer.isBuffer(bytes))deny('PROOF_BYTES');const text=bytes.toString('utf8');if(!bytes.equals(Buffer.from(text)))deny('PROOF_ENCODING');return text;};
