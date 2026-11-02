@@ -73737,9 +73737,9 @@
           "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
           "status": "MODIFIED",
           "previousSha256": "33378577f66ffe9b2661fbb648e10b7423e5d4f1359df2cf7822033b81da3ff7",
-          "currentSha256": "1459e50abd37a9b1851c23c171f813dd07cd8f460e4473acbb6d0ace3d652162",
+          "currentSha256": "533d51d12e50763ee57c042dbeb27439ca535587d55861c8b1a204414c4bf7bd",
           "previousBytes": 464286,
-          "currentBytes": 481405,
+          "currentBytes": 482143,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -73818,101 +73818,101 @@
             },
             {
               "currentOffsetCharacters": 342367,
-              "currentText": "  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}\n",
+              "currentText": "  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['evidence-producer-disagrees',c=>{const proof=c.extension.proofs.find(row=>row.kind===CURRENT85_CI_KIND)||c.extension.proofs.find(row=>row.kind===FOCUSED_WORKSPACE_CI_KIND);assert(proof,'Focused workspace proof required for UNIT tamper');const producers=c.evidenceProducers.filter(row=>row.path===proof.path&&row.producer===proof.producer&&row.blockId===proof.blockId&&row.lane===proof.lane);assert.equal(producers.length,1,'One source-bound focused workspace producer required for UNIT tamper');producers[0].producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}\n",
               "previousText": "  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}\n"
             },
             {
-              "currentOffsetCharacters": 344419,
+              "currentOffsetCharacters": 344788,
               "currentText": "  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}\n",
               "previousText": "  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}\n"
             },
             {
-              "currentOffsetCharacters": 345726,
+              "currentOffsetCharacters": 346095,
               "currentText": " checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource),...current85TypedGateSelftest(contract,shadowSource));\n const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};\n",
               "previousText": " checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));\n const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};\n"
             },
             {
-              "currentOffsetCharacters": 365335,
+              "currentOffsetCharacters": 365704,
               "currentText": "  for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){\n",
               "previousText": "  for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){\n"
             },
             {
-              "currentOffsetCharacters": 368899,
+              "currentOffsetCharacters": 369268,
               "currentText": "  try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}\n",
               "previousText": "  try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}\n"
             },
             {
-              "currentOffsetCharacters": 372315,
+              "currentOffsetCharacters": 372684,
               "currentText": " const checks=[],attendanceSupplementChecks=[],expectedHead=contract.extension.baseHead,cache=new Map();\n",
               "previousText": " const checks=[],expectedHead=contract.extension.baseHead,cache=new Map();\n"
             },
             {
-              "currentOffsetCharacters": 372922,
+              "currentOffsetCharacters": 373291,
               "currentText": " const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};\n",
               "previousText": " const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};\n"
             },
             {
-              "currentOffsetCharacters": 373235,
+              "currentOffsetCharacters": 373604,
               "currentText": "  const currentAttendance=spec.kind==='PG_FIELD'&&restorePilotCompletionPreviousProofSpec(spec)!==spec;\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 375871,
+              "currentOffsetCharacters": 376240,
               "currentText": "  }\n  if(currentAttendance){\n   const names=[...utf8(readSource(spec.producer)).matchAll(/\\battendanceReviewChecks\\.push\\('([^']+)'\\)/g)].map(match=>match[1]);\n   Object.assign(proof,{attendanceReviewChecks:names,attendanceReviewCheckCount:4,totalChecks:71});\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 387328,
+              "currentOffsetCharacters": 387697,
               "currentText": "  if(currentAttendance){\n   const start=checks.length;\n   good(spec.id+'-attendance-supplement-exact-71-preserves-historical67',()=>{\n    const before=canonical(proof),expected=clone(proof);expected.totalChecks=67;delete expected.attendanceReviewChecks;delete expected.attendanceReviewCheckCount;\n    equal(normalizePilotCanonicalFieldProof(spec,proof),expected,'PROOF_CHECK_NAMES');assert.equal(canonical(proof),before);assert.equal(proof.totalChecks,71);assert.equal(proof.attendanceReviewChecks.length,4);\n   });\n   mutate('attendance-checks-omitted','PROOF_CHECK_NAMES',p=>{delete p.attendanceReviewChecks;});\n   mutate('attendance-count-omitted','PROOF_CHECK_NAMES',p=>{delete p.attendanceReviewCheckCount;});\n   mutate('attendance-count-short','PROOF_CHECK_NAMES',p=>{p.attendanceReviewCheckCount=3;});\n   mutate('attendance-count-string','PROOF_CHECK_NAMES',p=>{p.attendanceReviewCheckCount='4';});\n   mutate('attendance-row-omitted','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.pop();});\n   mutate('attendance-row-extra','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.push('foreign attendance check');});\n   mutate('attendance-name-changed','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks[0]='foreign attendance check';});\n   mutate('attendance-row-duplicated','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks[0]=p.attendanceReviewChecks[1];});\n   mutate('attendance-order-changed','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.reverse();});\n   for(const total of [67,70,72])mutate('attendance-total-'+total,'PROOF_CHECK_NAMES',p=>{p.totalChecks=total;});\n   mutate('attendance-provider-call','PROOF_PROVIDER_IO',p=>{p.attendanceReviewProviderCalls=1;});\n   bad(spec.id+'-attendance-supplement-cannot-use-legacy-spec','PROOF_CHECK_NAMES',()=>normalizePilotCanonicalFieldProof(restorePilotCompletionPreviousProofSpec(spec),proof));\n   const forged=clone(spec);forged.checkNames[0]='foreign historical check';bad(spec.id+'-attendance-supplement-cannot-use-forged-spec','PROOF_CHECK_NAMES',()=>normalizePilotCanonicalFieldProof(forged,proof));\n   attendanceSupplementChecks.push(...checks.splice(start));\n  }\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 389976,
+              "currentOffsetCharacters": 390345,
               "currentText": " return [...checks,...attendanceSupplementChecks];\n",
               "previousText": " return checks;\n"
             },
             {
-              "currentOffsetCharacters": 397281,
+              "currentOffsetCharacters": 397650,
               "currentText": " const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};\n",
               "previousText": " const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};\n"
             },
             {
-              "currentOffsetCharacters": 410530,
+              "currentOffsetCharacters": 410899,
               "currentText": " const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};\n",
               "previousText": " const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};\n"
             },
             {
-              "currentOffsetCharacters": 414057,
+              "currentOffsetCharacters": 414426,
               "currentText": " const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\\r\\n','\\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource};\n",
               "previousText": " const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\\r\\n','\\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource};\n"
             },
             {
-              "currentOffsetCharacters": 418873,
-              "currentText": "  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}\n",
+              "currentOffsetCharacters": 419242,
+              "currentText": "  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['evidence-producer-disagrees',c=>{const proof=c.extension.proofs.find(row=>row.kind===CURRENT85_CI_KIND)||c.extension.proofs.find(row=>row.kind===FOCUSED_WORKSPACE_CI_KIND);assert(proof,'Focused workspace proof required for UNIT tamper');const producers=c.evidenceProducers.filter(row=>row.path===proof.path&&row.producer===proof.producer&&row.blockId===proof.blockId&&row.lane===proof.lane);assert.equal(producers.length,1,'One source-bound focused workspace producer required for UNIT tamper');producers[0].producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}\n",
               "previousText": "  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}\n"
             },
             {
-              "currentOffsetCharacters": 420924,
+              "currentOffsetCharacters": 421662,
               "currentText": "  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}\n",
               "previousText": "  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}\n"
             },
             {
-              "currentOffsetCharacters": 422229,
+              "currentOffsetCharacters": 422967,
               "currentText": "checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource),...current85TypedGateSelftest(contract,shadowSource));\n",
               "previousText": "checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));\n"
             },
             {
-              "currentOffsetCharacters": 422500,
+              "currentOffsetCharacters": 423238,
               "currentText": "const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};\n",
               "previousText": "const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};\n"
             },
             {
-              "currentOffsetCharacters": 441905,
+              "currentOffsetCharacters": 442643,
               "currentText": "for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){\n",
               "previousText": "for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){\n"
             },
             {
-              "currentOffsetCharacters": 445464,
+              "currentOffsetCharacters": 446202,
               "currentText": "try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}\n",
               "previousText": "try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}\n"
             }
