@@ -247,7 +247,13 @@ test('participant draft companion restores the complete published9b26 contract a
  const uiFiles=draftExpected.reviewedSourceChanges.map(row=>row.path),requiredRetainedUi=planBudgetValidationFiles(contract).filter(file=>uiFiles.includes(file));
  assert.deepEqual(requiredRetainedUi,["scripts/verify-participant-kyc-chat-closure-ui.mjs","scripts/verify-participants-ui.mjs","src/app/(identity)/cuenta/participant-panel.js"]);
  assert.deepEqual(requiredRetainedUi.filter(file=>file!=='scripts/verify-participant-kyc-chat-closure-ui.mjs'),["scripts/verify-participants-ui.mjs","src/app/(identity)/cuenta/participant-panel.js"]);
- const closureOwner=contract.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path==='scripts/verify-participant-kyc-chat-closure-ui.mjs');assert.equal(closureOwner.status,'MODIFIED');assert.equal(sha(read(closureOwner.path).toString('utf8').replaceAll('\r\n','\n')),closureOwner.currentSha256);
+ const closureOwner=contract.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path==='scripts/verify-participant-kyc-chat-closure-ui.mjs');assert.equal(closureOwner.status,'MODIFIED');
+ // Authenticate actual outer Pilot bytes before the unchanged Own owner's historical oracle.
+ assert.equal(closureOwner.currentSha256,'3ed71301e79875c9dfc70c3c98e2b3454b279c5bd30d2bd2a56d63699e984a04');
+ const closureSource=read(closureOwner.path).toString('utf8').replaceAll('\r\n','\n');
+ assert.equal(sha(closureSource),planBudgetCurrentSourcePin(contract,{path:closureOwner.path,sha256:closureOwner.currentSha256}));
+ assert.equal(sha(restorePilotCompletionPreviousSourceText(contract,closureOwner.path,closureSource)),closureOwner.currentSha256);
+ assert.throws(()=>restorePilotCompletionPreviousSourceText(contract,closureOwner.path,closureSource+'\n// foreign closure source'),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});
  const noUiRead=file=>{assert.equal(uiFiles.includes(file)&&!requiredRetainedUi.includes(file),false,'Composed Home verification must not read unrelated UI sources: '+file);return read(file);};
  assert.equal(verifyHomeDecisionsCurrentSources(contract,noUiRead).nativeOrBrowserAcceptance,false);
  denied(()=>verifyHomeDecisionsCurrentSources(contract,file=>file==='scripts/verify-participant-kyc-chat-closure-ui.mjs'?null:read(file)));

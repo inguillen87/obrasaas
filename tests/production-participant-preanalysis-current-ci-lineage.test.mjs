@@ -3,9 +3,11 @@ import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewSourceSet}
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {readFileSync} from 'node:fs';
 import {PARTICIPANT_PREANALYSIS_CURRENT_REVISION,PARTICIPANT_PREANALYSIS_VALIDATION_PATHS,PARTICIPANT_PREANALYSIS_EVIDENCE,restoreParticipantPreanalysisPreviousContract,participantPreanalysisCurrentSourcePin,verifyParticipantPreanalysisCurrentSources,validateParticipantPreanalysisWorkspaceContract} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
-import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,participantPreanalysisSourceManifest} from '../scripts/verify-participant-kyc-preanalysis-postgres.mjs';
+import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,participantPreanalysisSourceManifest,PARTICIPANT_PREANALYSIS_OWNED_CI_IMAGE,participantPreanalysisOwnedCiContext,participantPreanalysisOwnedCiEndpoint} from '../scripts/verify-participant-kyc-preanalysis-postgres.mjs';
 import {participantPreanalysisNativeSourceClosure,parseParticipantPreanalysisTap,validateParticipantKycPreanalysisNative,validateParticipantKycPreanalysisCi,PARTICIPANT_PREANALYSIS_CI_VERSION} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
@@ -153,11 +155,27 @@ test('block63 binds all actual native source roots and the reviewed CI leaves wi
  assert.deepEqual(projectedProofs,[...beforeBudget.extension.proofs,ownership.proof]);
 });
 
+// Synthetic parser/receipt inputs only. These values were not observed in CI
+// and do not represent a PostgreSQL, Docker, identity or provider execution.
+function ownedServiceSyntheticObservation(checkedAt = '2026-11-02T00:00:03.000Z') {
+ const context={repository:'inguillen87/obrasaas',sourceRevision:'a'.repeat(40),sourceTree:'b'.repeat(40),runId:'123456789',runAttempt:'1',event:'workflow_dispatch',workflow:'Authorized workspace acceptance',job:'people',serviceId:'c'.repeat(64),networkName:'github_network_'+'d'.repeat(32),publishedPort:5432};
+ return {version:1,checkedAt,context,inspection:{
+  container:{id:context.serviceId,imageId:'sha256:'+'e'.repeat(64),imageReference:PARTICIPANT_PREANALYSIS_OWNED_CI_IMAGE,running:true,health:'healthy',networks:{[context.networkName]:{networkId:'f'.repeat(64),endpointId:'1'.repeat(64),address:'172.18.0.2',prefix:16,aliases:['postgres']}},ports:{'5432/tcp':[{hostIp:'0.0.0.0',hostPort:'5432'},{hostIp:'::',hostPort:'5432'}]}},
+  image:{id:'sha256:'+'e'.repeat(64),repoDigests:['postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193']},
+  network:{id:'f'.repeat(64),name:context.networkName,driver:'bridge',internal:false,containers:{[context.serviceId]:{endpointId:'1'.repeat(64),ipv4Address:'172.18.0.2/16'}}}
+ }};
+}
+function ownedServiceSyntheticEnvironment(){
+ const observation=ownedServiceSyntheticObservation(),context=observation.context,workspace=path.resolve(fileURLToPath(root));
+ return {environment:{CUTOVER_TEST_DISPOSABLE:'1',CUTOVER_TEST_DATABASE_URL:'postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci',CI:'true',GITHUB_ACTIONS:'true',RUNNER_OS:'Linux',GITHUB_REPOSITORY:context.repository,GITHUB_SHA:context.sourceRevision,GITHUB_WORKFLOW:context.workflow,GITHUB_JOB:context.job,GITHUB_EVENT_NAME:context.event,GITHUB_RUN_ID:context.runId,GITHUB_RUN_ATTEMPT:context.runAttempt,GITHUB_WORKSPACE:workspace,OBRASAAS_PREANALYSIS_CI_SERVICE_ID:context.serviceId,OBRASAAS_PREANALYSIS_CI_NETWORK:context.networkName,OBRASAAS_PREANALYSIS_CI_PUBLISHED_PORT:'5432'},observed:{platform:'linux',head:context.sourceRevision,tree:context.sourceTree,remote:'https://github.com/inguillen87/obrasaas',workspace},context};
+}
+
 function ciShadow(){
  const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),revision=contract.participantPreanalysisCurrentRevision,spec=contract.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS'),evidence=new Map(),prefix='.vercel/private/participant-kyc-preanalysis-evidence/';
- const raw=Buffer.from(JSON.stringify(shadow(),null,2)+'\n');evidence.set(prefix+'native-original.json',raw);
+ const native=shadow();native.startedAt='2026-11-02T00:00:02.000Z';native.finishedAt='2026-11-02T00:00:04.000Z';native.ownedCiService=ownedServiceSyntheticObservation();native.engine.host='172.18.0.2';
+ const raw=Buffer.from(JSON.stringify(native,null,2)+'\n');evidence.set(prefix+'native-original.json',raw);
  const unitSuites=revision.unitSuites.map((row,index)=>{const tap=Buffer.from('TAP version 13\n'+row.caseNames.map((name,i)=>'ok '+(i+1)+' - '+name+'\n').join('')+'1..'+row.caseNames.length+'\n# tests '+row.caseNames.length+'\n# pass '+row.caseNames.length+'\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n'),path=prefix+'suite-'+index+'.tap';evidence.set(path,tap);return {file:row.file,sourceSha256:sha(read(row.file)),exitCode:0,tap:{path,bytes:tap.length,sha256:sha(tap)},result:parseParticipantPreanalysisTap(tap)};});
- const proof={version:PARTICIPANT_PREANALYSIS_CI_VERSION,status:'PASS',sourceRevision:'a'.repeat(40),sourceTree:'b'.repeat(40),sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],ciRun:{repository:'inguillen87/obrasaas',runId:'123456789',runAttempt:'1',event:'workflow_dispatch',workflow:'Authorized workspace acceptance'},harnessSha256:sha(read(spec.producer)),sourceManifest:spec.sourceFiles.map(path=>({path,sha256:sha(read(path))})),checks:[...PARTICIPANT_KYC_PREANALYSIS_CHECKS],rawNative:{path:prefix+'native-original.json',bytes:raw.length,sha256:sha(raw)},unitSuites,providerRequests:0,productionDataWritten:false,realConsentOrIdentityVerified:false,humanApprovalPerformed:false};
+ const proof={ownedCiServiceVerification:ownedServiceSyntheticObservation('2026-11-02T00:00:05.000Z'),version:PARTICIPANT_PREANALYSIS_CI_VERSION,status:'PASS',sourceRevision:'a'.repeat(40),sourceTree:'b'.repeat(40),sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],ciRun:{repository:'inguillen87/obrasaas',runId:'123456789',runAttempt:'1',event:'workflow_dispatch',workflow:'Authorized workspace acceptance'},harnessSha256:sha(read(spec.producer)),sourceManifest:spec.sourceFiles.map(path=>({path,sha256:sha(read(path))})),checks:[...PARTICIPANT_KYC_PREANALYSIS_CHECKS],rawNative:{path:prefix+'native-original.json',bytes:raw.length,sha256:sha(raw)},unitSuites,providerRequests:0,productionDataWritten:false,realConsentOrIdentityVerified:false,humanApprovalPerformed:false};
  const context={expectedHead:proof.sourceRevision,expectedTree:proof.sourceTree,readSource:file=>{try{return read(file);}catch{return null;}},readEvidence:file=>evidence.get(file)||null,spec,runId:'123456789',runAttempt:'1'};
  return {proof,context,evidence,validate(){return validateParticipantKycPreanalysisCi(proof,context);}};
 }
@@ -240,11 +258,17 @@ test('native AST roots and authenticated contract roots remain mandatory under a
 
 test('current native preanalysis advances only through Own while its frozen pin and both unit pins stay historical',()=>{
  const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),before=JSON.stringify(contract),native='scripts/verify-participant-kyc-preanalysis-postgres.mjs',helper='scripts/lib/participant-preanalysis-current-ci-lineage.mjs',rows=contract.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges,nativeRow=rows.find(r=>r.path===native),helperRow=rows.find(r=>r.path===helper);
+ // Authenticate physical current bytes before using the existing historical inverse.
+ const nativeText=read(native).toString().replaceAll('\r\n','\n');
+ assert.equal(planBudgetCurrentSourcePin(contract,{path:native,sha256:nativeRow.currentSha256}),sha(nativeText));
+ const ownContract=restorePilotCompletionPreviousContract(contract,read),ownNative=restorePilotCompletionPreviousSourceText(contract,native,nativeText);
+ assert.equal(sha(ownNative),'1754c3b2971bcfb0d5d23aadf19dbe8009388030bacc7f335908de561e1493f5');assert.equal(Buffer.byteLength(ownNative),64894);
+ assert.throws(()=>restorePilotCompletionPreviousSourceText(contract,native,nativeText+'\n// forged current native bytes\n'),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='PILOT_SOURCE_TEXT_CURRENT');
  assert.deepEqual({sha256:nativeRow.previousSha256,bytes:nativeRow.previousBytes},{sha256:'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8',bytes:61792});assert.deepEqual({sha256:helperRow.previousSha256,bytes:helperRow.previousBytes},{sha256:'3c330d4f821d7f2c998dd17064c67ffdcc52dc3cfbd033c165af39e071333f7b',bytes:54987});
- assert.equal(contract.participantPreanalysisCurrentRevision.nativeProducerSha256,'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8');assert.equal(PARTICIPANT_PREANALYSIS_CURRENT_REVISION.nativeProducerSha256,'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8');assert.equal(planBudgetCurrentSourcePin(contract,{path:native,sha256:'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8'}),nativeRow.currentSha256);assert.equal(nativeRow.currentSha256,sha(read(native).toString().replaceAll('\r\n','\n')));
+ assert.equal(contract.participantPreanalysisCurrentRevision.nativeProducerSha256,'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8');assert.equal(PARTICIPANT_PREANALYSIS_CURRENT_REVISION.nativeProducerSha256,'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8');assert.equal(planBudgetCurrentSourcePin(ownContract,{path:native,sha256:'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8'}),nativeRow.currentSha256);assert.equal(nativeRow.currentSha256,sha(ownNative));
  for(const row of contract.participantPreanalysisCurrentRevision.unitSuites)assert.equal(sha(read(row.file).toString().replaceAll('\r\n','\n')),row.sourceLfSha256);
  const result=verifyParticipantPreanalysisCurrentSources(contract,read);assert.equal(result.historicalPinsPreserved,true);assert.equal(result.nativeAcceptance,false);
- let historical=read(native).toString().replaceAll('\r\n','\n');for(const h of [...nativeRow.inverseHunks].reverse()){assert.equal(historical.slice(h.currentOffsetCharacters,h.currentOffsetCharacters+h.currentText.length),h.currentText);historical=historical.slice(0,h.currentOffsetCharacters)+h.previousText+historical.slice(h.currentOffsetCharacters+h.currentText.length);}assert.equal(sha(historical),'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8');assert.equal(Buffer.byteLength(historical),61792);
+ let historical=ownNative;for(const h of [...nativeRow.inverseHunks].reverse()){assert.equal(historical.slice(h.currentOffsetCharacters,h.currentOffsetCharacters+h.currentText.length),h.currentText);historical=historical.slice(0,h.currentOffsetCharacters)+h.previousText+historical.slice(h.currentOffsetCharacters+h.currentText.length);}assert.equal(sha(historical),'d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8');assert.equal(Buffer.byteLength(historical),61792);
  for(const substitute of [null,Buffer.from(historical),Buffer.concat([read(native),Buffer.from('\n// forged native bytes')])])denied(()=>verifyParticipantPreanalysisCurrentSources(contract,file=>file===native?substitute:read(file)));
  denied(()=>verifyParticipantPreanalysisCurrentSources(contract,file=>file===helper?Buffer.concat([read(helper),Buffer.from('\n// forged current validator')]):read(file)));
  for(const pin of ["b2d26d253faac6b4ada5cfc8acadb224689989d4b512ef0df2e9cb79f8ac6548","1a2dc8dc09a2b52d6b9fd1a814a2e71464c2f9d63491d5077c4431fa45c4c0e7","f1e94bbb3f370c769fa4ce74fb70310b4617605d890ffacc7113fc9fce736399"]){assert.equal(planBudgetPreviousSourcePin(contract,{path:helper,sha256:pin}),pin);assert.throws(()=>planBudgetCurrentSourcePin(contract,{path:helper,sha256:pin}),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='OWN_CURRENT_PIN_JOIN');}
@@ -270,3 +294,35 @@ function assertPilotProducerAdvance(actual, ownBase, index, readSource) {
  }else assert.equal(live.producerSha256,planBudgetCurrentSourcePin(actual,{path:live.producer,sha256:prior.producerSha256}));
  assert.equal(sha(readSource(live.producer).toString('utf8').replaceAll('\r\n','\n')),live.producerSha256);
 }
+
+// PROPOSED PURE CONTROLS ONLY — NOT EXECUTED OR ACCEPTED.
+test('owned CI service context binds the actual People job and rejects incomplete foreign or 6549 CI attempts',()=>{
+ const f=ownedServiceSyntheticEnvironment();assert.deepEqual(participantPreanalysisOwnedCiContext(f.environment,f.observed),f.context);
+ const changes=[{CI:undefined},{CI:'false'},{GITHUB_ACTIONS:undefined},{GITHUB_ACTIONS:'false'},{GITHUB_REPOSITORY:'foreign/repository'},{GITHUB_SHA:'9'.repeat(40)},{GITHUB_JOB:'field'},{GITHUB_WORKFLOW:'Another workflow'},{GITHUB_EVENT_NAME:'pull_request'},{GITHUB_RUN_ID:'0'},{GITHUB_RUN_ATTEMPT:'0'},{GITHUB_WORKSPACE:f.environment.GITHUB_WORKSPACE+'/foreign'},{OBRASAAS_PREANALYSIS_CI_SERVICE_ID:undefined},{OBRASAAS_PREANALYSIS_CI_SERVICE_ID:'c'.repeat(12)},{OBRASAAS_PREANALYSIS_CI_NETWORK:undefined},{OBRASAAS_PREANALYSIS_CI_NETWORK:'foreign-network'},{OBRASAAS_PREANALYSIS_CI_PUBLISHED_PORT:undefined},{OBRASAAS_PREANALYSIS_CI_PUBLISHED_PORT:'6549'},{CUTOVER_TEST_DATABASE_URL:'postgresql://cutover_test@127.0.0.1:6549/obrasaas_cutover_ci'},{DOCKER_HOST:'tcp://foreign:2375'},{DOCKER_CONTEXT:'foreign'}];
+ for(const change of changes)assert.throws(()=>participantPreanalysisOwnedCiContext({...f.environment,...change},f.observed),{code:'KYC_PREANALYSIS_CI_SERVICE_REJECTED'});
+ for(const change of [{head:'9'.repeat(40)},{tree:undefined},{remote:'https://github.com/foreign/repository'},{platform:'win32'},{workspace:f.observed.workspace+'/foreign'}])assert.throws(()=>participantPreanalysisOwnedCiContext(f.environment,{...f.observed,...change}),{code:'KYC_PREANALYSIS_CI_SERVICE_REJECTED'});
+});
+
+test('Docker service projections reject wrong missing foreign and ambiguous container image network or port observations',()=>{
+ const f=ownedServiceSyntheticObservation();assert.deepEqual(participantPreanalysisOwnedCiEndpoint(f,f.context),{host:'172.18.0.2',port:5432});
+ const edits=[p=>{delete p.inspection;},p=>{p.context.serviceId='9'.repeat(64);},p=>{p.inspection.container.id='9'.repeat(64);},p=>{p.inspection.container.running=false;},p=>{p.inspection.container.health='starting';},p=>{p.inspection.container.imageReference='postgres:latest';},p=>{p.inspection.image.id='sha256:'+'9'.repeat(64);},p=>{p.inspection.image.repoDigests=['postgres@sha256:'+'9'.repeat(64)];},p=>{p.inspection.image.repoDigests=[];},p=>{p.inspection.container.networks.foreign=structuredClone(Object.values(p.inspection.container.networks)[0]);},p=>{Object.values(p.inspection.container.networks)[0].networkId='9'.repeat(64);},p=>{Object.values(p.inspection.container.networks)[0].aliases=[];},p=>{p.inspection.network.name='github_network_'+'9'.repeat(32);},p=>{p.inspection.network.containers['9'.repeat(64)]=structuredClone(Object.values(p.inspection.network.containers)[0]);},p=>{Object.values(p.inspection.network.containers)[0].endpointId='9'.repeat(64);},p=>{Object.values(p.inspection.network.containers)[0].ipv4Address='172.18.0.9/16';},p=>{p.inspection.network.driver='host';},p=>{p.inspection.container.ports['5432/tcp'][0].hostPort='6549';},p=>{p.inspection.container.ports['5432/tcp'][0].hostIp='192.0.2.9';},p=>{p.inspection.container.ports['5432/tcp'].push(structuredClone(p.inspection.container.ports['5432/tcp'][0]));},p=>{p.inspection.container.ports['6549/tcp']=p.inspection.container.ports['5432/tcp'];},p=>{p.expectedIp='172.18.0.2';}];
+ for(const edit of edits){const p=structuredClone(f);edit(p);assert.throws(()=>participantPreanalysisOwnedCiEndpoint(p,f.context),{code:'KYC_PREANALYSIS_CI_SERVICE_REJECTED'});}
+});
+
+test('archived CI needs the separate consumer observation and rejects resealed native-only endpoint claims',()=>{
+ const missing=ciShadow();delete missing.proof.ownedCiServiceVerification;nativeEnvelopeRejected(()=>missing.validate());
+ const nativeMissing=ciShadow();resealRawNative(nativeMissing,p=>{delete p.ownedCiService;});nativeEnvelopeRejected(()=>nativeMissing.validate());
+ const edits=[p=>{p.engine.host='192.0.2.9';},p=>{p.engine.port=6549;},p=>{p.ownedCiService.context.serviceId='9'.repeat(64);},p=>{p.ownedCiService.context.networkName='github_network_'+'9'.repeat(32);},p=>{p.ownedCiService.context.runId='987654321';},p=>{p.ownedCiService.context.sourceRevision='9'.repeat(40);},p=>{p.ownedCiService.context.publishedPort=6549;},p=>{p.ownedCiService.checkedAt='2026-11-02T00:00:05.000Z';}];
+ for(const edit of edits){const f=ciShadow();resealRawNative(f,edit);nativeEnvelopeRejected(()=>f.validate());}
+});
+
+test('consumer service evidence cannot be altered omitted reordered in time or rebound to a foreign execution',()=>{
+ const edits=[p=>{p.checkedAt='not-a-date';},p=>{p.checkedAt='2026-11-02T00:00:03.000Z';},p=>{p.context.repository='foreign/repository';},p=>{p.context.runId='987654321';},p=>{p.context.sourceRevision='9'.repeat(40);},p=>{p.context.sourceTree='9'.repeat(40);},p=>{p.context.serviceId='9'.repeat(64);},p=>{p.context.networkName='github_network_'+'9'.repeat(32);},p=>{p.context.publishedPort=6549;},p=>{p.inspection.container.id='9'.repeat(64);},p=>{Object.values(p.inspection.network.containers)[0].ipv4Address='192.0.2.9/16';},p=>{p.inspection.container.ports['5432/tcp'][0].hostPort='6549';}];
+ for(const edit of edits){const f=ciShadow();edit(f.proof.ownedCiServiceVerification);nativeEnvelopeRejected(()=>f.validate());}
+});
+
+test('local native shadows keep the original loopback fence and do not borrow an owned CI receipt',()=>{
+ const local=shadow();assert.equal(verify(local).nativeCheckCount,19);
+ for(const edit of [p=>{p.engine.host='172.18.0.2';},p=>{p.ownedCiService=ownedServiceSyntheticObservation();}]){const p=shadow();edit(p);nativeEnvelopeRejected(()=>verify(p));}
+ const f=ciShadow(),native=JSON.parse(f.evidence.get(f.proof.rawNative.path));nativeEnvelopeRejected(()=>validateParticipantKycPreanalysisNative(native,{readSource:read,nativeSourceFiles}));
+});

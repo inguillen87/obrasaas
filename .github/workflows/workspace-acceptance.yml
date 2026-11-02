@@ -101,6 +101,11 @@ jobs:
           path: |
             .vercel/private/biometric-real-model-proof.json
             .vercel/participant-bank-intake-contract-evidence/
+            .vercel/private/selftest-workers-*/execution.json
+            .vercel/private/selftest-workers-*/A.stdout.log
+            .vercel/private/selftest-workers-*/A.stderr.log
+            .vercel/private/selftest-workers-*/B.stdout.log
+            .vercel/private/selftest-workers-*/B.stderr.log
             .vercel/workspace-ci-evidence/lane-contracts.json
           include-hidden-files: true
           retention-days: 7
@@ -255,6 +260,10 @@ jobs:
           npx eslint src/lib/company-channel-kyc.mjs src/lib/meta-kyc-*.mjs src/lib/participant-channel-kyc.mjs scripts/verify-company-channel-kyc-postgres.mjs tests/fixtures/company-kyc-memory.mjs tests/production-company-channel-kyc.test.mjs --max-warnings 0
           node scripts/verify-company-channel-kyc-postgres.mjs
       - name: AI-first participant preanalysis with personal consent and owned PostgreSQL evidence
+        env:
+          OBRASAAS_PREANALYSIS_CI_SERVICE_ID: ${{ job.services.postgres.id }}
+          OBRASAAS_PREANALYSIS_CI_NETWORK: ${{ job.services.postgres.network }}
+          OBRASAAS_PREANALYSIS_CI_PUBLISHED_PORT: ${{ job.services.postgres.ports[5432] }}
         run: |
           npx eslint scripts/verify-participant-kyc-preanalysis-ci.mjs scripts/verify-participant-kyc-preanalysis-postgres.mjs scripts/lib/participant-preanalysis-current-ci-lineage.mjs src/lib/participant-analysis-consent.mjs src/lib/participant-kyc-preanalysis*.mjs "src/app/(identity)/cuenta/participant-kyc-preanalysis-view.mjs" tests/production-participant-preanalysis-current-ci-lineage.test.mjs tests/production-participant-kyc-preanalysis*.test.mjs tests/fixtures/participant-preanalysis-memory.mjs --max-warnings 0
           node --test tests/production-participant-preanalysis-current-ci-lineage.test.mjs

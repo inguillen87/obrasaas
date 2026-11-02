@@ -41,12 +41,15 @@ jobs:
       - name: Production unit shard ${{ matrix.shard }}/16
         env:
           SHARD: ${{ matrix.shard }}
+          OBRASAAS_UNIT_FILE_LIFECYCLE_DIAGNOSTICS: ${{ matrix.shard == 9 && '1' || '0' }}
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import {readdirSync,lstatSync,readFileSync} from 'node:fs';
           import {createHash} from 'node:crypto';
           import {spawnSync} from 'node:child_process';
+          import {resolve} from 'node:path';
+          import {pathToFileURL} from 'node:url';
 
           const rawShard=process.env.SHARD||'';
           assert.match(rawShard,/^(?:[1-9]|1[0-6])$/,'SHARD must be an integer from 1 through 16');
@@ -64,9 +67,20 @@ jobs:
           const sourcePins=files=>files.map(file=>{const stat=lstatSync(file);assert.ok(stat.isFile()&&!stat.isSymbolicLink(),'Production test must remain a regular file: '+file);return {path:file,sha256:createHash('sha256').update(readFileSync(file)).digest('hex')};});
           const before=sourcePins(universe);
           console.log(JSON.stringify({kind:'production-test-shard-v1',shard,shardCount,universe:{count:universe.length,files:universe,sha256:hash(universe),sourceSha256:hash(before)},selected:{count:selected.length,files:selected,sha256:hash(selected)}}));
-          const child=spawnSync(process.execPath,['--test',...selected],{stdio:'inherit'});
+          const lifecycleEnabled=process.env.OBRASAAS_UNIT_FILE_LIFECYCLE_DIAGNOSTICS==='1';
+          const lifecycleHelper='.github/scripts/production-unit-file-lifecycle-preload.mjs';
+          let lifecyclePins=null,lifecycleEnv;
+          if(lifecycleEnabled){
+            assert.equal(shard,9,'Diagnostic opt-in is restricted to unit shard 9');
+            lifecyclePins=sourcePins([lifecycleHelper]);
+            assert.equal(lifecyclePins[0].sha256,'6fcd4f778a02e3cc3dfc106d6ebb623b684e04f1405313eff65c4af455fc50a6','Exact reviewed diagnostic helper required');
+            const byFile=new Map(before.map(row=>[row.path,row.sha256]));
+            lifecycleEnv={...process.env,OBRASAAS_UNIT_FILE_LIFECYCLE:JSON.stringify({version:1,root:process.cwd(),selected:selected.map(file=>({path:file,sha256:byFile.get(file)}))})};
+            lifecycleEnv.NODE_OPTIONS=[process.env.NODE_OPTIONS||'','--import='+pathToFileURL(resolve(lifecycleHelper)).href].filter(Boolean).join(' ');
+          }
+          const child=spawnSync(process.execPath,['--test',...selected],{stdio:'inherit',...(lifecycleEnabled?{env:lifecycleEnv}:{})});
           let sourceChanged=false;
-          try{assert.deepEqual(discover(),universe,'Production test universe changed during the shard');assert.deepEqual(sourcePins(universe),before,'Production test source changed during the shard');}
+          try{assert.deepEqual(discover(),universe,'Production test universe changed during the shard');assert.deepEqual(sourcePins(universe),before,'Production test source changed during the shard');if(lifecyclePins)assert.deepEqual(sourcePins([lifecycleHelper]),lifecyclePins,'Diagnostic helper changed during the shard');}
           catch(error){sourceChanged=true;console.error(error);}
           if(child.error)throw child.error;
           if(child.signal){console.error('Production test child terminated by signal: '+child.signal);process.kill(process.pid,child.signal);process.exitCode=1;}

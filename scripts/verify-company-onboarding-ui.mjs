@@ -205,7 +205,11 @@ async function scenario(mode,width=390){
   if(mode==='reload-denied'){await wait(page,'Tu pertenencia a esta empresa no está habilitada');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal((await page.$$('form')).length,0);}
   else if(mode==='reload-not-committed'){await wait(page,'Crear empresa y primera obra');assert.equal(await page.$eval('input[autocomplete="organization"]',node=>node.value),'');assert.equal(await page.$eval('input[placeholder*="Edificio"]',node=>node.value),'');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal(created,false);}
   else if(['reload-other-actor','reload-missing-receipt'].includes(mode)){await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo: '+originalReceipt));}
-  else {await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}
+  else {
+   await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));
+   assert.equal(await page.$eval('summary',node=>node.textContent),'Ver recibo original del alta');assert.equal(await page.$eval('summary',node=>node.parentElement.tagName==='DETAILS'&&node.parentElement.open===false),true);
+   await page.click('summary');await wait(page,'Alta confirmada');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);
+  }
   assert.equal(posts.length,1,'Reload performed another company POST');assert.equal(recoveryIds.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,`company-${mode}-${width}.png`),fullPage:true});checks.push(`${mode}-company-receipt-readonly-after-reload-${width}`);await context.close();return;
  }
  if(mode==='uncertain'){await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);await click(page,'Comprobar creación');}
