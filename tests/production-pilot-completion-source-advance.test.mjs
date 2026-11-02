@@ -242,10 +242,13 @@ test('historical source-set projection requires the complete current typed famil
  assert.throws(()=>restorePilotCompletionPreviousSourceSet(contract,'FOREIGN',[]),rejected);
 });
 
-test('company native additions require exact authenticated metadata and expose only nine reviewed library pins while preserving the original five',()=>{
- const originalThree=['src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs','src/lib/plan-budget-csv-source.mjs'],originalFive=['src/lib/approved-progress-curve-store.mjs','src/lib/approved-progress-curve.mjs',...originalThree],attendanceFour=['src/lib/attendance-chronology.mjs','src/lib/attendance-closure-policy.mjs','src/lib/attendance-closure-store.mjs','src/lib/attendance-effective-store.mjs'],expected=[...originalFive,...attendanceFour].sort();
+test('current company native additions require ten authenticated pins and retain the historical nine and all original projections',()=>{
+ const originalThree=['src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs','src/lib/plan-budget-csv-source.mjs'],originalFive=['src/lib/approved-progress-curve-store.mjs','src/lib/approved-progress-curve.mjs',...originalThree],attendanceFour=['src/lib/attendance-chronology.mjs','src/lib/attendance-closure-policy.mjs','src/lib/attendance-closure-store.mjs','src/lib/attendance-effective-store.mjs'],historicalNine=[...originalFive,...attendanceFour].sort(),helper='src/lib/meta-greeting.mjs',helperSha256='58afb99edb316ab6099c301723f591e88fc58fe23986bfe541defb3a528a7e57',expected=[...historicalNine,helper].sort();
  const before=JSON.stringify(contract),rows=pilotCompletionNativeLibrarySources(contract);
- assert.deepEqual(rows.map(row=>row.path),expected);assert.deepEqual(rows.map(row=>row.path).filter(file=>originalThree.includes(file)),originalThree);assert.deepEqual(rows.map(row=>row.path).filter(file=>originalFive.includes(file)),originalFive);
+ assert.equal(historicalNine.length,9);assert.equal(expected.length,10);assert.deepEqual(rows.map(row=>row.path),expected);
+ assert.deepEqual(rows.map(row=>row.path).filter(file=>historicalNine.includes(file)),historicalNine);assert.deepEqual(rows.map(row=>row.path).filter(file=>originalThree.includes(file)),originalThree);assert.deepEqual(rows.map(row=>row.path).filter(file=>originalFive.includes(file)),originalFive);assert.deepEqual(rows.map(row=>row.path).filter(file=>attendanceFour.includes(file)),attendanceFour);
+ const helperOwner=contract.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.find(row=>row.path===helper),helperBytes=Buffer.from(read(helper).toString('utf8').replaceAll('\r\n','\n'));
+ assert.ok(helperOwner);assert.equal(helperOwner.status,'ADDED');assert.equal(helperOwner.previousSha256,null);assert.equal(helperOwner.previousBytes,0);assert.equal(helperOwner.currentBytes,574);assert.equal(helperOwner.currentSha256,helperSha256);assert.equal(helperBytes.length,574);assert.equal(hash(helperBytes),helperSha256);assert.equal(rows.find(row=>row.path===helper).sha256,helperSha256);
  for(const row of rows)assert.equal(row.sha256,hash(read(row.path).toString('utf8').replaceAll('\r\n','\n')));
  rows[0].sha256='f'.repeat(64);rows.pop();assert.equal(pilotCompletionNativeLibrarySources(contract).length,expected.length);
  assert.notEqual(pilotCompletionNativeLibrarySources(contract)[0].sha256,'f'.repeat(64));
@@ -253,7 +256,15 @@ test('company native additions require exact authenticated metadata and expose o
   const forged=structuredClone(contract);mutate(forged);assert.throws(()=>pilotCompletionNativeLibrarySources(forged),rejected);
  }
  for(const omitted of attendanceFour){const forged=structuredClone(contract);forged.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges=forged.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.filter(row=>row.path!==omitted);assert.throws(()=>pilotCompletionNativeLibrarySources(forged),rejected);}
- const originalFiveOnly=structuredClone(contract);originalFiveOnly.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges=originalFiveOnly.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.filter(row=>!attendanceFour.includes(row.path));assert.throws(()=>pilotCompletionNativeLibrarySources(originalFiveOnly),rejected);
+ const originalFiveOnly=structuredClone(contract);originalFiveOnly.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges=originalFiveOnly.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.filter(row=>!attendanceFour.includes(row.path)&&row.path!==helper);assert.throws(()=>pilotCompletionNativeLibrarySources(originalFiveOnly),rejected);
  const foreign=structuredClone(contract),foreignRow=foreign.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.find(row=>row.path===attendanceFour[0]);foreignRow.path='src/lib/foreign-attendance-helper.mjs';foreign.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.sort((a,b)=>a.path.localeCompare(b.path));assert.throws(()=>pilotCompletionNativeLibrarySources(foreign),rejected);
+ for(const mutate of [
+  c=>{c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges=c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.filter(row=>row.path!==helper);},
+  c=>{c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.find(row=>row.path===helper).currentSha256='f'.repeat(64);},
+  c=>{c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.find(row=>row.path===helper).currentBytes=573;},
+  c=>{const row=c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.find(row=>row.path===helper);row.status='MODIFIED';row.previousSha256=helperSha256;row.previousBytes=574;},
+  c=>{c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.find(row=>row.path===helper).path='src/lib/foreign-meta-greeting.mjs';c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.sort((a,b)=>a.path.localeCompare(b.path));},
+  c=>{c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.push({...helperOwner,path:'src/lib/foreign-native-helper.mjs'});c.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.sort((a,b)=>a.path.localeCompare(b.path));},
+ ]){const forged=structuredClone(contract);mutate(forged);assert.throws(()=>pilotCompletionNativeLibrarySources(forged),rejected);}
  assert.equal(JSON.stringify(contract),before);
 });

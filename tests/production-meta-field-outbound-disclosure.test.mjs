@@ -311,3 +311,21 @@ test('a canonical recovery crossing its deadline during the catalog callback kee
 test('a canonical recovery crossing its source lease during the catalog callback rolls back before receipt or prompt persistence',async()=>{
  let crossed=false;const f=canonicalFenceFixture({afterQuery:(sql,_args,{advanceClockTo})=>{if(!crossed&&sql.startsWith('SELECT id,metadata,')&&sql.includes('FROM public."Project"')){crossed=true;advanceClockTo(Date.parse(f.deadline));}}});await assert.rejects(f.send('CONSUMO'),{code:'META_CUSTOMER_INBOX_LEASE_CHANGED'});assert.equal(crossed,true);assert.deepEqual(f.worker.metadata,f.original);assert.deepEqual(f.writes.map(write=>write.kind),[]);assert.equal(f.external(),0);
 });
+
+
+// UX414 regression proposal: the real bridge must preserve the same greeting scope.
+test('bounded greeting bridge receipts retain the live private draft and generic disclosure without a provider call',async()=>{
+ for(const body of ['Hola!','hola buenas','¡Buen día!']){
+  const f=fixture();await f.send('MATERIALES');const state=f.conversation(),envelope=f.envelope(),records=structuredClone(f.records);
+  const exchange=await f.send(body),receipt=[...f.audits.values()].find(row=>row.metadata.eventId===exchange.context.eventId);
+  assert.deepEqual(f.conversation(),state);assert.deepEqual(f.envelope(),envelope);assert.deepEqual(f.records,records);assert.equal(receipt.metadata.replyAuthority.disclosure,'GENERIC');assert.deepEqual(receipt.metadata.replyAuthority.requiredPermissions,[]);assert.doesNotMatch(exchange.result.reply.body,/PRIVATE_REASON|PRIVATE_MATERIAL/);assert.equal(f.external(),0);
+  assert.deepEqual(await f.bridge.execute(exchange.context),exchange.result);assert.deepEqual(f.envelope(),envelope);assert.deepEqual(f.records,records);assert.equal(f.external(),0);
+ }
+});
+
+test('bounded greeting replay cannot borrow another actor or organization for its original sealed authority',async()=>{
+ for(const change of [f=>{f.identity.actorId='foreign-actor';},f=>{f.identity.organizationId='foreign-organization';}]){
+  const f=fixture(),exchange=await f.send('Hola!'),row=[...f.audits.values()].find(value=>value.metadata.eventId===exchange.context.eventId),before=structuredClone(row),r=resolved(f,exchange.context.eventId);
+  change(f);await assert.rejects(readMetaFieldOutboundAuthority({query:async()=>({rows:[row]})},r,exchange.result.reply,{environment:f.environment}));assert.deepEqual(row,before);assert.equal(f.records.length,0);assert.equal(f.external(),0);
+ }
+});

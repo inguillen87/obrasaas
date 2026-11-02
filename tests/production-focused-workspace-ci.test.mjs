@@ -113,9 +113,28 @@ test('focused current v2 keeps the exact historical twenty while requiring every
 });
 test('focused current bootstrap subtree external imports and original producer hashes are independently mandatory',()=>{
  for(const edit of [r=>{r.bootstrapSourceManifest.pop();},r=>{r.bootstrapSourceManifest.push(clone(r.bootstrapSourceManifest[0]));},r=>{r.bootstrapSourceManifest[0].sha256='0'.repeat(64);},r=>{r.bootstrapExternalImports.push('foreign-provider');},r=>{r.externalImports.push('foreign-package');},r=>{r.sourceManifest.find(row=>row.path==='scripts/verify-focused-workspace-ui.mjs').sha256='6d61015a48202dc0affe71afe37bd026618dda325b055f1863589bdecee2963d';}]){const f=fixture();edit(f.raw);f.reseal();denied(f.validate);}
- const absent=fixture();absent.sourceOverrides.set('src/app/(identity)/cuenta/company-bootstrap-panel.js',null);assert.throws(absent.validate,{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'});
+ const absent=fixture();absent.sourceOverrides.set('src/app/(identity)/cuenta/company-bootstrap-panel.js',null);assert.throws(absent.validate,{code:'FOCUSED_WORKSPACE_CI_REJECTED',message:'Worksite live/hours source revision rejected: Pilot completion source lineage rejected: PILOT_SOURCE_BYTES_src/app/(identity)/cuenta/company-bootstrap-panel.js'});assert.throws(()=>focusedCompanyBootstrapUiSourceClosure(absent.readSource),{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'});
  const unit='tests/production-company-bootstrap-receipt.test.mjs',original=fixture(),unitBytes=original.readSource(unit),imports=focusedWorkspaceCiLocalImports(unitBytes,unit,original.readSource);assert.ok(imports.includes('../src/app/(identity)/cuenta/company-bootstrap-panel.js'));assert.ok(imports.includes('next/dist/build/swc/index.js'));assert.ok(imports.includes('react'));assert.ok(imports.includes('react-dom/server'));
  denied(()=>focusedWorkspaceCiLocalImports(unitBytes,'tests/foreign-bootstrap-receipt.test.mjs',original.readSource));
+ // This branch is proposed only with the exact 424 sources and a genuinely
+ // composed authenticated metadata frame. No import, compiler or pin is mocked.
+ const lfUnit=Buffer.from(unitBytes.toString('utf8').replaceAll('\r\n','\n'));
+ assert.equal(hash(lfUnit),'08b38bcced2c5e8700e193ac4f45223073c97b829c46a9ca61e4f5d0198c3d78');
+ const panel='src/app/(identity)/cuenta/company-bootstrap-panel.js',panelBytes=original.readSource(panel);
+ assert.equal(hash(Buffer.from(panelBytes.toString('utf8').replaceAll('\r\n','\n'))),'7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e');
+ assert.equal(WORKSPACE_CONTINUITY_FOCUSED_UI.controlledSourceTransforms[0].sourceLfSha256,'44676be514b092d8146f6f8ade5c4b0867f8bceb1b9f5c7ab204bb5f90e503af');
+ const withoutMetadata=file=>file==='.github/workspace-acceptance-contract.json'?null:original.readSource(file);
+ denied(()=>focusedWorkspaceCiLocalImports(unitBytes,unit,withoutMetadata));
+ const malformedMetadata=file=>file==='.github/workspace-acceptance-contract.json'?Buffer.from('{'):original.readSource(file);
+ denied(()=>focusedWorkspaceCiLocalImports(unitBytes,unit,malformedMetadata));
+ const changedPanel=file=>file===panel?Buffer.concat([panelBytes,Buffer.from('\n')]):original.readSource(file);
+ denied(()=>focusedWorkspaceCiLocalImports(unitBytes,unit,changedPanel));
+ const alternateRaw=unitBytes.equals(lfUnit)?Buffer.from(lfUnit.toString('utf8').replaceAll('\n','\r\n')):lfUnit;
+ assert.equal(hash(Buffer.from(alternateRaw.toString('utf8').replaceAll('\r\n','\n'))),hash(lfUnit));assert.equal(alternateRaw.equals(unitBytes),false);
+ denied(()=>focusedWorkspaceCiLocalImports(alternateRaw,unit,original.readSource));
+ for(const[before,after]of [["const acceptSource=source.slice(acceptNode.start,acceptNode.end);","const acceptSource=foreignBody;"],["return accept(value,openWorkspace);","return foreignAccept(value,openWorkspace);"],["alreadyConfiguredBodies.map(body=>","foreignBodies.map(body=>"]]){
+  assert.ok(unitBytes.toString().includes(before));denied(()=>focusedWorkspaceCiLocalImports(Buffer.from(unitBytes.toString().replace(before,after)),unit,original.readSource));
+ }
  for(const[before,after]of [["../src/app/(identity)/cuenta/company-bootstrap-panel.js","../src/app/(identity)/cuenta/foreign-panel.js"],["const source=readFileSync(new URL(","const source=foreignRead(new URL("],["next/dist/build/swc/index.js","next/dist/build/swc/foreign.js"],["const compiled=await transform(","const compiled=await foreignTransform("],["import.meta.resolve('react')","import.meta.resolve('foreign-react')"],["Buffer.from(compiled.code)","Buffer.from(source)"],[".toString('base64')",".toString('hex')"],["data:text/javascript;base64,","https://example.invalid/module/"]]){assert.ok(unitBytes.toString().includes(before));denied(()=>focusedWorkspaceCiLocalImports(Buffer.from(unitBytes.toString().replace(before,after)),unit,original.readSource));}
  denied(()=>focusedWorkspaceCiLocalImports(Buffer.from('await import(specifier);'),'scripts/foreign-transform.mjs',original.readSource));
  const remote=fixture();remote.sourceOverrides.set(unit,Buffer.from("await import('https://example.invalid/module.mjs');"));denied(()=>focusedWorkspaceCiSourceClosure(remote.readSource));

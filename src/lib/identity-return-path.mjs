@@ -63,9 +63,17 @@ function invitationPath(path, searchParams) {
   // A fixed worksite destination survives authentication without becoming
   // membership, a field permission or an attendance command. An invitation or
   // plan parameter, including an invalid one, keeps its original priority.
-  if(section==='actividad'&&!['participar','oficina','plan'].some(name=>hasQueryParameter(searchParams,name))){
+  if(['actividad','cronograma'].includes(section)&&!['participar','oficina','plan'].some(name=>hasQueryParameter(searchParams,name))){
     const project=identityWorkspaceProjectHint(searchParams);
     if(project)return `${path}?${new URLSearchParams({seccion:section,obra:project})}`;
+  }
+  // Older messages carry only the worksite hint. The server never receives
+  // their fragment: retain the validated hint without guessing a destination.
+  // Explicit invalid/duplicate sections and invitation/plan parameters do not
+  // fall back to this compatibility case.
+  if(!hasQueryParameter(searchParams,'seccion')&&!['participar','oficina','plan'].some(name=>hasQueryParameter(searchParams,name))){
+    const project=identityWorkspaceProjectHint(searchParams);
+    if(project)return `${path}?${new URLSearchParams({obra:project})}`;
   }
   return path;
 }

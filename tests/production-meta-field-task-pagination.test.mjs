@@ -47,7 +47,7 @@ test('schedule aliases traverse all 189 tasks with current dates/status, bounded
   const view=offset=>page(offset,false,{tasks:rows.slice(offset,offset+8),projectId:'project-a',permissions:{attendance:true,report:false}});
   let plan=say(command,null,view(0)),offset=0;assert.match(plan.reply.body,/2026-10-10 → 2026-10-19/);assert.equal(plan.state.purpose,'TASKS');
   while(offset+8<189){offset+=8;plan=pick(plan,'NEXT_TASKS',view(offset));bounded(plan);assert.ok(plan.reply.body.length<=1024);assert.equal(plan.command,undefined);assert.equal(plan.planImport,undefined);}
-  const detail=pick(plan,'task-189',view(offset));assert.match(detail.reply.body,/Partida 189/);assert.match(detail.reply.body,/Estado registrado: Bloqueada/);assert.match(detail.reply.body,/Avance registrado: 37%/);assert.match(detail.reply.body,/cuenta\?obra=project-a#schedule-gantt-title/);assert.equal(detail.state.taskId,undefined);assert.equal(detail.media,undefined);bounded(detail);
+  const detail=pick(plan,'task-189',view(offset));assert.match(detail.reply.body,/Partida 189/);assert.match(detail.reply.body,/Estado registrado: Bloqueada/);assert.match(detail.reply.body,/Avance registrado: 37%/);assert.match(detail.reply.body,/cuenta\?seccion=cronograma&obra=project-a#schedule-gantt-title/);assert.equal(detail.state.taskId,undefined);assert.equal(detail.media,undefined);bounded(detail);
  }
 });
 test('old page replies, expired choices, revoked permission and missing current task cannot continue',()=>{

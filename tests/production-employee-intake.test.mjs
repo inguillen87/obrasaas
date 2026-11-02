@@ -315,3 +315,56 @@ test('CANCELAR arriving after human admission preserves the admitted person and 
  assertAdmittedGuidance(result.reply);assert.doesNotMatch(result.reply.body,/Solicitud cancelada/);assert.equal(after.step,'ADMITTED');assert.equal(after.status,'ADMITTED');assert.equal(after.consent,true);assert.deepEqual(after.admission,before.state.admission);assert.deepEqual(f.workers.get(saved.workerId),before.worker);assert.deepEqual([...f.audits],before.audits);assert.deepEqual(f.connection.metadata,before.connection);assert.equal(result.businessApplied,false);
  assert.deepEqual(await employeeIntakeAcceptedPermissions({query:f.query},f.workers.get(saved.workerId),{organizationId:f.member.organizationId,projectId:f.target.id}),{attendance:true,report:true});assert.equal((await f.read()).records[0].status,'ADMITTED');assert.equal(f.workers.size,1);assert.equal(f.controls.providerCalls,0);
 });
+
+
+// UX414 regression proposal: whole-message greetings never fill NAME.
+test('bounded greetings cannot become a name through either confirmed NAME text path',()=>{
+ const state={version:1,step:'NAME',noticeVersion:'synthetic-notice',consent:false,name:null,job:null,email:null};
+ for(const body of ['Hola!','hola buenas','¡Buen día!'])for(const confirmation of [{promptConfirmed:true},{draftTextConfirmed:true},{promptConfirmed:false,draftTextConfirmed:false}]){
+  const before=structuredClone(state),plan=planEmployeeIntakeConversation({message:{type:'text',text:{body}},state,eventId:'synthetic-greeting-name',...confirmation});
+  assert.deepEqual(state,before);assert.equal(plan.state.step,'NAME');assert.equal(plan.state.name,null);assert.equal(plan.state.job,null);assert.equal(plan.state.email,null);assert.equal(plan.state.consent,false);assert.match(plan.reply.body,/nombre y apellido/);
+ }
+ for(const body of ['Juan Pérez','hola Juan','Hola, soy Juan','Buen Díaz']){
+  const plan=planEmployeeIntakeConversation({message:{type:'text',text:{body}},state,eventId:'synthetic-explicit-name',promptConfirmed:true});
+  assert.equal(plan.state.step,'JOB');assert.equal(plan.state.name,body);assert.equal(plan.state.consent,false);assert.equal(plan.state.job,null);
+ }
+ for(const message of [{type:'interactive',interactive:{list_reply:{id:'intake:foreign:0',title:'Hola!'}}},{type:'image',image:{id:'synthetic-image'}}]){
+  const plan=planEmployeeIntakeConversation({message,state,eventId:'synthetic-not-a-text-name',draftTextConfirmed:true});assert.equal(plan.state.step,'NAME');assert.equal(plan.state.name,null);assert.equal(plan.state.consent,false);
+ }
+});
+
+test('the signed bridge retains an unverified NAME and expiry for greeting replies and fresh plain greetings',async()=>{
+ for(const body of ['Hola!','hola buenas','¡Buen día!'])for(const fresh of [false,true]){
+  const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.choose('JOIN_WORKSITE');
+  const before=f.state(),audits=structuredClone([...f.audits]);
+  const exchange=await f.execute(body,fresh?{reply:false,timestamp:freshTimestamp(f)}:{}),after=f.state();
+  assert.equal(after.applicationId,before.applicationId);assert.equal(after.step,'NAME');assert.equal(after.name,null);assert.equal(after.job,null);assert.equal(after.email,null);assert.equal(after.consent,false);assert.equal(after.expiresAt,before.expiresAt);assert.equal(after.createdAt,before.createdAt);assert.deepEqual([...f.audits],audits);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+  const sends=f.controls.sends,out=structuredClone(f.outbounds.get(customerOutboundId(exchange.context.eventId)));
+  assert.deepEqual(await f.bridge.execute(exchange.context),exchange.result);assert.equal((await f.outbound.send(exchange.context,exchange.result.reply,{purpose:'EMPLOYEE_INTAKE'})).replayed,true);assert.equal(f.controls.sends,sends);assert.deepEqual(f.outbounds.get(customerOutboundId(exchange.context.eventId)),out);
+  await f.execute('Juan Pérez',fresh?{reply:false,timestamp:freshTimestamp(f)}:{});assert.equal(f.state().step,'JOB');assert.equal(f.state().name,'Juan Pérez');assert.equal(f.state().consent,false);assert.equal(f.workers.size,0);
+ }
+});
+
+test('a greeting never makes a stale or malformed NAME context valid',async()=>{
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.choose('JOIN_WORKSITE');
+ const oldPrompt=currentPrompt(f).outcome.messageId;await f.execute('Hola!');
+ for(const context of [{id:oldPrompt},{id:'wamid.ForeignPrompt'},null,{}]){
+  await f.execute({type:'text',text:{body:'Juan Pérez'},context},{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'NAME');assert.equal(f.state().name,null);assert.equal(f.state().consent,false);assert.equal(f.workers.size,0);
+ }
+ await f.execute('Juan Pérez');assert.equal(f.state().step,'JOB');assert.equal(f.state().consent,false);
+});
+
+test('a bounded signed welcome remains unprivileged and cannot resend an unknown greeting delivery',async()=>{
+ const f=employeeIntakeFixture();await f.configure();f.controls.loseSendAck=true;
+ const {context,result}=await f.execute('Hola!'),before=f.state();assert.equal(before.entryChoicePending,true);assert.equal(before.consent,false);assert.equal(before.name,null);assert.equal(f.controls.sends,1);
+ assert.equal((await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'})).state,'SEND_UNKNOWN');assert.equal(f.controls.sends,1);
+ await f.execute('Juan Pérez');assert.equal(f.state().entryChoicePending,true);assert.equal(f.state().name,null);assert.equal(f.state().consent,false);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+});
+
+test('a bounded signed greeting restarts only an expired incomplete intake and preserves its source envelope',async()=>{
+ const f=employeeIntakeFixture();await f.configure();const first=await f.execute('Hola!'),old=structuredClone(f.events.get(first.context.eventId).payload),expired=f.state();
+ f.now.setTime(Date.parse(expired.expiresAt)+1);await assert.rejects(f.execute('Juan Pérez'),{code:'EMPLOYEE_INTAKE_EXPIRED'});
+ const next=await f.execute('hola buenas'),fresh=intakeAnchorState(f,next.context.eventId);assert.equal(f.events.get(first.context.eventId).payload.employeeIntake.status,'CANCELLED');
+ for(const key of ['encryptedPayload','encryptedProof','payloadDigest'])assert.equal(f.events.get(first.context.eventId).payload[key],old[key]);
+ assert.notEqual(fresh.applicationId,expired.applicationId);assert.equal(fresh.step,'NAME');assert.equal(fresh.entryChoicePending,true);assert.equal(fresh.name,null);assert.equal(fresh.consent,false);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+});

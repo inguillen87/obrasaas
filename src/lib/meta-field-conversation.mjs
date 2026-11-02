@@ -1,3 +1,4 @@
+import {isMetaGreeting} from './meta-greeting.mjs';
 import {digest,WorkspaceError,workspaceId,calendarDate} from './workspace-policy.mjs';
 import {FIELD_NOTICE,fieldTransition} from './field-operations-policy.mjs';
 import {siteText,siteQuantity,MATERIAL_UNITS} from './site-register-policy.mjs';
@@ -13,7 +14,7 @@ import {identityAccountReturnPath} from './identity-return-path.mjs';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['EXECUTION','Registrar material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU','MENÚ':'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',CRONOGRAMA:'TASKS',GANTT:'TASKS','IMPORTAR CRONOGRAMA':'PLAN_IMPORT','IMPORTAR PLAN':'PLAN_IMPORT',EVIDENCIA:'MEDIA',EVIDENCIAS:'OWN_EVIDENCE',AVANCES:'OWN_PROGRESS',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',EJECUCION:'EXECUTION','EJECUCIÓN':'EXECUTION',REPORTAR:'EXECUTION',EJECUCIONES:'OWN_EXECUTIONS',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
-export const metaFieldConversationAction=body=>typeof body==='string'?aliases[body.trim().toUpperCase()]||null:null;
+export const metaFieldConversationAction=body=>typeof body==='string'?(isMetaGreeting(body)?'MENU':aliases[body.trim().toUpperCase()]||null):null;
 // A read requirement, never participant authority. The signed bridge proves
 // the recovery origin/binding and current permission before using this scope.
 export function metaFieldRecoveryCatalogRead({message,state,recovery,now,attendanceOnly=false}){
@@ -62,7 +63,7 @@ function scheduleReadBody(facts,detail='',draftInstruction=''){
  if(!detail)for(const titleLimit of [12,8,4]){if(body.length<=contentLimit)break;body=summary(titleLimit);}
  if(body.length>contentLimit)body=compactReadText(body,contentLimit);
  // This local hint is supplied by the signed bridge; Cuenta rechecks access.
- const link=!facts.attendanceOnly&&workspaceId(facts.projectId)?'\nGantt completo: https://obrasaas.com/cuenta?'+new URLSearchParams({obra:facts.projectId})+'#schedule-gantt-title':'';
+ const link=!facts.attendanceOnly&&workspaceId(facts.projectId)?'\nGantt completo: https://obrasaas.com'+identityAccountReturnPath(new URLSearchParams({seccion:'cronograma',obra:facts.projectId}))+'#schedule-gantt-title':'';
  if(body.length+link.length+instruction.length<=limit)body+=link;
  return body+(instruction.length<=limit-body.length?instruction:compactReadText(instruction,Math.max(0,limit-body.length)));
 }
@@ -219,7 +220,7 @@ function classifyPlan(input,plan){
  if((body==='CANCELAR'||selected==='CANCEL')&&!plan.command&&(!plan.state||plan.state.purpose==='MENU'))disclosure='WITHDRAWAL';
  else if(action==='STATUS'||selected==='STATUS'||plan.state?.step==='OWN_CONSUMPTION_STATUS')disclosure=facts.permissions.attendance===true?(facts.permissions.report===true?'MIXED':'ATTENDANCE'):'REPORT';
  else if(action==='TASKS'||plan.state?.purpose==='TASKS')disclosure='GENERIC';
- else if(body==='HOLA'&&active?.purpose!=='MENU'&&plan.preserveConversation&&active?.purpose!=='PLAN_IMPORT')disclosure='GENERIC';
+ else if(isMetaGreeting(body)&&active?.purpose!=='MENU'&&plan.preserveConversation&&active?.purpose!=='PLAN_IMPORT')disclosure='GENERIC';
  else if(plan.command)disclosure=plan.command.action==='ATTENDANCE'?'ATTENDANCE':'REPORT';
  else if(plan.media||plan.reportRead||plan.consumptionRead)disclosure='REPORT';
  else if(plan.planImport)disclosure='PLAN_IMPORT';
@@ -262,7 +263,7 @@ function planConversation({message,state,eventId,facts,now}){
  // A greeting is a read, never a replacement prompt for an open draft.
  // Keep its exact nonce, expiry and durable origin; authorization is resolved
  // by the signed bridge and purpose permissions still gate continuation.
- if(body?.toUpperCase()==='HOLA'&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};
+ if(isMetaGreeting(body)&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};
  if(alias==='STATUS'&&active&& !['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,consumptionRead:facts.permissions.report===true&&Boolean(facts.ownConsumptions),reply:text(statusReply(facts)+'\nConservamos el borrador. Para recorrer tus informes, cancelalo explícitamente con CANCELAR y abrí ESTADO → Mis evidencias, Mis avances o Mis consumos.')};
  if(alias==='OWN_CONSUMPTIONS'&&active&&!['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,reply:text('Conservamos el borrador actual. Escribí CANCELAR y abrí ESTADO → Mis consumos para consultar tus informes sin descartar un registro por accidente.')};
  if(ownReportPurposes.includes(alias)&&active&&!['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,reply:text('Conservamos el borrador actual. Escribí CANCELAR y abrí ESTADO → Mis evidencias o Mis avances para consultar tus informes sin descartar un registro por accidente.')};

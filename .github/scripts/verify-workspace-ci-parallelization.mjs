@@ -26,7 +26,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import yaml from 'js-yaml';
 import {parse} from '@babel/parser';
-import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
+import {parseTap,TEST_SUITES,RECOVERY_CASES,CURRENT_EXPECTED_SUITE_COUNTS as EXPECTED_SUITE_COUNTS,CURRENT_EXPECTED_TOTAL_TESTS as EXPECTED_TOTAL_TESTS,EXPECTED_SUITE_COUNTS as HISTORICAL_UNIT_SUITE_COUNTS,EXPECTED_TOTAL_TESTS as HISTORICAL_UNIT_TOTAL_TESTS,CURRENT_INTAKE_GREETING_TEST_NAMES,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
@@ -848,9 +848,26 @@ function intakeKycFixtureCopyShadow(spec,readSource){
   return {path:file,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(original),fixtureSha256:hash(generated),fixtureRelativePath:'app/'+path.posix.basename(file),dependencySourcePath:dependency,dependencyFixturePath:'app/capture-quality-policy.mjs'};
  });
 }
+// The two exact joint modes preserve app/(identity)/cuenta and fixture/lib.
+// Their authenticated current producer/helper executes zero import relocations;
+// an empty caller array is never evidence that an arbitrary copier did so.
+function isHierarchicalJointFixture(spec){
+ return spec.lane==='people'&&spec.blockId===56&&spec.producer==='scripts/verify-participant-bank-intake-ui.mjs'&&(
+  spec.id==='joint-ui'&&spec.kind==='UI_JOINT'&&spec.path==='.vercel/private/participant-bank-intake-integration/current/browser.json'||
+  spec.id==='joint-causal'&&spec.kind==='UI_CAUSAL'&&spec.path==='.vercel/private/participant-bank-intake-integration/bad-resolution/browser.json');
+}
+function hierarchicalJointFixtureCopyShadow(spec,document,readSource){
+ if(!isHierarchicalJointFixture(spec))return null;
+ const producer=readSource(spec.producer),layout="const fixture=mkdtempSync(path.join(scratch,'participant-bank-intake-ui-')),app=path.join(fixture,'app'),components=path.join(app,'(identity)/cuenta');mkdirSync(components,{recursive:true});";
+ if(!Buffer.isBuffer(producer)||hash(producer)!==spec.producerSha256)deny('PROOF_DOCUMENT_CURVE_COPY');
+ const source=utf8(producer),paths=['src/app/(identity)/cuenta/plan-source-curve.mjs',DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER,'src/lib/plan-import-cyp-curve.mjs'];
+ if(!producer.equals(Buffer.from(source))||source.split(layout).length!==2||!Array.isArray(spec.sourceFiles)||paths.some(file=>!spec.sourceFiles.includes(file))||document.fixtureTransforms.length!==2)deny('PROOF_DOCUMENT_CURVE_COPY');
+ equal(document.documentCurveSourceManifest.map(ref=>ref.path),paths,'PROOF_DOCUMENT_CURVE_COPY');
+ return {...document,fixtureTransforms:[]};
+}
 function fixtureCopyShadowForProducer(spec,readSource){
- const document=documentCurveCopyShadow(readSource);
- return {...document,fixtureTransforms:[...document.fixtureTransforms,...intakeKycFixtureCopyShadow(spec,readSource)]};
+ const document=documentCurveCopyShadow(readSource),hierarchical=hierarchicalJointFixtureCopyShadow(spec,document,readSource);
+ return hierarchical||{...document,fixtureTransforms:[...document.fixtureTransforms,...intakeKycFixtureCopyShadow(spec,readSource)]};
 }
 function validateDocumentCurveCopyProof(spec,proof,readSource){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return;
@@ -863,7 +880,29 @@ function validateDocumentCurveCopyProof(spec,proof,readSource){
 function documentCurveCopySelftest(spec,proof,validate,readSource){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return [];
  const checks=[],bad=(name,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');checks.push({name:spec.id+'-document-copy-'+name,result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure source/relocation shadow; no UI execution'});};
- bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});bad('relocation-missing',p=>{p.fixtureTransforms=[];});
+ bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});
+ if(isHierarchicalJointFixture(spec)){
+  const flattened=documentCurveCopyShadow(readSource);
+  bad('hierarchical-source-hash-missing',p=>{delete p.documentCurveSourceManifest[0].sha256;});
+  bad('hierarchical-relocations-missing',p=>{delete p.fixtureTransforms;});
+  bad('hierarchical-relocations-not-array',p=>{p.fixtureTransforms=null;});
+  bad('hierarchical-spurious-relocation',p=>{p.fixtureTransforms=[clone(flattened.fixtureTransforms[0])];});
+  bad('hierarchical-flattened-pair-not-executed',p=>{p.fixtureTransforms=clone(flattened.fixtureTransforms);});
+  bad('hierarchical-spurious-fixture-hash-missing',p=>{p.fixtureTransforms=[clone(flattened.fixtureTransforms[0])];delete p.fixtureTransforms[0].fixtureSha256;});
+  for(const [name,edit]of [['id',{id:'intake-ui'}],['kind',{kind:spec.kind==='UI_JOINT'?'UI_CAUSAL':'UI_JOINT'}],['lane',{lane:'workspace-ui'}],['block',{blockId:55}],['path',{path:spec.kind==='UI_JOINT'?'.vercel/private/participant-bank-intake-integration/bad-resolution/browser.json':'.vercel/private/participant-bank-intake-integration/current/browser.json'}],['producer',{producer:'scripts/verify-employee-intake-ui.mjs'}]]){
+   assert.throws(()=>validateDocumentCurveCopyProof({...spec,...edit},clone(proof),readSource),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');
+   checks.push({name:spec.id+'-document-copy-hierarchical-foreign-'+name+'-denied',result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure exact producer/mode shadow; no UI execution'});
+  }
+  for(const [name,file]of [['helper',DOCUMENT_CURVE_COPY_HELPER],['producer',spec.producer]]){
+   assert.throws(()=>validateDocumentCurveCopyProof(spec,clone(proof),candidate=>candidate===file?Buffer.from('foreign source bytes'):readSource(candidate)),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');
+   checks.push({name:spec.id+'-document-copy-hierarchical-altered-'+name+'-denied',result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure authenticated current-source shadow'});
+  }
+  const intake=JSON.parse(utf8(readSource('.github/workspace-acceptance-contract.json'))).extension.proofs.find(row=>row.id==='intake-ui');
+  assert.ok(intake);assert.throws(()=>validateDocumentCurveCopyProof(intake,clone(proof),readSource),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');
+  checks.push({name:spec.id+'-document-copy-hierarchical-zero-cannot-certify-intake-denied',result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure canonical intake descriptor; no UI execution'});
+  return checks;
+ }
+ bad('relocation-missing',p=>{p.fixtureTransforms=[];});
  for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('relocation-'+key,p=>{p.fixtureTransforms[0][key]='f'.repeat(64);});bad('relocation-foreign-root',p=>{p.fixtureTransforms[0].fixtureRelativePath='../foreign.mjs';});bad('relocation-wrong-module',p=>{p.fixtureTransforms[0].dependencySourcePath='src/lib/foreign-document-curve.mjs';});bad('relocation-untracked-fields',p=>{p.fixtureTransforms[0].exactCopied=true;});
  if(documentCurveCopyShadow(readSource).fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.splice(1,1);});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}
  if(spec.kind==='UI_INTAKE'){
@@ -1582,7 +1621,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
   let proof={...base};
   if(spec.kind.startsWith('PG_')){Object.assign(proof,{schemaRemoved:true,checks:[...spec.checkNames],realProviderCalls:0,providerCalls:0,unexpectedNetworkCalls:0,sqlFailures:[],...(spec.kind==='PG_COMPANY_KYC'?{productionDataTouched:false,databaseCreated:false,environment:'schema-only-localhost-postgresql-corporate-KYC',realClerkLogin:false,realMetaAccepted:false,humanAccepted:false,poolClosed:true,adminClosed:true,ownConnectionsClosed:true,expiryFeedbackNative:companyKycExpiryNativeShadowFixture(),contextFeedbackNative:companyKycContextNativeShadowFixture()}:{})});
 if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proof.currentImageNative=integratedCompanyCurrentShadowFixture(contract,readSource);if(spec.kind==='PG_COMPANY_KYC'&&contract.whatsappFieldContinuityCurrentRevision)proof.neutralStepGuidanceNative=whatsappFieldNeutralStepShadowFixture('COMPANY');}
-  else if(spec.kind==='UNIT'){Object.assign(proof,{sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,postgresExecuted:false,suites:TEST_SUITES.map((file,index)=>{const bytes=tap(index===4?RECOVERY_CASES:Array.from({length:EXPECTED_SUITE_COUNTS[file]||1},(_,i)=>'shadow fixture '+index+' case '+i)),filename='.vercel/participant-bank-intake-contract-evidence/suite-'+index+'.tap';evidence.set(filename,bytes);return {file,exitCode:0,...parseTap(bytes,{recovery:index===4,expectedTests:EXPECTED_SUITE_COUNTS[file]??null}),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};})});}
+  else if(spec.kind==='UNIT'){Object.assign(proof,{sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,postgresExecuted:false,suites:TEST_SUITES.map((file,index)=>{const bytes=tap(index===4?RECOVERY_CASES:Array.from({length:EXPECTED_SUITE_COUNTS[file]||1},(_,i)=>file==='tests/production-employee-intake.test.mjs'&&i>=HISTORICAL_UNIT_SUITE_COUNTS[file]?CURRENT_INTAKE_GREETING_TEST_NAMES[i-HISTORICAL_UNIT_SUITE_COUNTS[file]]:'shadow fixture '+index+' case '+i)),filename='.vercel/participant-bank-intake-contract-evidence/suite-'+index+'.tap';evidence.set(filename,bytes);return {file,exitCode:0,...parseTap(bytes,{recovery:index===4,expectedTests:EXPECTED_SUITE_COUNTS[file]??null}),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};})});}
   else{Object.assign(proof,{errors:[],realProviderCalls:0,providerCalls:0,postgresExecuted:false,realIdentityAccepted:false,widths:[320,390,768,1280],sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,dirtyTrackedPaths:[],fullSuite:true,badTransform:null,causalFailure:null});const modes=spec.kind==='UI_BANK'?['normal','invalid-cancel','lost-reload','unknown-close-reload','same-retry','stale','denied-forged','integrated']:spec.kind==='UI_INTAKE'?INTAKE_UI_MODES:['bank','intake'];proof.checks=proof.widths.flatMap(width=>modes.map(mode=>({width,mode,parentAndSiblingBlocked:true,ownRecoveryAndLocalCloseEnabled:true,noFeedbackDeadlock:true,automaticPost:false,storagePrivate:true,...(spec.kind==='UI_INTAKE'?{posts:intakeUiExpectedPosts(mode),...intakeUiExistingGuards(mode),privateStored:false,canonicalInvitationPrepared:true,scopeIsolated:true,canonicalInvitationConfirmed:true,focusRetainedAfterInvite:true,focusedRefresh:true,fullListExplicit:true,...(INTAKE_UI_FOCUSED_404_MODES.includes(mode)?{focused404Cleared:true,explicitListReconsulted:true,confirmedReceiptRetained:mode!=='continuation-missing'}:{})}:{})})));
    if(spec.kind==='UI_CAUSAL'){const source='src/app/(identity)/cuenta/participant-panel.js',original=readSource(source),needle=CIVIL_CURRENT_BANK_LOCK,replacement=CIVIL_CURRENT_CAUSAL_BANK_LOCK;Object.assign(proof,{widths:[320],checks:[],badTransform:{source,originalSha256:hash(original),fixtureSha256:hash(Buffer.from(original.toString().replace(needle,replacement))),needle,replacement,runtimeSourceEdited:false},causalFailure:{stage:'own-bank-save',message:'own bank save must remain enabled while its own pending gates siblings (shadow fixture)',expectedFailure:true}});}
   }
@@ -1671,6 +1710,9 @@ if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proo
    const previousGuidanceSpec={...spec,producerSha256:ADMITTED_GUIDANCE_PREVIOUS_UNIT_PRODUCER_SHA256};bad('bank-intake-units-previous-current-pin-cannot-certify-admitted-guidance-count','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(previousGuidanceSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:previousGuidanceSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
    const changed=clone(restoreParticipantPreanalysisPreviousContract(contract));changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('bank-intake-units-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
    const intakeIndex=TEST_SUITES.indexOf('tests/production-employee-intake.test.mjs'),intakePath=proof.suites[intakeIndex].tap.path,intakeOriginal=evidence.get(intakePath),legacyIntakeTap=tap(Array.from({length:65},(_,i)=>'historical employee intake suite '+i));evidence.set(intakePath,legacyIntakeTap);mutate('plain-text-intake-legacy-sixty-five-tests','PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(legacyIntakeTap),tap:{path:intakePath,bytes:legacyIntakeTap.length,sha256:hash(legacyIntakeTap)}};});evidence.set(intakePath,intakeOriginal);
+    good('ux420-current-unit-is-only-five-cases-beyond-frozen-ninety-five-and-289',()=>{assert.equal(HISTORICAL_UNIT_SUITE_COUNTS[TEST_SUITES[intakeIndex]],95);assert.equal(HISTORICAL_UNIT_TOTAL_TESTS,289);assert.equal(CURRENT_INTAKE_GREETING_TEST_NAMES.length,5);assert.equal(EXPECTED_SUITE_COUNTS[TEST_SUITES[intakeIndex]],100);assert.equal(EXPECTED_TOTAL_TESTS,294);});
+    const prior95Tap=tap(Array.from({length:HISTORICAL_UNIT_SUITE_COUNTS[TEST_SUITES[intakeIndex]]},(_,i)=>'historical8f7 intake '+i));evidence.set(intakePath,prior95Tap);
+    mutate('ux420-historical-ninety-five-and-289-cannot-certify-current-unit','PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(prior95Tap),tap:{path:intakePath,bytes:prior95Tap.length,sha256:hash(prior95Tap)}};assert.equal(p.suites.reduce((sum,suite)=>sum+suite.tests,0),HISTORICAL_UNIT_TOTAL_TESTS);});evidence.set(intakePath,intakeOriginal);
    const guidanceCount=EXPECTED_SUITE_COUNTS[TEST_SUITES[intakeIndex]];
    for(const size of [ADMITTED_GUIDANCE_PREVIOUS_UNIT_TEST_COUNTS.intake,guidanceCount-1,guidanceCount+1]){
     const bytes=tap(Array.from({length:size},(_,i)=>'admitted guidance suite '+i));evidence.set(intakePath,bytes);
@@ -1848,24 +1890,31 @@ if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proo
     const plainTextCheck='real-PG-signed-plain-name-email-current-sealed-outbox-time-fence-no-person-or-grant';
     const additions=['real-PG-canonical-additive-ASSIGN-retains-policy-digest-and-WAITING-signed-consent-bytes',...['nonnumeric','overflow','maximum-ten-digits'].map(name=>'real-PG-additive-proof-'+name+'-revision-fails-closed-without-SQL-cast-error'),'real-PG-additive-proof-missing-confirmed-baseline-denies-unchanged-WAITING','real-PG-additive-proof-duplicate-revision-denies-unchanged-WAITING','real-PG-old-signed-routing-revision-remains-rejected-after-only-addition','real-PG-canonical-SUSPEND-ACTIVATE-never-revives-policy-or-WAITING-consent','real-PG-canonical-REVOKE-ASSIGN-never-revives-policy-or-WAITING-consent','real-PG-anchor-REVOKE-denies-WAITING-admission-with-destination-still-ACTIVE'];
     const existingAdditions=["real-PG-existing-roster-candidate-current-snapshot-readonly-no-selection","real-PG-create-with-existing-contact-keeps-duplicate-denial","real-PG-existing-choice-snapshot-or-current-row-change-terminal-rejection","real-PG-existing-choice-registration-provenance-missing-foreign-duplicate-denial","real-PG-existing-choice-normalized-contact-ambiguity-denies-without-SQL-error","real-PG-existing-choice-stripped-participation-and-prior-admission-ledger-denial","real-PG-existing-choice-current-eligibility-markers-deny-preserving-source-consent","real-PG-existing-choice-preserves-roster-signed-consent-one-receipt-no-grant","real-PG-existing-choice-different-operations-one-admission-one-rejection","real-PG-existing-choice-audit-failure-rolls-back-worker-and-intake","real-PG-existing-choice-committed-ACK-loss-readback-without-write-repeat","real-PG-existing-roster-provenance-tamper-denies-accepted-permissions"];
-    const legacy=names=>names.filter(name=>!additions.includes(name)&&!existingAdditions.includes(name));
-    good('intake-postgres-current-thirty-three-SQL-checks-exact',()=>{
+    const withdrawalAdditions=["real-PG-signed-pending-withdrawal-preserves-original-envelope-replays-once-and-denies-old-and-current-admission-revisions","real-PG-admission-first-CANCELAR-preserves-person-and-reviewed-permissions-without-revocation"];
+    const legacy=names=>names.filter(name=>!additions.includes(name)&&!existingAdditions.includes(name)&&!withdrawalAdditions.includes(name));
+    good('intake-postgres-current-thirty-five-SQL-checks-exact',()=>{
      let source=readFileSync(path.join(root,spec.producer),'utf8');
      const loop="checks.push('real-PG-additive-proof-'+name+'-revision-fails-closed-without-SQL-cast-error');";
      assert.equal(source.split(loop).length,2);source=source.replace(loop,additions.slice(1,4).map(name=>"checks.push('"+name+"');").join(''));
-     assert.equal(spec.checkNames.length,33);equal([...source.matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');assert.equal(legacy(spec.checkNames).length,11);assert.equal(additions.length,10);assert.equal(existingAdditions.length,12);
+     assert.equal(spec.checkNames.length,35);equal([...source.matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');assert.equal(legacy(spec.checkNames).length,11);assert.equal(additions.length,10);assert.equal(existingAdditions.length,12);assert.equal(withdrawalAdditions.length,2);equal(spec.checkNames.slice(-2),withdrawalAdditions,'PROOF_CHECK_NAMES');
     });
     mutate('legacy-eight-checks','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks).filter(name=>!name.startsWith('real-PG-focused-')&&name!==plainTextCheck);assert.equal(p.checks.length,8);});
     mutate('legacy-ten-checks-without-plain-text-causal-fence','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks).filter(name=>name!==plainTextCheck);assert.equal(p.checks.length,10);});
     mutate('eleven-checks-duplicate','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);p.checks[4]=p.checks[3];assert.equal(p.checks.length,11);});
     mutate('eleven-checks-wrong-name','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);p.checks[4]='foreign focused check';assert.equal(p.checks.length,11);});
     mutate('eleven-checks-wrong-order','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);[p.checks[4],p.checks[5]]=[p.checks[5],p.checks[4]];});
-    mutate('legacy-twenty-one-checks-without-existing-profile','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>!existingAdditions.includes(value));assert.equal(p.checks.length,21);});
-    for(const name of [...additions,...existingAdditions])mutate('current-addition-omitted-'+name,'PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>value!==name);assert.equal(p.checks.length,32);});
-    mutate('current-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(additions[1])]=additions[0];assert.equal(p.checks.length,33);});
-    mutate('existing-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(existingAdditions[1])]=existingAdditions[0];assert.equal(p.checks.length,33);});
+    mutate('legacy-twenty-one-checks-without-existing-profile','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>!existingAdditions.includes(value)&&!withdrawalAdditions.includes(value));assert.equal(p.checks.length,21);});
+    for(const name of [...additions,...existingAdditions])mutate('current-addition-omitted-'+name,'PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>value!==name);assert.equal(p.checks.length,34);});
+    mutate('current-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(additions[1])]=additions[0];assert.equal(p.checks.length,35);});
+    mutate('existing-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(existingAdditions[1])]=existingAdditions[0];assert.equal(p.checks.length,35);});
     mutate('existing-addition-wrong-order','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(existingAdditions[1]);[p.checks[index],p.checks[index+1]]=[p.checks[index+1],p.checks[index]];});
     mutate('current-addition-wrong-order','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(additions[1]);[p.checks[index],p.checks[index+1]]=[p.checks[index+1],p.checks[index]];});
+    mutate('legacy-thirty-three-checks-without-withdrawal','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(name=>!withdrawalAdditions.includes(name));assert.equal(p.checks.length,33);});
+    for(const name of withdrawalAdditions)mutate('withdrawal-addition-omitted-'+name,'PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>value!==name);assert.equal(p.checks.length,34);});
+    mutate('withdrawal-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(withdrawalAdditions[1])]=withdrawalAdditions[0];assert.equal(p.checks.length,35);});
+    mutate('withdrawal-addition-wrong-name','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(withdrawalAdditions[0])]='foreign withdrawal check';assert.equal(p.checks.length,35);});
+    mutate('withdrawal-addition-wrong-order','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(withdrawalAdditions[0]);[p.checks[index],p.checks[index+1]]=[p.checks[index+1],p.checks[index]];assert.equal(p.checks.length,35);});
+    mutate('withdrawal-addition-relocated','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(withdrawalAdditions[0]),[check]=p.checks.splice(index,1);p.checks.splice(1,0,check);assert.equal(p.checks.length,35);});
    }
    return checks.splice(start);
   });

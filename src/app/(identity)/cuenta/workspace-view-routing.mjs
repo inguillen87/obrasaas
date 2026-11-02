@@ -2,6 +2,8 @@
 const destinations = {
  'workspace-home-title': ['inicio', 'Resumen'],
  'schedule-title': ['cronograma', 'Cronograma'],
+ // Fixed legacy/current WhatsApp fragment; presentation only, no new capability.
+ 'schedule-gantt-title': ['cronograma', 'Gantt completo'],
  'plan-import-title': ['cronograma', 'Importar cronograma'],
  'plan-measurement-title': ['cronograma', 'Metrados por revisar'],
  'schedule-edit-title': ['cronograma', 'Planificar tarea'],
