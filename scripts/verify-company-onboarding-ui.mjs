@@ -379,6 +379,11 @@ async function organizationDraftProtection(mode,width){
    assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope(letter));assert.equal(url.searchParams.get('projectId'),project(letter).id);
    return respond(request,projectPreparationSnapshot({scope:scope(letter),projectId:project(letter).id,canManage:true,revision:0,detailsDigest:'d'.repeat(64),name:project(letter).name,clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope:scope(letter),projectId:project(letter).id}));
   }
+  if(url.pathname==='/api/identity/operations-status'){
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','view']);
+   assert.equal(url.searchParams.get('scope'),scope(letter));assert.equal(url.searchParams.get('projectId'),project(letter).id);assert.equal(url.searchParams.get('view'),'decisions');
+   return respond(request,{scope:scope(letter),projectId:project(letter).id,view:'decisions',observedAt:'2026-10-28T00:00:00.000Z',evidence:{pending:0},proposals:{pending:0},inventory:{canManage:true,pendingCounts:{consumptions:0,adjustments:0}}});
+  }
   assert.equal(url.pathname,'/api/identity/workspace');
   if(request.method()==='POST'){
    assert.equal(url.search,'');const input=JSON.parse(request.postData());posts.push(input);assert.equal(letter,'A');assert.equal(input.scope,scope('A'));assert.equal(input.projectId,project('A').id);assert.equal(input.taskId,tasks.A.id);assert.equal(input.expectedRevision,tasks.A.revision);assert.equal(input.reason,reason);assert.equal(input.startsOn,draftDates.startsOn);assert.equal(input.endsOn,draftDates.endsOn);

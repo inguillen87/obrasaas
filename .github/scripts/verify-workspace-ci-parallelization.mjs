@@ -832,20 +832,53 @@ function documentCurveCopyShadow(readSource){
  for(const dependency of WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.dependencies){const needle='../../../lib/'+path.posix.basename(dependency);if(text.split(needle).length!==2)deny('PROOF_DOCUMENT_CURVE_COPY');const before=generated;generated=Buffer.from(utf8(before).replace(needle,'./'+path.posix.basename(dependency)));fixtureTransforms.push({path:view,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(before),fixtureSha256:hash(generated),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:dependency,dependencyFixturePath:'app/'+path.posix.basename(dependency)});}
  return {documentCurveSourceManifest:[view,DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER,'src/lib/plan-import-cyp-curve.mjs'].map(file=>({path:file,sha256:hash(readSource(file))})),fixtureTransforms};
 }
+// Only this exact reviewed producer emits the two additional KYC relocations.
+// Its source bytes and every dependency below are already authenticated by the
+// original harness/source-manifest gates before this expected-set comparison.
+function intakeKycFixtureCopyShadow(spec,readSource){
+ if(!(spec.id==='intake-ui'&&spec.kind==='UI_INTAKE'&&spec.lane==='people'&&spec.blockId===55&&spec.path==='.vercel/private/employee-intake-ui/browser.json'&&spec.producer==='scripts/verify-employee-intake-ui.mjs'))return [];
+ const dependency='src/lib/capture-quality-policy.mjs',sources=['src/app/(identity)/cuenta/participant-panel.js','src/app/(identity)/cuenta/participant-kyc-capture.js'];
+ if(!Array.isArray(spec.sourceFiles)||[dependency,...sources].some(file=>!spec.sourceFiles.includes(file)))deny('PROOF_DOCUMENT_CURVE_COPY');
+ if(!Buffer.isBuffer(readSource(dependency)))deny('PROOF_DOCUMENT_CURVE_COPY');
+ return sources.map(file=>{
+  const original=readSource(file);if(!Buffer.isBuffer(original))deny('PROOF_DOCUMENT_CURVE_COPY');
+  const source=utf8(original),needle='../../../lib/capture-quality-policy.mjs';
+  if(!original.equals(Buffer.from(source))||source.split(needle).length!==2)deny('PROOF_DOCUMENT_CURVE_COPY');
+  const generated=Buffer.from(source.replace(needle,'./capture-quality-policy.mjs'));
+  return {path:file,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(original),fixtureSha256:hash(generated),fixtureRelativePath:'app/'+path.posix.basename(file),dependencySourcePath:dependency,dependencyFixturePath:'app/capture-quality-policy.mjs'};
+ });
+}
+function fixtureCopyShadowForProducer(spec,readSource){
+ const document=documentCurveCopyShadow(readSource);
+ return {...document,fixtureTransforms:[...document.fixtureTransforms,...intakeKycFixtureCopyShadow(spec,readSource)]};
+}
 function validateDocumentCurveCopyProof(spec,proof,readSource){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return;
- const expected=documentCurveCopyShadow(readSource);
+ const expected=fixtureCopyShadowForProducer(spec,readSource);
  if(!Array.isArray(proof.documentCurveSourceManifest)||!Array.isArray(proof.fixtureTransforms))deny('PROOF_DOCUMENT_CURVE_COPY');
  for(const ref of proof.documentCurveSourceManifest)exactKeys(ref,['path','sha256'],'PROOF_DOCUMENT_CURVE_COPY');
  equal([...proof.documentCurveSourceManifest].sort((a,b)=>a.path.localeCompare(b.path)),expected.documentCurveSourceManifest.sort((a,b)=>a.path.localeCompare(b.path)),'PROOF_DOCUMENT_CURVE_COPY');
  if(proof.fixtureTransforms.length!==expected.fixtureTransforms.length)deny('PROOF_DOCUMENT_CURVE_COPY');proof.fixtureTransforms.forEach((row,index)=>exactKeys(row,Object.keys(expected.fixtureTransforms[index]),'PROOF_DOCUMENT_CURVE_COPY'));equal(proof.fixtureTransforms,expected.fixtureTransforms,'PROOF_DOCUMENT_CURVE_COPY');
 }
-function documentCurveCopySelftest(spec,proof,validate){
+function documentCurveCopySelftest(spec,proof,validate,readSource){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return [];
  const checks=[],bad=(name,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');checks.push({name:spec.id+'-document-copy-'+name,result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure source/relocation shadow; no UI execution'});};
  bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});bad('relocation-missing',p=>{p.fixtureTransforms=[];});
  for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('relocation-'+key,p=>{p.fixtureTransforms[0][key]='f'.repeat(64);});bad('relocation-foreign-root',p=>{p.fixtureTransforms[0].fixtureRelativePath='../foreign.mjs';});bad('relocation-wrong-module',p=>{p.fixtureTransforms[0].dependencySourcePath='src/lib/foreign-document-curve.mjs';});bad('relocation-untracked-fields',p=>{p.fixtureTransforms[0].exactCopied=true;});
- if(proof.fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.pop();});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}
+ if(documentCurveCopyShadow(readSource).fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.splice(1,1);});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}
+ if(spec.kind==='UI_INTAKE'){
+  for(const index of [2,3])bad('kyc-relocation-'+index+'-omitted',p=>{p.fixtureTransforms.splice(index,1);});
+  bad('kyc-relocation-source-substituted',p=>{p.fixtureTransforms[2].path='src/app/(identity)/cuenta/foreign-panel.js';});
+  bad('kyc-relocation-extra',p=>{p.fixtureTransforms.push(clone(p.fixtureTransforms[2]));});
+  bad('kyc-relocation-duplicate',p=>{p.fixtureTransforms[3]=clone(p.fixtureTransforms[2]);});
+  bad('kyc-relocations-reordered',p=>{[p.fixtureTransforms[2],p.fixtureTransforms[3]]=[p.fixtureTransforms[3],p.fixtureTransforms[2]];});
+  bad('kyc-relocation-original-hash-forged',p=>{p.fixtureTransforms[2].sourceSha256='f'.repeat(64);});
+  bad('kyc-relocation-generated-hash-forged',p=>{p.fixtureTransforms[3].fixtureSha256='f'.repeat(64);});
+  for(const [name,edit]of [['another-producer',{producer:'scripts/verify-participant-bank-intake-ui.mjs'}],['another-kind',{kind:'UI_JOINT'}]]){
+   assert.throws(()=>validateDocumentCurveCopyProof({...spec,...edit},clone(proof),readSource),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');
+   checks.push({name:spec.id+'-document-copy-kyc-'+name+'-denied',result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure exact producer-set shadow; no UI execution'});
+  }
+ }
  return checks;
 }
 // This explicit dependency port belongs to the Node verifier API, never to a
@@ -1556,8 +1589,8 @@ if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proo
    if(spec.kind==='PG_PREPARATION')Object.assign(proof,{ok:true,sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,databaseRemoved:true,fixture:'disposable-local-postgres-canonical-workspace-with-synthetic-sessions',totalCheckCount:spec.checkNames.length});
    if(spec.kind==='UI_PREPARATION')Object.assign(proof,{validated:true,synthetic:true,realProviderCalls:false,sourceState:'EXACT_CI_SOURCE',fixtureRemoved:true,totalCheckCount:24,checks:proof.widths.flatMap(width=>PREPARATION_MODES.map(mode=>({width,mode,posts:mode==='cancel'?2:1,recoveryReads:0,currentSessionToken:true,placeholdersOnly:true,tasksUnchanged:true,noPayloadPersistence:true,horizontalOverflow:false})))});
    const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
-  if(['UI_INTAKE','UI_PREPARATION','UI_JOINT','UI_CAUSAL'].includes(spec.kind))Object.assign(proof,documentCurveCopyShadow(readSource));
-  good(spec.id+'-complete-proof',()=>validate(proof));checks.push(...documentCurveCopySelftest(spec,proof,validate));
+  if(['UI_INTAKE','UI_PREPARATION','UI_JOINT','UI_CAUSAL'].includes(spec.kind))Object.assign(proof,fixtureCopyShadowForProducer(spec,readSource));
+  good(spec.id+'-complete-proof',()=>validate(proof));checks.push(...documentCurveCopySelftest(spec,proof,validate,readSource));
   if(['UI_JOINT','UI_CAUSAL'].includes(spec.kind))mutate('pre-document-relocation-harness-cannot-certify-current-source','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256=JOINT_DOCUMENT_RELOCATION_PREVIOUS_PRODUCER_SHA256;});
   if(spec.kind==='PG_BANK')checks.push(...organizationUsageClosureSelftest(spec,proof,root,validate));
   checks.push(...companyKycCurrentSourceClosureSelftest(spec,proof,root,validate));
@@ -2550,10 +2583,18 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
    const names=[...utf8(readSource(spec.producer)).matchAll(/\battendanceReviewChecks\.push\('([^']+)'\)/g)].map(match=>match[1]);
    Object.assign(proof,{attendanceReviewChecks:names,attendanceReviewCheckCount:4,totalChecks:71});
   }
+  const previousEffectiveSpec=spec.kind==='PG_OVERTIME'?restorePilotCompletionPreviousProofSpec(spec):spec,currentEffectiveAttendance=previousEffectiveSpec!==spec;
+  if(currentEffectiveAttendance){
+   assert.equal(previousEffectiveSpec.checkNames.length,30);assert.equal(spec.checkNames.length,43);assert.deepEqual(spec.checkNames.slice(0,30),previousEffectiveSpec.checkNames);
+   const effectiveNames=spec.checkNames.slice(30);assert.equal(effectiveNames.length,13);assert.ok(effectiveNames.every(name=>name.startsWith('effective-attendance: ')));
+   // Synthetic shape only: no PostgreSQL case, report or provider is executed.
+   const reportNames=["private-reason-separation.json","unrelated-history.json","mixed-author.json","unconfirmed-effective.json","retained-checkpoint.json","cross-project-checkpoint.json","real-platform-head.json","overtime.json","malformed-own-inspection.json","missing-receipt-shift.json","selected-detail-global-guard.json","checkpoint-ancestor-foreign-author.json","unlocatable-marker-types.json","final-state.json"];
+   proof.effectiveAttendance={status:'PASS',checks:effectiveNames.map(name=>name.slice('effective-attendance: '.length)),checkCount:13,schema:'obrasaas_attendance_effective_'+'a'.repeat(32),disposableSchemaRemoved:true,caseReportDigests:Object.fromEntries(reportNames.map(name=>[name,hash(Buffer.from('synthetic canonical field shadow report '+name))])),providerCalls:0,actualAuthenticatedSessionVerified:false,syntheticSessionBoundaryInputsOnly:true,physicalAttendanceVerified:false,realBusinessDatabaseUsed:false,paymentEngineUsed:false,humanAccepted:false};
+  }
   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   currentKycStatusChecks.push(()=>currentKycStatusClosureSelftest(spec,proof,root,validate));
    currentWhatsappPlanChecks.push(()=>whatsappPlanImportClosureSelftest(spec,proof,root,validate));
-  good(spec.id+'-complete-current-proof',()=>assert.equal(validate(proof).checks,privacyRevision?.currentCheckCount??(spec.kind==='PG_FIELD'?66:29)));
+  good(spec.id+'-complete-current-proof',()=>assert.equal(validate(proof).checks,currentEffectiveAttendance?spec.checkNames.length:(privacyRevision?.currentCheckCount??(spec.kind==='PG_FIELD'?66:29))));
   good(spec.id+'-current-manifest-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   currentReactiveChecks.push(()=>{
    const start=checks.length,previous=REACTIVE_SOURCE_COUNTS[spec.kind]-1;
@@ -2736,7 +2777,7 @@ function portfolioSelftest(workflow,contract,root){
   else Object.assign(proof,{sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],productionDataTouched:false,environment:'local-disposable-postgresql',databaseRemoved:true,connectionClosed:true,physicalWhatsAppTested:false,checks:[...spec.checkNames],totalCheckCount:spec.checkNames.length});
   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)});
   const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
-  checks.push(...documentCurveCopySelftest(spec,proof,validate));
+  checks.push(...documentCurveCopySelftest(spec,proof,validate,readSource));
   good(spec.id+'-complete-native-proof',()=>assert.equal(validate(proof).checks,summary(spec)));
   good(spec.id+'-current-source-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   good(spec.id+'-manifest-order-independent',()=>{const value=clone(proof);value.sourceManifest.reverse();assert.equal(validate(value).sourceManifestSha256,validate(proof).sourceManifestSha256);});
