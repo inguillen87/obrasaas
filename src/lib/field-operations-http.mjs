@@ -23,6 +23,11 @@ export function createFieldHandlers({verify,operations}) {
     const session=await identity(request,verify),params=new URL(request.url).searchParams;
     if(request.method==='POST'){if(params.size)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.save(session,await boundedBody(request)));}
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
+    if(params.has('closureWorkerId')||params.has('closureShiftId')){
+      const input=context(params,['closureWorkerId','closureShiftId']);
+      if(params.size!==4||![params.get('closureWorkerId'),params.get('closureShiftId')].every(workspaceId))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return reply(await operations.attendanceClosureView(session,{...input,workerId:params.get('closureWorkerId'),shiftId:params.get('closureShiftId')}));
+    }
     if(['progressCurveTaskId','progressCurveCursor'].some(key=>params.has(key))){
       const input=context(params,['progressCurveTaskId','progressCurveCursor']);
       if(!workspaceId(params.get('progressCurveTaskId'))||params.has('progressCurveCursor')&&(!params.get('progressCurveCursor')||params.get('progressCurveCursor').length>1200))throw new WorkspaceError('FIELD_QUERY_INVALID');

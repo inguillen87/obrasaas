@@ -1,4 +1,5 @@
 import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
+import {ATTENDANCE_CLOSURE_ACTIONS,attendanceClosureOutcome} from './attendance-closure-view.mjs';
 import {planBaselineCommandDigest,planBaselineOutcome} from './plan-baseline-view.mjs';
 import {normalizeDocumentCurve,documentCurveCanonical,planDocumentDraftView,planInvestmentDraftView} from './plan-source-curve.mjs';
 import {PRIVATE_BANK_ACTIONS,validatePrivateBankOutcome} from './private-bank-account-format.mjs';
@@ -47,6 +48,8 @@ const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,12
 const channelReferenceValid=(action,connectionId)=>OWN_COMPANY_ACTIONS.includes(action)?(id(connectionId)||action==='CONNECT_OWN_NUMBER'&&connectionId===null):[...COMPANY_CHANNEL_ACTIONS,...OWN_TEMPLATE_ACTIONS].includes(action)&&id(connectionId);
 const PROGRESS_TEMPLATE_SEND_KEY='progress_review_notification';
 export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME','PROPOSE_OVERTIME','DECIDE_OVERTIME']);
+export const FIELD_ATTENDANCE_CLOSURE_RECOVERY_ACTIONS=ATTENDANCE_CLOSURE_ACTIONS;
+const correlatedFieldAction=action=>FIELD_OVERTIME_RECOVERY_ACTIONS.includes(action)||ATTENDANCE_CLOSURE_ACTIONS.includes(action);
 const fieldMeasurementAction='CONFIGURE_PROGRESS_MEASUREMENT';
 const fieldMeasurementCancelAction='CANCEL_PROGRESS_MEASUREMENT_CONFIGURATION';
 export const PARTICIPANT_INTAKE_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
@@ -227,7 +230,7 @@ async function reference(url, options, now) {
   const bankAction=body.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT'?body.payload?.originalAction:body.action;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(bankAction)||!id(body.payload?.workerId)))throw unavailable();
   const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
-  const overtime=resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(body.action);
+  const overtime=resource==='field-operations'&&correlatedFieldAction(body.action);
   const measurement=resource==='field-operations'&&[fieldMeasurementAction,fieldMeasurementCancelAction].includes(body.action);
   if(measurement&&!id(body.payload?.taskId))throw unavailable();
   const intake=resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(body.action);
@@ -289,7 +292,7 @@ function valid(entry) {
   if(planUpload&&!/^[a-f0-9]{64}$/.test(entry.inputDigest||''))return false;
   if(plan&&!planUpload&&(!(measurementImport?measurementImportActions:planActions).includes(entry.action)||!id(entry.draftId)||!Number.isSafeInteger(entry.expectedRevision)||entry.expectedRevision<1||!/^[a-f0-9]{64}$/.test(entry.inputDigest||'')))return false;
   if(measurementImport&&!planUpload&&(!/^[a-f0-9]{64}$/.test(entry.sourceSha256||'')||!/^[a-f0-9]{64}$/.test(entry.sourceDigest||'')||(entry.action==='APPLY_MEASUREMENT'?!/^[a-f0-9]{64}$/.test(entry.reviewDigest||''):entry.reviewDigest!==null&&!/^[a-f0-9]{64}$/.test(entry.reviewDigest||''))))return false;
-  if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
+  if(overtime&&!correlatedFieldAction(entry.action))return false;
   if(measurement&&!id(entry.taskId))return false;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(entry.action)||!id(entry.workerId)))return false;
   if(intake&&(!PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)||!id(entry.connectionId)||entry.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(entry.applicationId||'')))return false;
@@ -359,6 +362,7 @@ export function recoveryResult(entry, result) {
     if(result.state==='RECORDED'&&result.saved===true&&/^company_phone_[a-f0-9]{64}$/.test(result.receipt?.id||'')&&Number.isSafeInteger(result.receipt.savedRevision)&&result.receipt.savedRevision>=1&&typeof result.savedDeclarationIsCurrent==='boolean'&&id(result.organizationId)&&result.currentCompany?.organizationId===result.organizationId&&result.currentCompany?.expectedClerkOrganizationId===entry.expectedClerkOrganizationId)return {state:'RECORDED',receiptId:result.receipt.id};
     if(result.state==='NOT_OBSERVED'&&result.definitive===false&&result.saved!==true&&!result.receipt)return {state:'NOT_OBSERVED'};return null;
   }
+  if(entry.resource==='field-operations'&&ATTENDANCE_CLOSURE_ACTIONS.includes(entry.action))return attendanceClosureOutcome(result,entry)?{state:result.state,...(result.receiptId?{receiptId:result.receiptId}:{})}:null;
   if(entry.resource==='field-operations' &&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){
     if(result.projectId!==entry.projectId||result.operationId!==entry.operationId)return null;
     if(result.state==='RECORDED'&&result.saved===true&&result.action===entry.action&&/^field_[a-f0-9]{64}$/.test(result.receiptId||''))return {state:'RECORDED',receiptId:result.receiptId};
@@ -796,6 +800,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(entry.resource==='company-channel'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='plan-measurement'&&entry.action!=='UPLOAD'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='plan-import'||entry.resource==='plan-measurement'&&entry.action==='UPLOAD'){const outcome=recoveryResult(entry,result);if(outcome?.liveOnly===true)return;if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&(outcome.phase==='PRE_DECISION'||outcome.proof==='AUDITED_UPLOAD'||!ticket.existed))await remove(entry);return;}
+      if(entry.resource==='field-operations'&&ATTENDANCE_CLOSURE_ACTIONS.includes(entry.action)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='field-operations'&&entry.action===fieldMeasurementAction){if(['RECORDED','CANCELLED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))await remove(entry);

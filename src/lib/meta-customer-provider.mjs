@@ -215,11 +215,13 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   };
   const debug=(await auditRequest('debug_token?'+new URLSearchParams({input_token:token}),true)).data;
   if(!ownTokenVerified(debug,current,now())||runtime&&!ownRuntimeTokenMatches(debug,current))throw new WorkspaceError('META_OWN_COMPANY_TOKEN_REJECTED',403);
-  for(const [edge,expected] of [['system_users',String(debug.user_id)],['owned_apps',current.appId],['owned_whatsapp_business_accounts',current.wabaId]]){
+  const businessAssets={systemUserAssigned:false,appOwned:false,wabaOwned:false};
+  for(const [edge,expected,key] of [['system_users',String(debug.user_id),'systemUserAssigned'],['owned_apps',current.appId,'appOwned'],['owned_whatsapp_business_accounts',current.wabaId,'wabaOwned']]){
    const result=await auditRequest(current.businessId+'/'+edge+'?'+new URLSearchParams({fields:'id',limit:'100'}));
    if(result.paging?.next||!Array.isArray(result.data)||result.data.length>100||result.data.some(item=>!metaAssetId(String(item?.id)))||new Set(result.data.map(item=>String(item.id))).size!==result.data.length||!result.data.some(item=>String(item.id)===expected))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
+   businessAssets[key]=true;
   }
-  const audit=Object.freeze({});ownAudits.set(audit,{policyDigest:current.policyDigest,tokenDigest:customerTokenDigest(token),systemUserId:String(debug.user_id),tokenExpiresAt:ownTokenExpiry(debug),dataAccessExpiresAt:ownDataAccessExpiry(debug),expiresAt:Math.min(Date.parse(current.expiresAt),debug.expires_at*1000,debug.data_access_expires_at?debug.data_access_expires_at*1000:Infinity,now()+60000)});
+  const audit=Object.freeze({});ownAudits.set(audit,{policyDigest:current.policyDigest,tokenDigest:customerTokenDigest(token),systemUserId:String(debug.user_id),tokenExpiresAt:ownTokenExpiry(debug),dataAccessExpiresAt:ownDataAccessExpiry(debug),expiresAt:Math.min(Date.parse(current.expiresAt),debug.expires_at*1000,debug.data_access_expires_at?debug.data_access_expires_at*1000:Infinity,now()+60000),businessAssets:Object.freeze(businessAssets)});
   if(transportOperation)ownTransportInspections.set(audit,transportOperation);
   return createMetaCustomerProvider({environment,fetchImpl,now,readiness,ownCapability:capability,ownAudit:audit,ownFence:runtime?fence:null,ownTemplateAdministration:templateAdministration,ownDiagnostic:diagnostic,ownParticipantOnboardingScope:onboardingScope});
  }
@@ -237,11 +239,17 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  function captureOwnRuntimePhone(phone,policy,token,sequence){
   const frame=ownRuntimeDiagnosticFrames.get(ownDiagnostic);
   if(!frame||frame.capability!==ownCapability||frame.tokenDigest!==customerTokenDigest(token)||frame.connection.phoneNumberId!==String(phone.id)||frame.connection.whatsappBusinessId!==policy.wabaId)return;
+  const audit=ownAudits.get(ownAudit);
+  // Only the real, completed business audit can accompany this exact phone
+  // observation. Stored connection flags and externally supplied DTOs cannot
+  // manufacture this module-private witness.
+  if(audit?.policyDigest!==policy.policyDigest||audit.tokenDigest!==frame.tokenDigest||audit.expiresAt<=now()||!['systemUserAssigned','appOwned','wabaOwned'].every(key=>audit.businessAssets?.[key]===true))return;
   let normalized=null;try{normalized=normalizeCompanyPhone(phone.display_phone_number,true);}catch{}
   const present=Object.hasOwn(phone,'code_verification_status');
   const verification=present?['VERIFIED','NOT_VERIFIED','EXPIRED'].includes(phone.code_verification_status)?phone.code_verification_status:'OTHER':'MISSING';
   const platform=phone.platform_type==null?'MISSING':['CLOUD_API','NOT_APPLICABLE'].includes(phone.platform_type)?phone.platform_type:'OTHER';
-  frame.inspection={sequence,current:()=>sequence===inspectionSequence,checkedAt:now(),projection:Object.freeze({codeVerificationPresent:present,codeVerificationState:verification,registered:phone.status==='CONNECTED'&&phone.platform_type==='CLOUD_API',platformState:platform,displayComparable:normalized!==null,displayMatchesExpected:normalized!==null&&normalized===policy.expectedPhoneE164})};
+  const checkedAt=now(),businessAssets=Object.freeze({...audit.businessAssets,phoneInWaba:true,checkedAt:new Date(checkedAt).toISOString()});
+  frame.inspection={sequence,current:()=>sequence===inspectionSequence,checkedAt,projection:Object.freeze({codeVerificationPresent:present,codeVerificationState:verification,registered:phone.status==='CONNECTED'&&phone.platform_type==='CLOUD_API',platformState:platform,displayComparable:normalized!==null,displayMatchesExpected:normalized!==null&&normalized===policy.expectedPhoneE164,businessAssets})};
  }
  function rejectOwnPhone(stage,sequence){
   reportOwnPhoneRejection(stage);const error=new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403),frame=ownRuntimeDiagnosticFrames.get(ownDiagnostic);

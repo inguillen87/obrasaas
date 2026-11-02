@@ -15,7 +15,16 @@ function fixture({current='a',sourceActor='a',mixed=false,malformed=false}={}){
  const calls={writes:0,chain:0,overlap:0,history:0,list:0,cursor:0};
  const result=rows=>({rows:structuredClone(rows)});
  const client={async query(sql,args){
-  assert.match(sql,/^SELECT /,'Reads cannot write business state');
+  sql=sql.replace(/\s+/g,' ');
+  assert.match(sql,/^(?:SELECT |WITH RECURSIVE )/,'Reads cannot write business state');
+  if(sql==='SELECT clock_timestamp() AS now')return result([{now:new Date('2026-10-18T12:00:00.000Z')}]);
+  if(sql.startsWith('WITH RECURSIVE retained_keys AS'))return result(rows.filter(row=>row.metadata.fieldOperations.recordedBy===args[1]).map(row=>({...row,checkedInAt:new Date(row.metadata.fieldOperations.recordedAt)})));
+  if(sql.startsWith('SELECT i.id,i.metadata FROM public."Incident"')||sql.startsWith('SELECT i.id,i."projectId",i.metadata FROM public."Incident"'))return result([]);
+  if(sql.startsWith('SELECT id,metadata FROM public."AuditLog"')&&sql.includes("action='field.attendance.corrected'"))return result([]);
+  if(sql.startsWith('SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata'))return result([]);
+  if(sql.includes('FROM public."PlatformUser" u JOIN public."TenantMembership" m'))return result([{actorId:args[0],clerkUserId:'user_HistoryA',membershipId:'membership-history-a',membershipStatus:'ACTIVE',role:'SITE_MANAGER',clerkRole:'org:member',membershipRevision:'2026-01-01T00:00:00.000000'}]);
+  if(sql.includes('FROM public."Worker" w JOIN public."Project"')||sql.includes('FROM public."ProjectMembership"')||sql.includes('FROM public."Worker" w WHERE'))return result([]);
+  if(sql.startsWith('SELECT id,"projectId",active,metadata,'))return result([{...worker,projectId:project.id,revision:'2026-01-01T00:00:00.000000'}]);
   if(sql.includes('FROM public."Worker" WHERE id=$1'))return result(args[0]===worker.id&&args[1]===project.id?[worker]:[]);
   if(sql.includes('FROM public."AttendanceEntry" a JOIN public."Worker"')){
    if(sql.includes('WHERE a.id=$1')){
@@ -28,6 +37,7 @@ function fixture({current='a',sourceActor='a',mixed=false,malformed=false}={}){
    const author=sql.match(/a\.metadata->'fieldOperations'->>'recordedBy'=\$(\d+)/);
    return result(rows.filter(row=>row.metadata.fieldOperations.eventType==='CHECK_OUT'&&row.projectId===args[0]&&(!args[3]||row.sortAt<args[3]||row.sortAt===args[3]&&row.id<args[4])&&(args[1]||args[2].includes(row.workerId)&&(!author||row.metadata.fieldOperations.recordedBy===args[Number(author[1])-1]))).map(row=>({...row,name:worker.name})));
   }
+  if(sql.includes('jsonb_to_recordset($2::jsonb)'))return result(rows.map(row=>({...row,checkedInAt:new Date(row.metadata.fieldOperations.recordedAt)})));
   if(sql.includes('FROM public."AttendanceEntry" a JOIN public."Project"')){calls.overlap++;return result(rows.filter(row=>row.metadata.fieldOperations.recordedBy===args[1]));}
   if(sql.includes('FROM public."AuditLog"')){calls.history++;return result([]);}
   if(sql.includes('WHERE id=$1 AND "projectId"=$2'))return result(rows.filter(row=>row.id===args[0]&&row.projectId===args[1]));
@@ -84,4 +94,11 @@ test('revoked current attendance access and channel-only calls keep their existi
  const member={...actor('a'),channelProof:{provider:'synthetic-existing-channel'}};
  await assert.rejects(f.store.readShift(f.client,member,session('a'),project,{closingEventId:'attendance-end'}),{code:'OVERTIME_WEB_ONLY'});
  await assert.rejects(f.store.journeys(f.client,member,session('a'),project,[f.worker.id],{scope}),{code:'OVERTIME_WEB_ONLY'});assert.equal(f.calls.writes,0);
+});
+
+test('malformed observed detail explicitly withholds effective source, overlap certainty and all overtime actions',async()=>{
+ const f=fixture({malformed:true}),detail=await f.read('a');assert.equal(detail.effectiveSourceStatus,'UNCONFIRMED');assert.equal(detail.effectiveSourceCode,'CHAIN_INTEGRITY_REQUIRED');assert.equal(detail.overlapSourceStatus,'UNCONFIRMED');assert.equal(detail.overlapDetected,null);assert.equal(detail.observedSummary.status,'INTEGRITY_REVIEW_REQUIRED');for(const key of ['canPropose','canApprove','canReject'])assert.equal(detail[key],false);assert.equal(detail.events.length,2);assert.equal(f.calls.writes,0);
+});
+test('ordinary observed times without original audit evidence remain inspectable but never authorize overtime',async()=>{
+ const f=fixture(),detail=await f.read('a');assert.equal(detail.summary.netMs,3600000);assert.equal(detail.summary.recordedBy,'actor-a');assert.equal(detail.effectiveSourceStatus,'UNCONFIRMED');assert.equal(typeof detail.effectiveSourceCode,'string');assert.equal(detail.overlapDetected,null);for(const key of ['canPropose','canApprove','canReject'])assert.equal(detail[key],false);assert.equal(detail.events.length,2);assert.equal(f.calls.writes,0);
 });

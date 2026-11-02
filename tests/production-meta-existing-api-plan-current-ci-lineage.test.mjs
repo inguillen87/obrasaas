@@ -1,3 +1,4 @@
+import {restorePilotCompletionPreviousProofSpec as pilotPriorProof,restorePilotCompletionPreviousContract as pilotPriorContract} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restorePilotCompletionPreviousSourceSet,restoreOwnRuntimeDiagnosticPreviousContract,planBudgetCurrentSourcePin,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
@@ -18,13 +19,22 @@ const serialize=value=>JSON.stringify(value,null,2)+'\n';
 const denied=run=>assert.throws(run,{code:'EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED'});
 const deniedMetadata=edit=>{const contract=current(),historical=restorePlanBudgetPreviousContract(contract);edit(historical);denied(()=>restoreExistingApiPlanPreviousContract(historical));edit(contract);denied(()=>restoreExistingApiPlanPreviousContract(contract));};
 
+
+// Only an exact compiled current proof may enter the inherited metadata oracle.
+// RAW producer/source closure validation continues to use the unmodified proof.
+// Capture the exact compiled mapping before any negative mutation. The same
+// physical row stays addressable after tampering, so the validator rejects it.
+const currentProofIds=new Map(current().extension.proofs.map(proof=>[pilotPriorProof(proof).id,proof.id]));
+function currentProofByHistoricalId(contract,id){const proof=contract.extension.proofs.find(row=>row.id===id)||contract.extension.proofs.find(row=>row.id===currentProofIds.get(id));assert.ok(proof,'Exact current proof for historical id '+id);return proof;}
+const historicalProof=(contract,id)=>pilotPriorProof(currentProofByHistoricalId(contract,id));
+
 test('API plan revision restores the whole published material contract and every inherited proof',()=>{
  const actual=current(),actualBefore=serialize(actual),contract=restoreOwnRuntimeDiagnosticPreviousContract(actual,read),before=serialize(contract),publishedHomePredecessor=restoreHomeDecisionsPreviousContract(contract),previous=restoreExistingApiPlanPreviousContract(contract);
  assert.equal(sha(serialize(previous)),expected.previousContractSha256);assert.equal(expected.predecessorCommit,'5d0c4303cbced786f2ec8a0a10edaa72b3aff02d');assert.equal(Object.hasOwn(previous,key),false);assert.equal(serialize(actual),actualBefore);assert.equal(serialize(contract),before);
  assert.deepEqual(previous.materialReviewCurrentRevision,contract.materialReviewCurrentRevision);
  for(const name of ['blocks','lanes','artifactPatterns','evidenceProducers','whatsappFieldContinuityCurrentRevision'])assert.deepEqual(previous[name],publishedHomePredecessor[name]);
  const focusedProducer=value=>value.evidenceProducers.find(row=>row.producer==='scripts/verify-focused-workspace-ci.mjs');// Project only the authenticated outer pin for the historical assertion; read current source bytes below.
- assert.equal(worksiteLiveHoursPreviousSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}),'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(contract).producerSha256,'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(worksiteLiveHoursCurrentSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24'}),'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(focusedProducer(actual).producerSha256,planBudgetCurrentSourcePin(actual,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}));assert.equal(sha(read('scripts/verify-focused-workspace-ci.mjs').toString('utf8').replaceAll('\r\n','\n')),focusedProducer(actual).producerSha256);assert.equal(focusedProducer(publishedHomePredecessor).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
+ assert.equal(worksiteLiveHoursPreviousSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}),'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(contract).producerSha256,'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(worksiteLiveHoursCurrentSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24'}),'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(historicalProof(actual,'focused-workspace-ui').producerSha256,planBudgetCurrentSourcePin(actual,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}));assert.equal(sha(read('scripts/verify-focused-workspace-ci.mjs').toString('utf8').replaceAll('\r\n','\n')),historicalProof(actual,'focused-workspace-ui').producerSha256);const currentFocused=currentProofByHistoricalId(actual,'focused-workspace-ui');assert.equal(actual.evidenceProducers.find(row=>row.path===currentFocused.path).producerSha256,currentFocused.producerSha256);assert.equal(sha(read(currentFocused.producer).toString('utf8').replaceAll('\r\n','\n')),currentFocused.producerSha256);assert.equal(focusedProducer(publishedHomePredecessor).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
  assert.equal(sha(serialize(restoreMaterialReviewPreviousContract(contract))),'1bb5e262dac06377590ea983a9c800163726cb6510ae0fbbbdca17309253c6af');
 });
 
@@ -44,7 +54,7 @@ test('only exact authenticated predecessor and current pins advance',()=>{
 test('actual producer closures grow only by their exact reviewed dependencies',()=>{
  const full=current(),contract=restoreHomeDecisionsPreviousContract(full),previous=restoreExistingApiPlanPreviousContract(contract);
  for(const spec of contract.extension.proofs){
-  const actual=full.extension.proofs.find(row=>row.id===spec.id);assert.deepEqual(currentProducerSourceFiles(actual,process.cwd()),actual.sourceFiles,'Actual current source closure '+spec.id);
+  const actual=currentProofByHistoricalId(full,spec.id);assert.deepEqual(currentProducerSourceFiles(actual,process.cwd()),actual.sourceFiles,'Actual current source closure '+spec.id);
   const delta=expected.proofSourceDeltas.find(row=>row.id===spec.id),prior=previous.extension.proofs.find(row=>row.id===spec.id);assert.deepEqual(spec.checkNames,prior.checkNames);assert.equal(spec.producerSha256,prior.producerSha256);
   if(!delta){assert.deepEqual(spec.sourceFiles,prior.sourceFiles);continue;}
   assert.deepEqual(restoreExistingApiPlanSourceSet(delta.family,spec.sourceFiles,contract),prior.sourceFiles);assert.deepEqual(existingApiPlanProofSourceAdditions(spec),delta.additions);assert.deepEqual(existingApiPlanProofSourceAdditions(prior),[]);
@@ -52,9 +62,9 @@ test('actual producer closures grow only by their exact reviewed dependencies',(
 });
 
 test('source-set negatives reject omission duplicate old-set-as-current reverse order and same-count foreign paths',()=>{
- const contract=current(),previous=restoreExistingApiPlanPreviousContract(contract);
+ const actual=current(),contract=pilotPriorContract(actual,read),previous=restoreExistingApiPlanPreviousContract(contract);
  for(const delta of expected.proofSourceDeltas){
-  const spec=contract.extension.proofs.find(row=>row.id===delta.id),prior=previous.extension.proofs.find(row=>row.id===delta.id),files=spec.sourceFiles;
+  const spec=currentProofByHistoricalId(contract,delta.id),prior=previous.extension.proofs.find(row=>row.id===delta.id),files=spec.sourceFiles;
   for(const changed of [files.slice(1),[...files,files[0]].sort(),[...files].reverse(),files.map((file,index)=>index===0?'src/lib/foreign-same-count.mjs':file).sort(),prior.sourceFiles])denied(()=>restoreExistingApiPlanSourceSet(delta.family,changed,contract));
   denied(()=>existingApiPlanProofSourceAdditions({...spec,sourceFiles:files.map((file,index)=>index===0?'src/lib/foreign-same-count.mjs':file).sort()}));
  }

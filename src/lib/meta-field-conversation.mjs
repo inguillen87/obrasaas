@@ -24,7 +24,7 @@ const journeyExplanation={ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada a
 const text=body=>({type:'text',body});
 const permits=(purpose,facts)=>purpose==='PLAN_IMPORT'?canImportPlan(facts.planImportRole):purpose==='TASKS'||(purpose==='ATTENDANCE'?facts.permissions.attendance===true:facts.permissions.report===true);
 const denied=purpose=>markMetaFieldDisclosure({state:null,reply:text((purpose==='ATTENDANCE'?'Tu participación no tiene habilitado el registro de jornada.':'Tu participación no tiene habilitado el envío de reportes, evidencia o propuestas de avance.')+' Pedí al responsable que revise tus permisos en Mi cuenta. Escribí MENU para consultar las opciones disponibles.')},'GENERIC');
-function journeyError(action,facts){try{fieldTransition(attendanceEvents[action],facts.latest);return null;}catch(error){if(!Object.hasOwn(journeyExplanation,error.code))throw error;return error.code;}}
+function journeyError(action,facts){try{if(facts.latest?.effectiveClosed===true){if(attendanceEvents[action]!=='CHECK_IN')return 'ATTENDANCE_SHIFT_NOT_OPEN';}else fieldTransition(attendanceEvents[action],facts.latest);return null;}catch(error){if(!Object.hasOwn(journeyExplanation,error.code))throw error;return error.code;}}
 // Keep the old CONSUMO command and historical menu capability valid. The menu
 // leads with real authorized execution; its manual alternative stays explicit.
 const availableMenu=facts=>menuOptions.filter(([action])=>action!=='CONSUMPTION'&&(!facts.attendanceOnly||action.startsWith('ATTEND_')||action==='STATUS')).filter(([action])=>action==='PLAN_IMPORT'?permits('PLAN_IMPORT',facts):action.startsWith('ATTEND_')?permits('ATTENDANCE',facts)&&!journeyError(action,facts):action==='EXECUTION'?permits('REPORT',facts)&&Boolean(facts.inventory?.materials?.some(m=>m.active)):['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(action)?permits('REPORT',facts):true);
@@ -118,7 +118,7 @@ function ownReportDetail(state,facts,id){
  return {state,preserveConversation:true,reply:text(body),reportRead:true};
 }
 function statusReply(facts){const e=facts.latest,page=facts.ownConsumptions;let body='Obra: '+compactReadText(facts.projectName,160);
- if(facts.permissions.attendance===true)body+='\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso');
+ if(facts.permissions.attendance===true)body+='\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.effectiveClosed===true?'cierre efectivo aprobado':e.phase==='ON_BREAK'?'en pausa':'en curso');
  if(facts.permissions.report===true)body+='\nEvidencias y avances: consultá tus informes para ver la revisión vigente, su motivo y sus recibos.';
  if(facts.permissions.report===true&&page)body+='\nConsumos informados por tu cuenta (últimos '+page.records.length+'):'+(page.records.length?'\n'+page.records.map(c=>consumptionName(c).slice(0,45)+' · '+c.quantity+' '+c.unit+' · '+consumptionState(c.state)).join('\n'):' ninguno.')+(page.nextCursor?'\nHay más informes para consultar.':'');
  return withAttendanceWebGuidance(boundedReadBody(body+(facts.permissions.report===true?'\nEscribí EVIDENCIAS, AVANCES o CONSUMOS para consultar tus informes.':'\nConsultá los recibos de jornada en Mi cuenta.'),Number.isSafeInteger(facts.replyBodyLimit)?facts.replyBodyLimit:1024),facts);

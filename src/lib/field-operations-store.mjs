@@ -1,12 +1,12 @@
 import { randomUUID, randomBytes } from 'node:crypto';
 import { WorkspaceError, workspaceId, operationId, digest } from './workspace-policy.mjs';
 import { cleanMetadata } from './site-register-policy.mjs';
-import { normalizeFieldCommand, fieldTransition, evaluateFieldLocation, fieldReceiptId, canReviewField, canApproveProgress } from './field-operations-policy.mjs';
+import { normalizeFieldCommand, evaluateFieldLocation, fieldReceiptId, canReviewField, canApproveProgress } from './field-operations-policy.mjs';
 import { insertSiteReport, publicSiteReport } from './site-register-store.mjs';
 import { META_DEMO_PILOT_PROTOCOL } from './meta-cloud-protocol.mjs';
 import { compareProgressMeasurementQuantities } from './progress-measurement-quantity.js';
 import {MATERIAL_INVENTORY_ACTIONS,MATERIAL_CATALOG_LIMIT,inventoryCatalog,inventoryCatalogHash,applyInventoryFieldAction,readInventory,readOwnConsumptions,readConsumption,readStockAdjustment,lockStockAdjustmentProposer} from './material-inventory.mjs';
-import {lockPersonWorksiteJourney,assertPersonWorksiteJourney} from './person-worksite-journey.mjs';
+import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {OVERTIME_ACTIONS,canDecideOvertime} from './field-overtime-policy.mjs';
 import {createFieldOvertime} from './field-overtime-store.mjs';
 import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
@@ -14,6 +14,9 @@ import {TASK_MEASUREMENT_VERSION,publicTaskMeasurement,deriveTaskMeasurement,ass
 import {readOwnFieldReports} from './field-report-feedback.mjs';
 import {readFieldHoursReport} from './field-hours-report.mjs';
 import {createApprovedProgressCurveReader} from './approved-progress-curve-store.mjs';
+import {createAttendanceClosures,isAttendanceClosureAction} from './attendance-closure-store.mjs';
+import {readEffectivePersonAttendance,effectiveHead,assertEffectivePersonJourney,nextClosureCheckpoint,effectiveJourney,readScopedAttendanceAnnotations} from './attendance-effective-store.mjs';
+import {verifiedAttendanceTransition} from './attendance-chronology.mjs';
 import {EXECUTION_ACTIONS} from './field-execution-policy.mjs';
 import {createFieldExecution,beforeExecutionProject} from './field-execution-store.mjs';
 
@@ -63,6 +66,7 @@ const publicProposal=row=>({id:row.id,summary:row.summary,status:row.status==='P
   result:row.result?.fieldOperations||null});
 export function createFieldOperations({workspace,assertParticipant,usage=null}) {
   if(usage!==null&&typeof usage.resourceProjection!=='function')throw new TypeError('Explicit field review usage port required');
+  const attendanceClosures=createAttendanceClosures({workspace});
   const overtime=createFieldOvertime({assertWorker:worker});
   const progressCurve=createApprovedProgressCurveReader({workspace,canReview:canReviewField});
   const execution=createFieldExecution({assertWorker:worker,assertTask:(...args)=>task(...args),assertEvidence:(...args)=>evidence(...args),publicTask:publicMeasuredTask});
@@ -93,7 +97,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
     const row=(await client.query(`SELECT id,summary,status::text AS status,action,precondition,result,"proposedByWorkerId","expiresAt",("expiresAt"<=clock_timestamp()) AS expired,${revision('"updatedAt"')} AS revision FROM public."OperationalProposal" WHERE id=$1 AND "projectId"=$2 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' ${lock?'FOR UPDATE':''}`,[id,projectId])).rows[0];
     if(row?.action?.fieldOperationsVersion!==1)throw new WorkspaceError('FIELD_PROPOSAL_UNAVAILABLE',404);return row;
   };
-  const prior=async(client,member,id)=>(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='field.operation.recorded'`,[id,member.organizationId,member.actorId])).rows[0];
+  const prior=async(client,member,id)=>(await client.query(`SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='field.operation.recorded'`,[id,member.organizationId,member.actorId])).rows[0];
   async function recoveryPermission(client,member,session,projectId,receipt) {
     if(receipt.metadata?.projectId!==projectId)throw new WorkspaceError('FIELD_RECEIPT_INTEGRITY',409);
     const action=receipt.metadata.command;
@@ -151,19 +155,28 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
     const ids=owned.filter(row=>row.metadata.participant.permissions?.attendance===true).map(row=>row.id);
     // Same version predicate and per-worker order as latest(), without the
     // history window. One read remains inside the canonical project snapshot.
-    const rows=ids.length?(await client.query(`SELECT DISTINCT ON ("workerId") id,"workerId",metadata FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=ANY($2::text[]) AND metadata->'fieldOperations'->>'version'='1' ORDER BY "workerId",(metadata->'fieldOperations'->>'sequence')::int DESC,id DESC`,[projectId,ids])).rows:[];
-    return ids.map(workerId=>{
+    const rows=ids.length?(await client.query(`SELECT DISTINCT ON ("workerId") id,"projectId","workerId",metadata FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=ANY($2::text[]) AND metadata->'fieldOperations'->>'version'='1' ORDER BY "workerId",(metadata->'fieldOperations'->>'sequence')::int DESC,id DESC`,[projectId,ids])).rows:[];
+    const annotations=await readScopedAttendanceAnnotations(client,{organizationId:member.organizationId,projectId,shifts:rows.map(row=>({workerId:row.workerId,shiftId:row.metadata?.fieldOperations?.shiftId}))});
+    const oneHead=async workerId=>{
       const matches=rows.filter(row=>row.workerId===workerId),row=matches[0],event=row?.metadata?.fieldOperations;
       if(!matches.length)return {workerId,status:'EMPTY',head:null};
       const phase={CHECK_IN:'WORKING',BREAK_START:'ON_BREAK',BREAK_END:'WORKING',CHECK_OUT:'WORKING'};
       // A reassigned person's previous author is not this account's history.
       // Unknown or malformed state is never interpreted as a fresh check-in.
       if(matches.length!==1||!workspaceId(row.id)||event?.version!==1||event.recordedBy!==member.actorId||!Object.hasOwn(phase,event.eventType)||phase[event.eventType]!==event.phase||!Number.isSafeInteger(event.sequence)||event.sequence<1||typeof event.recordedAt!=='string'||!Number.isFinite(Date.parse(event.recordedAt))||new Date(event.recordedAt).toISOString()!==event.recordedAt)return {workerId,status:'UNAVAILABLE',head:null};
-      return {workerId,status:'CURRENT',head:{id:row.id,eventType:event.eventType,phase:event.phase,sequence:event.sequence,recordedAt:event.recordedAt}};
-    });
+      const plain={id:row.id,eventType:event.eventType,phase:event.phase,sequence:event.sequence,recordedAt:event.recordedAt};
+      // Ordinary head remains a navigation reference. A human close override
+      // requires its exact audited source; the writer always verifies globally.
+      if(annotations.ambiguous)return {workerId,status:'UNAVAILABLE',head:null};
+      if(!annotations.keys.has(JSON.stringify([workerId,event.shiftId])))return {workerId,status:'CURRENT',head:plain};
+      try{const ledger=await readEffectivePersonAttendance(client,{organizationId:member.organizationId,actorId:member.actorId,journeyKeys:[{projectId,workerId,shiftId:event.shiftId}]});return {workerId,status:'CURRENT',head:effectiveHead(row,ledger)};}
+      catch(error){if(error instanceof WorkspaceError&&[403,404,409].includes(error.status))return {workerId,status:'UNAVAILABLE',head:null};throw error;}
+    };
+    const heads=[];for(const workerId of ids)heads.push(await oneHead(workerId));return heads;
   }
   return {
     progressCurve,
+    attendanceClosureView(session,context){return attendanceClosures.read(session,context);},
     shift(session,context){return run(session,context,false,async(client,member,scope,project)=>({scope,...await overtime.readShift(client,member,session,project,context)}));},
     reviewPage(session,context) {
       const {reviewSection,reviewFilter,afterReview=null,reviewId=null,reviewAccessStamp:expectedAccess}=context;
@@ -237,7 +250,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
         // Reuse the existing decision predicate and canonical project admission.
         // No identity exception, field-user bypass or new authorization engine.
         if(!canDecideOvertime(member.role))throw new WorkspaceError('FIELD_HOURS_PERMISSION_REQUIRED',403);
-        return readFieldHoursReport(client,{project,scope,period:context.period});
+        return readFieldHoursReport(client,{project:{...project,organizationId:member.organizationId},scope,period:context.period});
       });
     },
     async read(session,context) {
@@ -264,6 +277,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
       });
     },
     async save(session,body) {
+      if(isAttendanceClosureAction(body?.action))return attendanceClosures.save(session,body);
       const command=normalizeFieldCommand(body),p=command.payload,requestDigest=digest(command);
       return run(session,command,true,async(client,member,scope,project)=>{
         if(member.channelProof&&OVERTIME_ACTIONS.includes(command.action))throw new WorkspaceError('OVERTIME_WEB_ONLY',403);
@@ -307,16 +321,22 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
           outcome={kind:'CONFIGURATION',qrTokens:tokens.map(s=>({sectorId:s.id,token:s.token})),recordedAt:now.toISOString()};
         }else if(command.action==='ATTENDANCE') {
           await worker(client,member,session,command.projectId,p.workerId,'attendance');
-          await assertPersonWorksiteJourney(client,member,command.projectId,p.workerId,p.eventType);
+          const ledger=await readEffectivePersonAttendance(client,{organizationId:member.organizationId,actorId:member.actorId,observedAt:now.toISOString()});
+          assertEffectivePersonJourney(ledger,{projectId:command.projectId,workerId:p.workerId,eventType:p.eventType,at:now.toISOString()});
           const selected=config(project),sector=selected.sectors.find(s=>s.id===p.sectorId);if(!sector)throw new WorkspaceError('FIELD_SECTOR_UNAVAILABLE',404);
           const previousEvent=await latest(client,command.projectId,p.workerId),last=previousEvent?.metadata.fieldOperations;
           if((previousEvent?.id||null)!==p.expectedEventId)throw new WorkspaceError('ATTENDANCE_REVISION_CHANGED',409);
-          const transition=fieldTransition(p.eventType,last),qrValid=p.qrToken!==null&&digest([command.projectId,p.sectorId,selected.configRevision,p.qrToken])===sector.qrHash;
+          const currentJourney=last?effectiveJourney(ledger,command.projectId,p.workerId,last.shiftId):null;
+          const transition=verifiedAttendanceTransition(p.eventType,last,currentJourney?.projection||null),qrValid=p.qrToken!==null&&digest([command.projectId,p.sectorId,selected.configRevision,p.qrToken])===sector.qrHash;
           if(p.qrToken!==null&&!qrValid)throw new WorkspaceError('FIELD_QR_INVALID',422);
           const needsLocation=['CHECK_IN','CHECK_OUT'].includes(p.eventType),location=needsLocation?evaluateFieldLocation(p.location,sector,now):null;
           if(!needsLocation&&p.location!==null)throw new WorkspaceError('FIELD_INPUT_INVALID');
           const verification=needsLocation?(location.verificationStatus==='VERIFIED'&&qrValid?'VERIFIED':'REVIEW_REQUIRED'):'NOT_REQUIRED';
           const eventId=newId('attendance'),details={version:1,eventType:p.eventType,phase:transition.phase,shiftId:p.eventType==='CHECK_IN'?newId('shift'):last.shiftId,sequence:(last?.sequence||0)+1,previousEventId:previousEvent?.id||null,sectorId:p.sectorId,sectorName:sector.name,configRevision:selected.configRevision,qrStatus:qrValid?'MATCHED':'NOT_PROVIDED',verificationStatus:verification,location,recordedBy:member.actorId,recordedAt:now.toISOString(),source:member.channelProof?.provider===META_DEMO_PILOT_PROTOCOL.provider?'meta-demo-pilot':member.channelProof?'meta-customer':'account',review:null};
+          if(p.eventType==='CHECK_IN'){
+            const checkpoint=nextClosureCheckpoint(ledger,{organizationId:member.organizationId,projectId:command.projectId,workerId:p.workerId,beneficiaryActorId:member.actorId,beneficiaryClerkUserId:session.userId,id:eventId,shiftId:details.shiftId,sequence:details.sequence,previousEventId:details.previousEventId,recordedAt:details.recordedAt});
+            if(checkpoint)details.previousClosureCheckpoint=checkpoint;
+          }
           await client.query(`INSERT INTO public."AttendanceEntry"(id,"projectId","workerId",status,latitude,longitude,"distanceMeters",source,"checkedInAt",metadata) VALUES($1,$2,$3,$4::"AttendanceStatus",$5,$6,$7,'account-field',clock_timestamp(),$8::jsonb)`,[eventId,command.projectId,p.workerId,verification==='REVIEW_REQUIRED'?'OUTSIDE_GEOFENCE':'PRESENT',location?.latitude??null,location?.longitude??null,location?.distanceMeters??null,JSON.stringify({fieldOperations:details})]);
           outcome={kind:'ATTENDANCE',event:{id:eventId,workerId:p.workerId,...details}};
         }else if(['REPORT_INCIDENT','REQUEST_MATERIAL'].includes(command.action)) {
@@ -413,6 +433,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
       if(!operationId(context.operationId))throw new WorkspaceError('FIELD_INPUT_INVALID');
       return run(session,context,false,async(client,member,scope)=>{
         const row=await prior(client,member,fieldReceiptId(member.actorId,context.projectId,context.operationId));
+        if(isAttendanceClosureAction(row?.metadata?.command))return attendanceClosures.recoverWithin(client,member,scope,context,row);
         if(member.channelProof&&OVERTIME_ACTIONS.includes(row?.metadata?.command))throw new WorkspaceError('OVERTIME_WEB_ONLY',403);
         if(row)await recoveryPermission(client,member,session,context.projectId,row);
         if(measurementCancelled(row))return cancelledMeasurementOutcome(row,context,scope);

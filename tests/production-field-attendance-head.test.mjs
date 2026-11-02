@@ -89,6 +89,7 @@ const prefix=`import React from ${JSON.stringify(import.meta.resolve('react'))};
 ${importer('createWorkspaceRequestLifecycle','workspace-request-lifecycle.mjs')}
 ${importer('collectRetainedPages,retainedRows,liveContextChanged','workspace-live-read.mjs')}
 ${importer('FIELD_OVERTIME_RECOVERY_ACTIONS','workspace-recovery-journal.mjs')}
+${importer('ATTENDANCE_CLOSURE_ACTIONS,attendanceClosureViewMatches,attendanceClosurePayload,attendanceClosureOutcome','attendance-closure-view.mjs')}
 ${importer('FIELD_PROGRESS_PENDING_EVENT,FIELD_EVIDENCE_PENDING_EVENT,fieldReviewPage,mergeFieldReviewRows','field-review-page-view.mjs')}
 ${importer('fieldMediaAttemptReference,fieldMediaHeldOutcome,fieldMediaHeldMessage,fieldMediaEvidenceHeld,fieldMediaReviewEligible','field-media-held-view.mjs')}
 ${importer('taskMeasurementView,measurementProposalPreview,measurementProposalPayload,prepareMeasuredVoiceProgress,measuredQuantityLabel,measurementConfirmation,measurementConfirmationMatches','task-progress-measurement-view.mjs')}
@@ -102,7 +103,7 @@ const useEffect=(callback,deps)=>{const index=effectCursor++,previous=effects[in
 const useLayoutEffect=useEffect,useWorkspaceRequest=()=>lifecycle.request;
 const handlers=new Map();const window={addEventListener(name,handler){handlers.set(name,handler);},removeEventListener(name,handler){if(handlers.get(name)===handler)handlers.delete(name);}};
 const useWorksiteLiveRefresh=()=>({status:{state:'IDLE',checkedAt:null,updates:false},check(){throw Error('No live scheduling in attendance fixture');}});
-const styles={},WorksiteLiveRefreshStatus=()=>null,WorksiteTaskSelector=()=>null,FieldMediaCapture=()=>null,FieldMediaPreview=()=>null,FieldQrCapture=()=>null,PrivateWorkspaceDownload=()=>null,FieldOvertimeJourney=()=>null,FieldOvertimeForm=()=>null,FieldHoursReportPanel=()=>null,VoiceProgressDraftView=()=>null;
+const styles={},WorksiteLiveRefreshStatus=()=>null,WorksiteTaskSelector=()=>null,FieldMediaCapture=()=>null,FieldMediaPreview=()=>null,FieldQrCapture=()=>null,PrivateWorkspaceDownload=()=>null,FieldOvertimeJourney=()=>null,FieldOvertimeForm=()=>null,FieldHoursReportPanel=()=>null,VoiceProgressDraftView=()=>null,FieldAttendanceClosureReview=()=>null,FieldAttendanceClosureForm=()=>null;
 `;
 const suffix=`
 export function unmount(){for(const effect of effects)effect?.cleanup?.();lifecycle?.abort();}
