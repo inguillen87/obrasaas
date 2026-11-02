@@ -17,12 +17,16 @@ function fixture(){
   let row={id:taskId,title:'Synthetic measured task',progress:0,status:'BACKLOG',metadata:{preserve:true},startsOn:'2026-10-01',endsOn:'2026-10-10',revision:'2026-10-12T10:00:00.000001'},receipts=new Map(),writes=0,failReceipt=false,queue=Promise.resolve();
   const member={actorId:'synthetic-actor',organizationId:'synthetic-organization',role:'ADMIN'};
   const query=async(sql,values=[])=>{
-    if(sql.startsWith('SELECT id,metadata FROM public."AuditLog"'))return {rows:receipts.has(values[0])?[structuredClone(receipts.get(values[0]))]:[]};
+    if(sql===`SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='field.operation.recorded'`){
+      assert.equal(values.length,3);assert.equal(typeof values[0],'string');assert.deepEqual(values.slice(1),[member.organizationId,member.actorId]);
+      const receipt=receipts.get(values[0]);
+      return {rows:receipt&&receipt.organizationId===values[1]&&receipt.actorId===values[2]&&receipt.action==='field.operation.recorded'?[structuredClone(receipt)]:[]};
+    }
     if(sql.startsWith('SELECT id,title,progress,status::text AS status,metadata'))return {rows:values[0]===taskId&&values[1]===projectId?[structuredClone(row)]:[]};
     if(sql.startsWith('SELECT clock_timestamp() AS now'))return {rows:[{now:new Date('2026-10-12T10:00:00.000Z')}]};
     if(sql.startsWith('SELECT id,"expiresAt" FROM public."OperationalProposal"')||sql.startsWith('SELECT id FROM public."OperationalProposal"'))return {rows:[]};
     if(sql.startsWith('UPDATE public."Task" SET metadata=')){writes++;row={...row,metadata:JSON.parse(values[2]),revision:'2026-10-12T10:00:00.000002'};return {rowCount:1};}
-    if(sql.startsWith('INSERT INTO public."AuditLog"')){if(failReceipt)throw new Error('Synthetic receipt failure');assert.equal(receipts.has(values[0]),false);receipts.set(values[0],{id:values[0],metadata:JSON.parse(values[4])});return {rowCount:1};}
+    if(sql.startsWith('INSERT INTO public."AuditLog"')){assert.equal(sql,`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'field.operation.recorded','Project',$4,$5::jsonb)`);assert.equal(values.length,5);assert.deepEqual(values.slice(1,4),[member.organizationId,member.actorId,projectId]);if(failReceipt)throw new Error('Synthetic receipt failure');assert.equal(receipts.has(values[0]),false);receipts.set(values[0],{id:values[0],organizationId:values[1],actorId:values[2],action:'field.operation.recorded',entityType:'Project',entityId:values[3],metadata:JSON.parse(values[4])});return {rowCount:1};}
     throw new Error('Unrecognized closed fixture query: '+sql);
   };
   const workspace={async projectOperation(actor,context,writable,callback){

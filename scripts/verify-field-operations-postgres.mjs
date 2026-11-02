@@ -50,6 +50,9 @@ try{
  INSERT INTO "ProjectMembership" VALUES('manager-p','p-a','manager-m','ACTIVE'),('worker-p','p-a','worker-m','ACTIVE'),('worker2-p','p-a','worker2-m','ACTIVE'),('owner-p','p-a','owner-m','ACTIVE');
  INSERT INTO "Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata) VALUES('task-a','p-a','Synthetic task','BACKLOG',0,'2026-10-01','2026-10-10','{"unrelated":true}'),('task-b','p-b','Foreign task','BACKLOG',0,null,null,'{}');
  `);
+ // Current chronology authority reads revisions from both membership scopes.
+ // Keep this FIELD-only: overtime extracts the unchanged base DDL above and owns its bootstrap.
+ await pool.query(`ALTER TABLE "TenantMembership" ADD COLUMN "updatedAt" timestamp NOT NULL DEFAULT clock_timestamp();ALTER TABLE "ProjectMembership" ADD COLUMN "updatedAt" timestamp NOT NULL DEFAULT clock_timestamp();`);
  for(const [id,user] of [['w-a','user_Worker'],['w-a2','user_Worker2'],['w-owner','user_Owner']])await pool.query(`INSERT INTO "Worker"(id,"projectId",name,phone,role,metadata,"updatedAt") VALUES($1,'p-a',$1,$2,'WORKER',$3::jsonb,clock_timestamp())`,[id,'+549110000'+(id==='w-a'?'1111':id==='w-a2'?'2222':'3333'),JSON.stringify({participant:{version:1,clerkUserId:user,status:'ACTIVE',permissions:{attendance:true,report:true},kyc:{version:1,status:'NOT_SUBMITTED'}}})]);
  const workspace=createWorkspaceStore({connect:()=>pool.connect()}),operations=createFieldOperations({workspace}),scopes={};for(const s of [owner,director,manager,worker,otherWorker,foreign])scopes[s.userId]=(await workspace.list(s)).scope;
  const kycFixture=createCanonicalParticipantKycFixture({workspace,connect:()=>pool.connect(),query:(sql,args)=>pool.query(sql,args)});
