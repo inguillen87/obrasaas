@@ -106,6 +106,8 @@ jobs:
             .vercel/private/selftest-workers-*/A.stderr.log
             .vercel/private/selftest-workers-*/B.stdout.log
             .vercel/private/selftest-workers-*/B.stderr.log
+            .vercel/private/selftest-workers-*/C.stdout.log
+            .vercel/private/selftest-workers-*/C.stderr.log
             .vercel/workspace-ci-evidence/lane-contracts.json
           include-hidden-files: true
           retention-days: 7

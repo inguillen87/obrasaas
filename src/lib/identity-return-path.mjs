@@ -67,6 +67,11 @@ function invitationPath(path, searchParams) {
     const project=identityWorkspaceProjectHint(searchParams);
     if(project)return `${path}?${new URLSearchParams({seccion:section,obra:project})}`;
   }
+  // Office chat carries only navigation, never a session or tenant grant.
+  if(['canal','mi-whatsapp'].includes(section)&&!['participar','oficina','plan'].some(name=>hasQueryParameter(searchParams,name))){
+    const project=identityWorkspaceProjectHint(searchParams);
+    return `${path}?${new URLSearchParams({seccion:section,...(project?{obra:project}:{})})}`;
+  }
   // Older messages carry only the worksite hint. The server never receives
   // their fragment: retain the validated hint without guessing a destination.
   // Explicit invalid/duplicate sections and invitation/plan parameters do not

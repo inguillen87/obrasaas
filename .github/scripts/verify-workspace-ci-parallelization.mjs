@@ -14,6 +14,7 @@ import {FIELD_TASK_PAGINATION_CI_KIND,validateFieldTaskPaginationCi,fieldTaskPag
 import {WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWorkspaceContinuityPreviousContract,verifyWorkspaceContinuityCurrentSources} from '../../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256,restoreDocumentTaskAssociationPreviousContract,verifyDocumentTaskAssociationCurrentSources} from '../../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import {createHash,randomUUID} from 'node:crypto';
+import {encodeWorkspaceProvenance,decodeWorkspaceProvenance} from './workspace-provenance-transport.mjs';
 import {INTEGRATED_IDENTITY_CURRENT_REVISION,integratedIdentityCurrentSourcePin,restoreIntegratedIdentityPreviousContract,validateIntegratedIdentityWorkspaceContract,verifyIntegratedIdentityCurrentSources,validateIntegratedCompanyCurrentNative,integratedCompanyCurrentShadowFixture,integratedIdentityCurrentSelftest,integratedIdentityPreviousProofChecks} from '../../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {CURRENT85_CI_KIND,validateFocusedWorkspaceCurrent85Ci,focusedWorkspaceCurrent85CiSourceClosure} from '../../scripts/verify-focused-workspace-current85-ci.mjs';
 import {FOCUSED_WORKSPACE_CI_KIND,validateFocusedWorkspaceCi,focusedWorkspaceCiSourceClosure} from '../../scripts/verify-focused-workspace-ci.mjs';
@@ -2189,7 +2190,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision){const raw=JSON.parse(readFileSync(path.join(root,'.vercel/workspace-identity-only-evidence/browser.json')));validateIdentityDestinationRetainedScreenshots(files,raw.destinationNavigation?.checks?.map(row=>row.screenshot));}
  const record=seal({version:2,proofBindings:extensionProofBindings,lane,head:actual,...clock,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
  if(Buffer.byteLength(JSON.stringify(record))>400*1024)deny('PROVENANCE_LIMIT');
- assertLaneOutputSize(JSON.stringify(record));
+ assertLaneOutputSize(encodeWorkspaceProvenance(JSON.stringify(record)));
  return record;
 }
 export function retainWeeklyCypImportUiScreenshots({root,bytes,readSource,expectedHead,expectedTree}){
@@ -2225,7 +2226,7 @@ export function validateIdentityDestinationRetainedScreenshots(files,expected=nu
  for(const[index,row]of declared.entries()){const matches=files.filter(file=>file.path===row.path);if(matches.length!==1||!sha(matches[0].sha256)||matches[0].bytes<24||expected&&matches[0].sha256!==expected[index].sha256)deny('PROOF_IDENTITY_DESTINATION_SCREENSHOT_BINDING');}
  return true;
 }
-export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource}){
+export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource,allowLegacyProvenance=false}){
  validateContract(contract);if(!head(expectedHead)||!sha(workflowSha256)||!positive(runId)||!positive(runAttempt))deny('EXPECTED_IDENTITY_INVALID');
  if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');
  try{verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);}catch(error){if(['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code))deny('PROOF_BINDING_SOURCE');throw error;}
@@ -2238,7 +2239,9 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   if(!positive(job.outputs.artifactId)||!sha(job.outputs.artifactDigest))deny('MISSING_ARTIFACT');
   if(artifacts.has(job.outputs.artifactId))deny('ARTIFACT_COLLISION');artifacts.add(job.outputs.artifactId);
   if(typeof job.outputs.provenance!=='string'||Buffer.byteLength(job.outputs.provenance)>400*1024)deny('PROVENANCE_LIMIT');
-  let record;try{record=JSON.parse(job.outputs.provenance);}catch{deny('INVALID_PROVENANCE_JSON');}
+  if(!allowLegacyProvenance||job.outputs.provenance.startsWith('wsp1.'))assertLaneOutputSize(job.outputs.provenance);
+  const provenanceText=decodeWorkspaceProvenance(job.outputs.provenance,{allowLegacyJson:allowLegacyProvenance});
+  let record;try{record=JSON.parse(provenanceText);}catch{deny('INVALID_PROVENANCE_JSON');}
   exactKeys(record,['version','lane','head','runId','runAttempt','workflowSha256','contractSha256','blockIds','commandDigests','artifactPatterns','requiredRetainedEvidence','requiredProducedEvidence','producedNotUploaded','verifierSha256','packageLockSha256','requirementsSha256','files','proofBindings','manifestSha256'],'INVALID_PROVENANCE_SHAPE');
   if(record.version!==2||record.lane!==lane||record.head!==expectedHead||record.runId!==runId||record.runAttempt!==runAttempt||record.workflowSha256!==workflowSha256||record.contractSha256!==EXPECTED_CONTRACT_SHA256||record.verifierSha256!==verifierSha256()||record.packageLockSha256!==contract.packageLockSha256||record.requirementsSha256!==contract.requirementsSha256)deny('PROVENANCE_IDENTITY');
   if(!sha(record.manifestSha256)||hash(JSON.stringify(unseal(record))+'\n')!==record.manifestSha256)deny('PROVENANCE_DIGEST');
@@ -2324,7 +2327,7 @@ export function current85TypedGateSelftest(contract,sourceReader){
  let binding,needs;
  good('explicit-git-port-validates-real-dispatch85-without-fallback',()=>{binding=verifier.validateExtensionProof(spec,proofBytes(),fixture.options);assert.equal(binding.kind,CURRENT85_CI_KIND);assert.equal(binding.checks,85);assert.equal(binding.proofSha256,hash(proofBytes()));});
  good('expectedNeeds-uses-typed-raw-png-tap-and-envelope-digests',()=>{needs=verifier.expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture);const record=JSON.parse(needs['workspace-ui'].outputs.provenance),actual=record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND);equal(actual,binding,'PROOF_BINDING_IDENTITY');for(const[path,bytes]of fixture.evidence){const retained=record.files.find(row=>row.path===path);assert(retained);assert.equal(retained.sha256,hash(bytes));assert.equal(retained.bytes,bytes.length);}});
- const input=()=>({needs:clone(needs),contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource});
+ const input=()=>({needs:clone(needs),contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource,allowLegacyProvenance:true});
  good('eight-lane-gate-accepts-complete-typed85-bindings',()=>{const report=verifier.gate(input());assert.equal(report.state,'PASS');assert.equal(report.lanes.length,8);assert.equal(report.lanes.find(row=>row.lane==='workspace-ui').proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).checks,85);});
  const mutateNeeds=change=>{const value=input(),job=value.needs['workspace-ui'],record=JSON.parse(job.outputs.provenance);change(record);job.outputs.provenance=JSON.stringify(seal(unseal(record)));return value;};
  bad('binding-omitted','PROOF_BINDINGS',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings=record.proofBindings.filter(row=>row.kind!==CURRENT85_CI_KIND);})));
@@ -2415,7 +2418,7 @@ export function selftest(workflow,contract,root=process.cwd()){
  checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
  checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource),...current85TypedGateSelftest(contract,shadowSource));
- const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
+ const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource,allowLegacyProvenance:true};
  bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
  good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
  good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
@@ -2643,7 +2646,7 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
  const readSource=file=>{if(!cache.has(file))cache.set(file,Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n')));return cache.get(file);};
  const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure canonical field shadow fixture; no Git/PG/UI/provider execution'});};
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure canonical field shadow fixture'});};
- const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource,allowLegacyProvenance:true};
  for(const spec of contract.extension.proofs.filter(isCanonicalField)){
   const currentAttendance=spec.kind==='PG_FIELD'&&restorePilotCompletionPreviousProofSpec(spec)!==spec;
   const sets=canonicalFieldSourceSets(spec,readSource),map=files=>Object.fromEntries(files.map(file=>[file,hash(readSource(file))]));
@@ -2805,7 +2808,7 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  }
  mutate('source-duplicate','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push(clone(p.sourceManifest[0]));});mutate('source-foreign','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push({path:'src/foreign.mjs',sha256:'f'.repeat(64)});});
  mutate('source-path-unsafe','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest[0].path='../private';});mutate('source-reference-extra-key','PROOF_SOURCE_REFERENCE',p=>{p.sourceManifest[0].ignored=true;});
- const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource,allowLegacyProvenance:true};
  good('gate-binds-103-checks',()=>assert.equal(gate(input).lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,IDENTITY_ONLY_CHECK_COUNT));
  for(const [name,code,edit] of [
   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
@@ -2890,7 +2893,7 @@ function portfolioSelftest(workflow,contract,root){
    mutate('dirty-source','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('dirty-path','PROOF_SOURCE_STATE',p=>{p.dirtyTrackedPaths=['src/lib/workspace-store.mjs'];});mutate('local-proof','PROOF_SOURCE_STATE',p=>{p.sourceState='LOCAL_REVIEW_SOURCE';});mutate('wrong-total','PROOF_CHECK_NAMES',p=>{p.totalCheckCount=0;});mutate('omitted-check','PROOF_CHECK_NAMES',p=>{p.checks.pop();});mutate('duplicated-check','PROOF_CHECK_NAMES',p=>{p.checks[0]=p.checks[1];});mutate('claims-physical-acceptance','PROOF_PROVIDER_IO',p=>{p.physicalWhatsAppTested=true;});
   }
  }
- const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource,allowLegacyProvenance:true};
  for(const spec of specs){
   for(const [name,code,edit] of [
    ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
@@ -2918,7 +2921,7 @@ function portfolioSelftest(workflow,contract,root){
 
 // Pure source/aggregate shadows: no browser, PostgreSQL or provider evidence.
 export function planBudgetCurrentGateSelftest(workflow,contract,root=process.cwd()){
- const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\r\n','\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource};
+ const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\r\n','\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource,allowLegacyProvenance:true};
  const good=(name,run)=>{run();checks.push({name:'budget-current-'+name,result:'PASS',boundary:'pure source and aggregate shadow; no browser acceptance'});},bad=(name,code,change)=>{const copy=clone(needs),record=JSON.parse(copy.plans.outputs.provenance);change(record);copy.plans.outputs.provenance=JSON.stringify(seal(unseal(record)));assert.throws(()=>gate({...input,needs:copy}),error=>error.code===code);checks.push({name:'budget-current-'+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial aggregate shadow'});};
  good('exact-corrected11-contract-inverse',()=>assert.equal(hash(JSON.stringify(restorePlanBudgetPreviousContract(contract),null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839'));
  good('all-current-sources-bound',()=>verifyPlanBudgetCurrentSources(contract,readSource));good('all23-pngs-bound-in-aggregate',()=>gate(input));
@@ -2935,6 +2938,7 @@ function writeJson(filename,value){mkdirSync(path.dirname(filename),{recursive:t
 function options(argv){const parsed={};for(let i=0;i<argv.length;i+=2){if(!argv[i]?.startsWith('--')||!argv[i+1])deny('CLI_ARGUMENT');parsed[argv[i].slice(2)]=argv[i+1];}return parsed;}
 function selftestWorkerA(workflow,contract,root,tracker){
 const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);
+void historicalContractForNegativeFixtures;
 const checks=[];
 function good(name,run){run();checks.push({name,result:'PASS'});}
 function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
@@ -2963,8 +2967,28 @@ const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath
 checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource),...current85TypedGateSelftest(contract,shadowSource));
 tracker.mark("F0",11,"end");
 tracker.segments.push({phase:"F0",rows:checks.slice(phaseStart)});
+tracker.mark("F3",153);phaseStart=checks.length;
+checks.push(...companySubscriptionContractSelftest(contract));
+checks.push(...taskMeasurementContractSelftest(contract));
+checks.push(...organizationUsageContractSelftest(contract));
+checks.push(...companyKycCurrentSourceContractSelftest(contract));
+checks.push(...planBaselineSelftest(workflow,contract,root));
+checks.push(...documentCurveUiSelftest(workflow,contract,root));
+checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));
+tracker.mark("F3",159,"end");
+tracker.segments.push({phase:"F3",rows:checks.slice(phaseStart)});
+return checks;
+}
+
+function selftestWorkerC(workflow,contract,root,tracker){
+const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);
+const checks=[];
+function good(name,run){run();checks.push({name,result:'PASS'});}
+function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
+let phaseStart;
+const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
 tracker.mark("F1",12);phaseStart=checks.length;
-const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
+const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource,allowLegacyProvenance:true};
 bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
 good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
 good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
@@ -3193,16 +3217,6 @@ try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREAN
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
 tracker.mark("F1",135,"end");
 tracker.segments.push({phase:"F1",rows:checks.slice(phaseStart)});
-tracker.mark("F3",153);phaseStart=checks.length;
-checks.push(...companySubscriptionContractSelftest(contract));
-checks.push(...taskMeasurementContractSelftest(contract));
-checks.push(...organizationUsageContractSelftest(contract));
-checks.push(...companyKycCurrentSourceContractSelftest(contract));
-checks.push(...planBaselineSelftest(workflow,contract,root));
-checks.push(...documentCurveUiSelftest(workflow,contract,root));
-checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));
-tracker.mark("F3",159,"end");
-tracker.segments.push({phase:"F3",rows:checks.slice(phaseStart)});
 return checks;
 }
 
@@ -3274,7 +3288,7 @@ return checks;
 
 const SELFTEST_WORKER_PROTOCOL=Object.freeze({
  version:1,phases:Object.freeze(['F0','F1','F2','F3']),
- workers:Object.freeze({A:Object.freeze(['F0','F1','F3']),B:Object.freeze(['F2'])}),
+ workers:Object.freeze({A:Object.freeze(['F0','F3']),B:Object.freeze(['F2']),C:Object.freeze(['F1'])}),
  statements:Object.freeze({F0:Object.freeze([4,11]),F1:Object.freeze([12,135]),F2:Object.freeze([136,152]),F3:Object.freeze([153,159])}),
  chunkRows:64,packetBytes:1024*1024,maxRows:1000000,stdioBytes:8*1024*1024,
  startMs:30000,finishMs:30000,defaultBudgetMs:70*60*1000,maxBudgetMs:74*60*1000,
@@ -3363,9 +3377,9 @@ function validateSelftestWorkerPacket(packet,binding){
 function mergeSelftestWorkerChecks(records){
  const fail=code=>{throw Object.assign(new Error(code),{code});};
  const sha=value=>createHash('sha256').update(value).digest('hex');
- if(!Array.isArray(records)||records.length!==2)fail('SELFTEST_WORKERS_INCOMPLETE');
+ if(!Array.isArray(records)||records.length!==3)fail('SELFTEST_WORKERS_INCOMPLETE');
  const phases=new Map();
- for(const worker of ['A','B']){
+ for(const worker of ['A','B','C']){
   const matches=records.filter(record=>record.worker===worker);if(matches.length!==1)fail('SELFTEST_WORKERS_DUPLICATE');const record=matches[0];
   if(!record.ready||!record.closed||!record.disconnected||record.code!==0||record.signal!==null||record.executionError||record.terminal?.kind!=='done')fail('SELFTEST_WORKER_NOT_SUCCESS');
   const expected=SELFTEST_WORKER_PROTOCOL.workers[worker];if(record.phases.size!==expected.length)fail('SELFTEST_PHASE_MISSING');
@@ -3476,7 +3490,7 @@ function runParallelSelftest(root,options){
   };
   try{
    deadline=setTimeout(()=>{for(const record of records){record.executionError??=fail('SELFTEST_TIMEOUT');for(const cancelSend of record.cancelSends)cancelSend(record.executionError);}stopAll();},budget);
-   try{start('A');start('B');}catch(error){startupFailure=fail('SELFTEST_FORK_FAILED',{cause:error});stopAll();}
+   try{start('A');start('B');start('C');}catch(error){startupFailure=fail('SELFTEST_FORK_FAILED',{cause:error});stopAll();}
    await Promise.allSettled(pending);await Promise.allSettled(records.flatMap(record=>record.sendWaits));
   }finally{
    stopAll();await Promise.allSettled(pending);await Promise.allSettled(records.flatMap(record=>record.sendWaits));clearTimeout(deadline);process.off('SIGINT',onSigint);process.off('SIGTERM',onSigterm);
@@ -3499,9 +3513,14 @@ function runParallelSelftest(root,options){
 }
 
 // Diagnostic-only metadata. It never supplies IPC rows, receipts or acceptance.
-// One owned A worker can emit at most nine short records to its existing stderr.
-export function createSelftestPhaseDiagnostic(){
- const sequence=[['preflight-before',null],['preflight-after',null],['oracle-enter',null],['phase-start','F0'],['phase-end','F0'],['phase-start','F1'],['phase-end','F1'],['phase-start','F3'],['phase-end','F3']];
+// Each owned A/C worker emits only its declared bounded phase diagnostics.
+// The default preserves the historical exported A diagnostic sequence.
+export function createSelftestPhaseDiagnostic(worker='legacy-A'){
+ const sequence=worker==='A'?[
+  ['preflight-before',null],['preflight-after',null],['oracle-enter',null],['phase-start','F0'],['phase-end','F0'],['phase-start','F3'],['phase-end','F3']
+ ]:worker==='C'?[
+  ['preflight-before',null],['preflight-after',null],['oracle-enter',null],['phase-start','F1'],['phase-end','F1']
+ ]:[['preflight-before',null],['preflight-after',null],['oracle-enter',null],['phase-start','F0'],['phase-end','F0'],['phase-start','F1'],['phase-end','F1'],['phase-start','F3'],['phase-end','F3']];
  let started=null,last=null,next=0;
  try{started=process.hrtime.bigint();}catch{/* Diagnostics cannot alter the oracle. */}
  return(event,phase=null)=>{
@@ -3521,7 +3540,7 @@ export function createSelftestPhaseDiagnostic(){
 async function selftestWorkerMain(opts){
  const fail=code=>{throw Object.assign(new Error(code),{code});};
  const expected=['root','expected-head','workflow','contract','worker','session','parent-pid'];
- if(Object.keys(opts).length!==expected.length||expected.some(key=>!Object.hasOwn(opts,key))||!['A','B'].includes(opts.worker)||!process.send||!process.connected||process.execArgv.length||process.env.NODE_OPTIONS||process.env.NODE_PATH||Number(opts['parent-pid'])!==process.ppid)throw fail('SELFTEST_WORKER_ENTRY');
+ if(Object.keys(opts).length!==expected.length||expected.some(key=>!Object.hasOwn(opts,key))||!['A','B','C'].includes(opts.worker)||!process.send||!process.connected||process.execArgv.length||process.env.NODE_OPTIONS||process.env.NODE_PATH||Number(opts['parent-pid'])!==process.ppid)throw fail('SELFTEST_WORKER_ENTRY');
  const before=snapshotSelftestPhysicalSource(opts.root,opts['expected-head'],{session:opts.session,parentPid:process.ppid,workflowFile:opts.workflow,contractFile:opts.contract});
  const binding={worker:opts.worker,pid:process.pid,context:before.context,contextSha256:before.contextSha256},base={version:1,worker:opts.worker,session:opts.session,contextSha256:before.contextSha256,pid:process.pid,parentPid:process.ppid};
  const send=packet=>new Promise((resolve,reject)=>{try{validateSelftestWorkerPacket(packet,binding);process.send(packet,error=>error?reject(error):resolve());}catch(error){reject(error);}});
@@ -3547,7 +3566,7 @@ async function selftestWorkerMain(opts){
  };
  let waitingControl=null;
  let terminal,scope='preflight';const tracker={segments:[],phase:null,statement:null,started:process.hrtime.bigint(),progress:[]};
- const diagnostic=opts.worker==='A'?createSelftestPhaseDiagnostic():null;
+ const diagnostic=['A','C'].includes(opts.worker)?createSelftestPhaseDiagnostic(opts.worker):null;
  try{
   waitingControl=control('start');await send({...base,kind:'ready'});await waitingControl.promise;waitingControl=null;
   diagnostic?.('preflight-before');
@@ -3555,7 +3574,7 @@ async function selftestWorkerMain(opts){
   diagnostic?.('preflight-after');
   tracker.mark=(phase,statement,stage='start')=>{tracker.phase=phase;tracker.statement=statement;tracker.progress.push({...base,kind:'progress',phase,statement,stage,elapsedNs:String(process.hrtime.bigint()-tracker.started)});diagnostic?.(stage==='start'?'phase-start':'phase-end',phase);};
   diagnostic?.('oracle-enter');
-  scope='oracle';const checks=(opts.worker==='A'?selftestWorkerA:selftestWorkerB)(workflow,contract,before.root,tracker),owned=tracker.segments.flatMap(segment=>segment.rows);
+  scope='oracle';const checks=(opts.worker==='A'?selftestWorkerA:opts.worker==='B'?selftestWorkerB:selftestWorkerC)(workflow,contract,before.root,tracker),owned=tracker.segments.flatMap(segment=>segment.rows);
   if(controlError)throw controlError;
   if(JSON.stringify(checks)!==JSON.stringify(owned))throw fail('SELFTEST_LOCAL_SEGMENT_COVERAGE');
   terminal={...base,kind:'done',phases:[...SELFTEST_WORKER_PROTOCOL.workers[opts.worker]],count:checks.length,rowsSha256:createHash('sha256').update(JSON.stringify(checks)).digest('hex'),sourceFinalSha256:null};
@@ -3594,7 +3613,7 @@ async function main(){
  }
  if(mode==='provenance'){
   const record=provenance({root,lane:opts.lane,contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes)}),manifest=path.join(root,'.vercel/workspace-ci-evidence/lane-'+opts.lane+'.json');mkdirSync(path.dirname(manifest),{recursive:true});writeFileSync(manifest,JSON.stringify(unseal(record))+'\n');
-  if(!process.env.GITHUB_OUTPUT)deny('OUTPUT_FILE_REQUIRED');writeFileSync(process.env.GITHUB_OUTPUT,'record='+JSON.stringify(record)+'\n',{flag:'a'});return;
+  if(!process.env.GITHUB_OUTPUT)deny('OUTPUT_FILE_REQUIRED');writeFileSync(process.env.GITHUB_OUTPUT,'record='+encodeWorkspaceProvenance(JSON.stringify(record))+'\n',{flag:'a'});return;
  }
  if(mode==='gate'){
   identity(root,opts['expected-head']);const filename=path.join(root,'.vercel/workspace-ci-evidence/gate.json');

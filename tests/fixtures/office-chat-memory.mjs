@@ -1,0 +1,74 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {OFFICE_CHAT_SQL,createOfficeChatStore,createOfficeChatBridge} from '../../src/lib/office-chat-store.mjs';
+import {OFFICE_CHAT_ACTION} from '../../src/lib/office-chat-policy.mjs';
+import {digest,scopeStamp,WorkspaceError} from '../../src/lib/workspace-policy.mjs';
+import {COMPANY_CHANNEL_SCHEMA_CONTRACT} from '../../src/lib/company-channel-schema.mjs';
+import {META_CUSTOMER_PROTOCOL} from '../../src/lib/meta-cloud-protocol.mjs';
+import {OBRASAAS_META_CHANNEL} from '../../src/lib/meta-channel-binding.mjs';
+import {encryptCustomerSecret} from '../../src/lib/meta-customer-credentials.mjs';
+import {metaCustomerContentDigest} from '../../src/lib/meta-customer-callback.mjs';
+
+// Bounded SQL model, not a PostgreSQL/concurrency/provider acceptance claim.
+export function officeChatFixture({role='ADMIN'}={}){
+ const audits=new Map(),events=new Map(),queries=[],controls={active:true,channel:true,mode:'COMPANY',ownerRevision:1,assignmentRevision:1,posts:0,loseAck:false,participantBound:false,projectAccess:true,projects:['project_a'],clock:Date.now(),beforePost:null};
+ const member={actorId:'office_actor',membershipId:'office_member',organizationId:'company_a',clerkUserId:'user_Office',clerkOrganizationId:'org_CompanyA',clerkRole:role==='ADMIN'?'org:admin':'org:member',role,memberRevision:'2026-11-02T01:00:00.000001',actorRevision:'2026-11-02T01:00:00.000001'};
+ const session={authenticated:true,verification:'clerk-production-jwt',userId:member.clerkUserId,organizationId:member.clerkOrganizationId,organizationRole:member.clerkRole};
+ const environment={META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,7).toString('base64')};
+ const connection={id:'channel_a',projectId:'project_a',organizationId:member.organizationId,phoneNumberId:'123456789012345',whatsappBusinessId:'234567890123456',enabled:true,connectionStatus:'CONNECTED',displayPhoneNumber:'+5491111111111',metadata:{credentialFormat:'tenant-aad-v2',credentialOrganizationId:member.organizationId,customerSubscribed:true,customerActivation:{version:1,state:'ACTIVE',actorId:member.actorId},customerVerification:{registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging']}}};
+ connection.encryptedAccessToken=encryptCustomerSecret('synthetic-office-test-token',{organizationId:member.organizationId,projectId:connection.projectId,purpose:META_CUSTOMER_PROTOCOL.credentialPurpose,resourceId:connection.phoneNumberId},environment);
+ let sequence=0,queue=Promise.resolve();
+ const result=rows=>({rows:structuredClone(rows),rowCount:rows.length});
+ const owner=()=>({connectionId:connection.id,anchorProjectId:connection.projectId,mode:controls.mode,revision:controls.ownerRevision,assignmentRevision:controls.assignmentRevision});
+ async function query(sql,args=[]){
+  queries.push({sql,args:structuredClone(args)});
+  if(sql.startsWith('SET LOCAL'))return result([]);
+  if(sql==='SELECT clock_timestamp() AS now')return result([{now:new Date(controls.clock)}]);
+  if(sql===OFFICE_CHAT_SQL.webMember)return result(controls.active&&args[0]===member.clerkUserId&&args[1]===member.clerkOrganizationId&&args[2]===member.clerkRole?[member]:[]);
+  if(sql===OFFICE_CHAT_SQL.principalLocks){assert.deepEqual(args[0],[...args[0]].sort());assert.equal(args[1],member.organizationId);return result([{id:member.actorId,membershipId:member.membershipId}]);}
+  if(sql===OFFICE_CHAT_SQL.member){await controls.onAuthorityRead?.();const officeReviewOnly=[...audits.values()].some(row=>row.organizationId===member.organizationId&&row.actorId===member.actorId&&row.action==='office.review.accepted'&&row.metadata?.membershipId===member.membershipId);return result(controls.active&&args[0]===member.actorId&&args[1]===member.membershipId&&args[2]===member.organizationId?[{...member,officeReviewOnly}]:[]);}
+  if(sql===OFFICE_CHAT_SQL.trail)return result([...audits.values()].filter(r=>r.organizationId===args[0]&&r.entityType==='TenantMembership'&&r.entityId===args[1]&&['participant.operation.recorded','office.review.accepted'].includes(r.action)).sort((a,b)=>a.id.localeCompare(b.id)));
+  if(sql===OFFICE_CHAT_SQL.project)return result(args[1]===member.organizationId?args[0].filter(id=>controls.projects.includes(id)&&controls.projectAccess).map(id=>({id,organizationId:member.organizationId,status:'ACTIVE'})):[]);
+  if(sql===OFFICE_CHAT_SQL.projectAccess)return result(controls.projectAccess&&controls.projects.includes(args[0])&&args[1]===member.membershipId?[{id:'pm_'+args[0],revision:'2026-11-02T01:00:00.000001'}]:[]);
+  if(sql===OFFICE_CHAT_SQL.row||sql===OFFICE_CHAT_SQL.row+' FOR UPDATE'){const row=audits.get(args[0]);return result(row&&row.organizationId===args[1]&&row.action===args[2]?[row]:[]);}
+  if(sql===OFFICE_CHAT_SQL.discover)return result([...audits.values()].filter(r=>r.organizationId===args[0]&&r.action===OFFICE_CHAT_ACTION&&r.metadata.connectionId===args[1]&&r.metadata.sender===args[2]&&(args[3]===null||r.metadata.pending?.hash===args[3]||r.metadata.binding?.sourceEventId===args[4])).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,3));
+  if(sql===OFFICE_CHAT_SQL.insert){assert(!audits.has(args[0]));audits.set(args[0],{id:args[0],organizationId:args[1],actorId:args[2],action:args[3],entityType:'Project',entityId:args[4],metadata:JSON.parse(args[5])});await controls.afterAuditWrite?.(args[3]);return result([{}]);}
+  if(sql===OFFICE_CHAT_SQL.update){const row=audits.get(args[0]);if(!row||row.organizationId!==args[1]||row.actorId!==args[2]||row.action!==OFFICE_CHAT_ACTION)return result([]);row.metadata=JSON.parse(args[3]);row.entityId=args[4];return result([{}]);}
+  if(sql===OFFICE_CHAT_SQL.event||sql===OFFICE_CHAT_SQL.event+' FOR UPDATE'){const row=events.get(args[0]);return result(row&&row.projectId===args[1]&&row.provider==='meta-customer-v1'?[row]:[]);}
+  if(sql===OFFICE_CHAT_SQL.channel)return result(controls.channel&&args[0]===connection.id&&args[1]===connection.projectId?[connection]:[]);
+  if(sql==='SELECT "whatsappBusinessId","phoneNumberId" FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2')return result(controls.channel&&args[0]===connection.id&&args[1]===connection.projectId?[connection]:[]);
+  if(sql.startsWith('SELECT c.id,c."projectId",p."organizationId",cc.mode,cc.revision FROM public."WhatsAppConnection"')){assert.deepEqual(args,[connection.whatsappBusinessId,connection.phoneNumberId,connection.projectId]);return result([{id:connection.id,projectId:connection.projectId,organizationId:member.organizationId,mode:controls.mode,revision:controls.ownerRevision}]);}
+  if(sql==='SELECT id FROM public."Organization" WHERE id=$1 AND COALESCE(metadata->\'internal\',\'false\'::jsonb)<>\'true\'::jsonb FOR SHARE')return result(args[0]===member.organizationId?[{id:member.organizationId}]:[]);
+  if(sql==='SELECT id,"organizationId" FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND (status=\'ACTIVE\' OR $3::boolean) FOR SHARE')return result(args[0]===connection.projectId&&args[1]===member.organizationId?[{id:connection.projectId,organizationId:member.organizationId}]:[]);
+  if(sql.startsWith('SELECT id,"projectId",metadata,"whatsappBusinessId","phoneNumberId",enabled')){assert.deepEqual(args,[connection.id,connection.projectId,connection.whatsappBusinessId,connection.phoneNumberId]);return result([connection]);}
+  if(sql==='SELECT mode,revision FROM public."WhatsAppCompanyChannel" WHERE "connectionId"=$1 AND "organizationId"=$2 AND "anchorProjectId"=$3 FOR SHARE'){assert.deepEqual(args,[connection.id,member.organizationId,connection.projectId]);return result([{mode:controls.mode,revision:controls.ownerRevision}]);}
+  if(sql==='SELECT id,"projectId",provider,payload,status::text AS status,"leaseToken","leaseExpiresAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider=$3 FOR UPDATE'){const row=events.get(args[0]);return result(row&&row.projectId===args[1]&&row.provider===args[2]?[row]:[]);}
+  if(sql.startsWith('SELECT id,"projectId",payload,status::text AS status,"leaseToken","leaseExpiresAt",outcome,attempts')){const row=events.get(args[0]);return result(row&&row.provider===args[1]?[row]:[]);}
+  if(sql.startsWith('UPDATE public."WebhookEvent" SET "leaseToken"=$2')){const row=events.get(args[0]);assert(row);row.leaseToken=args[1];row.leaseExpiresAt=args[2];row.attempts=(row.attempts||0)+1;return result([{}]);}
+  if(sql.includes("to_regclass('public.\"WhatsAppCompanySchema\"')"))return result([{present:true,count:1}]);
+  if(sql.startsWith('SELECT version,contract,"catalogFingerprint",'))return result([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]}),currentCatalog:{columns:[],keys:[],indexes:[],triggers:[]},catalog:args[1].map(conname=>({conname,convalidated:true})),indexes:args[2].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[3].map(tgname=>({tgname,tgenabled:'O'}))}]);
+  if(sql.startsWith('SELECT cc."connectionId"'))return result(controls.channel&&args[0]===member.organizationId&&controls.projects.includes(args[1])?[owner()]:[]);
+  if(sql.startsWith('SELECT cc.revision,a.revision'))return result(controls.channel&&args[0]===connection.id&&args[1]===member.organizationId&&args[2]===controls.ownerRevision&&controls.projects.includes(args[3])&&args[4]===controls.assignmentRevision&&args[5]===controls.mode?[{revision:controls.ownerRevision,assignmentRevision:controls.assignmentRevision}]:[]);
+  if(sql.startsWith('SELECT id,"projectId","whatsappBusinessId"'))return result(controls.channel&&args[0]===connection.id&&args[1]===connection.projectId?[connection]:[]);
+  if(sql.startsWith('SELECT w.id FROM public."Worker"'))return result(controls.participantBound?[{id:'linked_worker'}]:[]);
+  if(sql.includes("metadata->>'kind'='INVITATION_ACCEPTED'"))return result([]);
+  if(sql.startsWith('SELECT')&&sql.includes('FROM public."WebhookEvent"')&&sql.includes("provider='meta-customer-outbound-v1'")){const row=events.get(args[0]);return result(row&&row.projectId===args[1]&&row.provider==='meta-customer-outbound-v1'&&(!sql.includes("payload->>'channelId'=$3")||row.payload.channelId===args[2])?[row]:[]);}
+  if(sql.startsWith('INSERT INTO public."WebhookEvent"')){assert(!events.has(args[0]));events.set(args[0],{id:args[0],projectId:args[1],provider:'meta-customer-outbound-v1',eventType:args[2],status:'PENDING',payload:JSON.parse(args[3]),outcome:JSON.parse(args[4]),leaseToken:args[5],leaseExpiresAt:args[6]});return result([{}]);}
+  if(sql.startsWith('UPDATE public."WebhookEvent" SET status=\'PROCESSED\',outcome=$3')){const row=events.get(args[0]);if(!row||row.projectId!==args[1])return result([]);row.outcome=JSON.parse(args[2]);row.status='PROCESSED';row.leaseToken=null;return result([{}]);}
+  if(sql.startsWith('UPDATE public."WebhookEvent" SET status=\'PROCESSED\'')){const row=events.get(args[0]);if(!row||row.projectId!==args[1]||row.leaseToken!==args[2])return result([]);row.outcome=JSON.parse(args[3]);row.status='PROCESSED';row.leaseToken=null;return result([{}]);}
+  throw new Error('Unexpected SQL in office model: '+sql);
+ }
+ async function connect(){let releaseQueue,snapshot;return {async query(sql,args){if(sql==='BEGIN'){const previous=queue;queue=new Promise(resolve=>{releaseQueue=resolve;});await previous;snapshot={audits:structuredClone(audits),events:structuredClone(events)};return result([]);}if(sql==='COMMIT'){releaseQueue();releaseQueue=null;return result([]);}if(sql==='ROLLBACK'){audits.clear();events.clear();for(const [k,v]of snapshot.audits)audits.set(k,v);for(const [k,v]of snapshot.events)events.set(k,v);releaseQueue?.();releaseQueue=null;return result([]);}return query(sql,args);},release(){releaseQueue?.();}};}
+ const provider={async sendReply(input){await controls.beforePost?.();await input.finalBeforeExternal?.();controls.posts++;if(controls.loseAck)throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);return {messageId:'wamid.syntheticofficeoutbound'+controls.posts};}};
+ const store=createOfficeChatStore({connect,environment}),bridge=createOfficeChatBridge({connect,provider,environment});
+ const context=()=>({projectId:connection.projectId,scope:scopeStamp(session,member)});
+ const command=(action='PREPARE',extra={})=>({...context(),action,operationId:randomUUID(),...(action==='PREPARE'?{sender:'+5492222222222'}:{}),...extra});
+ function receive(body,{sender='5492222222222',mutate=null,payloadType='message'}={}){
+  const id='customer_webhook_'+digest(['office-test',++sequence]),value=payloadType==='message_status'?{timestamp:String(Math.floor(controls.clock/1000)),recipient_id:sender,...body}:{id:'wamid.syntheticofficeincoming'+sequence,from:sender,timestamp:String(Math.floor(controls.clock/1000)),...(typeof body==='string'?{type:'text',text:{body}}:body)},payload={type:payloadType,field:'messages',wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,value},payloadDigest=metaCustomerContentDigest(payload);
+  const proof={scheme:META_CUSTOMER_PROTOCOL.scheme,appId:OBRASAAS_META_CHANNEL.appId,channelId:connection.id,organizationId:connection.organizationId,payloadDigest};
+  const scope={organizationId:connection.organizationId,projectId:connection.projectId,resourceId:id};
+  const event={id,projectId:connection.projectId,provider:'meta-customer-v1',status:'PENDING',leaseToken:randomUUID(),leaseExpiresAt:new Date(controls.clock+60000),payload:{signatureVerified:true,signatureScheme:META_CUSTOMER_PROTOCOL.scheme,organizationId:connection.organizationId,channelId:connection.id,payloadDigest,encryptedProof:encryptCustomerSecret(JSON.stringify(proof),{...scope,purpose:META_CUSTOMER_PROTOCOL.proofPurpose},environment),encryptedPayload:encryptCustomerSecret(JSON.stringify(payload),{...scope,purpose:META_CUSTOMER_PROTOCOL.payloadPurpose},environment)}};
+  mutate?.(event);events.set(id,event);return {eventId:id,projectId:event.projectId,channelId:connection.id,payloadDigest:event.payload.payloadDigest,leaseToken:event.leaseToken};
+ }
+ return {store,bridge,connect,provider,environment,controls,member,session,connection,audits,events,queries,context,command,receive,slot:()=>[...audits.values()].find(r=>r.action===OFFICE_CHAT_ACTION)?.metadata};
+}

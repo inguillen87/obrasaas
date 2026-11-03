@@ -10,6 +10,12 @@ export default function IdentityLayout({ children }) {
   if (!setup.configured) return <AccessNotice />;
   return <ClerkProvider publishableKey={setup.publishableKey}
     localization={{ ...esES,
+      formFieldLabel__organizationName:'Nombre de la empresa',
+      formFieldInputPlaceholder__organizationName:'Ej.: Constructora del Sur',
+      formFieldLabel__organizationSlug:'Identificador del espacio',
+      formFieldInputPlaceholder__organizationSlug:'Se completa con el nombre',
+      createOrganization:{...esES.createOrganization,title:'Crear espacio de empresa',formButtonSubmit:'Crear espacio'},
+      organizationSwitcher:{...esES.organizationSwitcher,action__createOrganization:'Crear espacio de empresa',notSelected:'Elegí el espacio de tu empresa'},
       formFieldInputPlaceholder__emailAddress:'Tu correo electrónico',
       formFieldInputPlaceholder__password:'Ingresá tu contraseña',
       formFieldInputPlaceholder__signUpPassword:'Creá una contraseña',

@@ -123,7 +123,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  // transport prerequisite while requiring v4 separately for a new code.
  // The internal DEMO composition injects a different, complete seven-gate
  // contract. It cannot inherit CUSTOMER gates or authorize a partial shape.
- let inspectedAssets=null,inspectionSequence=0;const registrationProofs=new WeakMap();
+ let inspectedAssets=null,inspectionSequence=0;const registrationProofs=new WeakMap(),transferInventoryProofs=new WeakMap();
  const policy=()=>developmentPilotCapabilityPolicy(pilotCapability,environment,now());
  const scopedReady=()=>{
    const ready=readiness(environment);
@@ -403,7 +403,19 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    const scoped=await this.forWorkspace({member:{actorId:current.actorId,organizationId:current.organizationId,role:'ADMIN'},session:{userId:current.clerkUserId,organizationId:current.clerkOrganizationId,organizationRole:'org:admin'},project:{id:current.projectId,organizationId:current.organizationId}});
    await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED',inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL});return scoped;
   },
-  async exchange(code){
+  async verifyTransferGrant({token,wabaId,phoneNumberId}){
+    config(true);if(readiness!==metaCustomerReadiness||ownCapability||pilotCapability)throw new WorkspaceError('COMPANY_TRANSFER_PROVIDER_GRANT_REJECTED',403);
+    const verification=await this.inspect({token,wabaId,phoneNumberId,numberMode:'DEDICATED',inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL});
+    const inventory=transferInventoryProofs.get(verification);
+    if(!inventory||inventory.complete!==true||inventory.phoneIds.length!==1||inventory.phoneIds[0]!==phoneNumberId||verification.registered!==true||verification.isOnBizApp!==false||verification.platformType!=='CLOUD_API')throw new WorkspaceError('COMPANY_TRANSFER_WABA_SCOPE_REJECTED',409);
+    const subscribed=await this.inspectSubscription({token,wabaId});if(!subscribed)throw new WorkspaceError('COMPANY_TRANSFER_SUBSCRIPTION_REQUIRED',409);
+    return {token,wabaId,phoneNumberId,inventory:[...inventory.phoneIds],checkedAt:new Date(now()).toISOString(),verification:{...verification,displayPhoneNumber:normalizeCompanyPhone(verification.displayPhoneNumber,true)},subscribed};
+   },
+   async exchangeTransferGrant({code,wabaId,phoneNumberId}){
+    config(true);if(readiness!==metaCustomerReadiness||ownCapability||pilotCapability)throw new WorkspaceError('COMPANY_TRANSFER_PROVIDER_GRANT_REJECTED',403);
+    const token=await this.exchange(code);return {...await this.verifyTransferGrant({token,wabaId,phoneNumberId}),origin:'fresh-customer-oauth'};
+   },
+   async exchange(code){
    const ready=config(true),query=new URLSearchParams({client_id:ready.appId,client_secret:environment.META_APP_SECRET,code});
    const result=await request('oauth/access_token?'+query);
    if(typeof result.access_token!=='string'||result.access_token.length<20||result.access_token.length>4096)throw new WorkspaceError('META_CUSTOMER_EXCHANGE_UNCONFIRMED',503);return result.access_token;
@@ -456,6 +468,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     displayPhoneNumber:typeof phone.display_phone_number==='string'?phone.display_phone_number.slice(0,64):null,
     verifiedBusinessName:typeof phone.verified_name==='string'?phone.verified_name.slice(0,160):null};
    if(readiness===metaCustomerReadiness)assertMetaCustomerPhoneMode(verified,numberMode);
+   if(readiness===metaCustomerReadiness&&!ownCapability&&!pilotCapability)transferInventoryProofs.set(verified,Object.freeze({complete:!phones.paging?.next,phoneIds:Object.freeze(phones.data.map(item=>String(item.id)))}));
     if(ownPolicy){if(sequence!==inspectionSequence){rejectOwnPhone('INSPECTION_SUPERSEDED',sequence);}if(normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164){rejectOwnPhone('DISPLAY_PHONE_MATCH',sequence);}inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType,phoneCodeVerified:phone.code_verification_status==='VERIFIED',tokenDigest:customerTokenDigest(token),systemUserId:String(data.user_id),tokenExpiresAt:ownTokenExpiry(data),dataAccessExpiresAt:ownDataAccessExpiry(data),checkedAt:new Date(now()).toISOString()});ownInspections.set(verified,inspectedAssets);}
    if(!pilotCapability&&ownCompanyCapabilityKind(ownCapability)!=='RUNTIME'&&readiness===metaCustomerReadiness)registrationProofs.set(verified,{tokenDigest:customerTokenDigest(token),wabaId,phoneNumberId:verified.phoneNumberId,numberMode,inspectionPhase,expiresAt:now()+60000});
    if(pilotCapability){if(sequence!==inspectionSequence)throw new WorkspaceError('META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',403);inspectedAssets=Object.freeze({capability:pilotCapability,policyDigest:policy().policyDigest,wabaId,phoneNumberId:verified.phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType});pilotInspections.set(verified,inspectedAssets);}return verified;
