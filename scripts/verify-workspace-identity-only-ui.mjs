@@ -96,6 +96,8 @@ const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function waitText(page,label){await page.waitForFunction(text=>document.body.innerText.includes(text),{timeout:15000},label);}
 async function visibleElementClick(page,handle){
+ assert.ok(handle,'A click requires a current element handle');
+ assert.ok(await page.evaluate(node=>Boolean(node?.isConnected),handle),'Click target must still be connected before opening disclosures');
  // Open only necessary disclosures by clicking their visible native summary.
  // Never set details.open or bypass the rendered user navigation.
  for(let depth=0;depth<12;depth++){
@@ -109,9 +111,9 @@ async function visibleElementClick(page,handle){
 async function click(page,label){
  const hiddenScreen=await page.evaluate(text=>{const matches=[...document.querySelectorAll('button')].filter(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text));if(matches.some(button=>!button.closest('[hidden]')))return null;return matches[0]?.closest('[data-workspace-screen]')?.dataset.workspaceScreen||null;},label);
  if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);await chooseWorkspaceView(page,id);}
- await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),{timeout:15000},label);
- const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),label);
- await visibleElementClick(page,handle.asElement());await handle.dispose();
+ const handle=await page.waitForFunction(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text))||false,{timeout:15000},label);
+ const element=handle.asElement();assert.ok(element,'Missing current button '+label);
+ try{await visibleElementClick(page,element);}finally{await handle.dispose();}
 }
 async function chooseWorkspaceView(page,id){
  const own='nav[aria-label="Mi participación en la obra"]';if(await page.$(own)){const anchor=await page.$(own+' a[href="#'+id+'"]');assert.ok(anchor,'Private destination must be listed');await visibleElementClick(page,anchor);await anchor.dispose();await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);return;}
@@ -429,7 +431,15 @@ async function approvalTokenNavigationRace(width,outcome){
   await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');releaseCurrent();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);
   assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A');assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual selection must cancel the previous focus request');
-  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');
+  const workspaceRead=projectId=>page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/workspace'&&response.request().method()==='GET'&&(projectId===null?url.search==='':url.searchParams.get('projectId')===projectId&&url.searchParams.get('scope')===scopeA);},{timeout:15000});
+  const workspaceBefore=current.requests.filter(row=>row.path==='/api/identity/workspace').length;
+  const refreshedReads=Promise.all([workspaceRead(null),workspaceRead('p-a')]);
+  await click(page,'Actualizar');assert.deepEqual((await refreshedReads).map(response=>response.status()),[200,200]);
+  await settled(page);await waitRecordedTask(page,'Tarea operativa p-a');
+  assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/workspace').slice(workspaceBefore).map(row=>row.projectId||null),[null,'p-a'],'Refresh must complete the account and preserved canonical project reads before manual selection');
+  const reselectedRead=workspaceRead('p-a');await click(page,'Obra A');assert.equal((await reselectedRead).status(),200);
+  await settled(page);await waitRecordedTask(page,'Tarea operativa p-a');
+  assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/workspace').slice(workspaceBefore).map(row=>row.projectId||null),[null,'p-a','p-a'],'The preserved manual selection requires exactly one additional canonical project read');
   assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','A refreshed manual selection must not restore the consumed focus request');
   assert.equal(current.requests.filter(row=>row.path==='/api/identity/worker-channel').length,0);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);
  }else{

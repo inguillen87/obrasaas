@@ -1,5 +1,5 @@
 import {createSyntheticCurrent85FixtureFromSource,optionalCurrent85UnitSourceReader} from '../../tests/fixtures/focused-workspace-current85-fixture.mjs';
-import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePilotCompletionPreviousFieldProof,restorePilotCompletionPreviousProofSpec} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePilotCompletionPreviousFieldProof,restorePilotCompletionPreviousProofSpec,restorePilotCompletionPreviousContract} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_BUDGET_UI_MATRIX,validatePlanBudgetUiProofBytes,planBudgetUiSourceBinding,planBudgetUiRetainedScreenshotPath} from '../../scripts/lib/plan-budget-ui-contract.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -20,7 +20,7 @@ import {FOCUSED_WORKSPACE_CI_KIND,validateFocusedWorkspaceCi,focusedWorkspaceCiS
 import {PARTICIPANT_PREANALYSIS_KIND,restoreParticipantPreanalysisPreviousContract,validateParticipantPreanalysisWorkspaceContract,participantPreanalysisProofSourceAdditions,restoreParticipantPreanalysisSourceSet} from '../../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {validateParticipantKycPreanalysisCi,participantPreanalysisCiSourceClosure} from '../../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {execFileSync,fork} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,realpathSync,mkdtempSync,rmSync,existsSync} from 'node:fs';
+import {readFileSync,writeFileSync,writeSync,mkdirSync,readdirSync,lstatSync,realpathSync,mkdtempSync,rmSync,existsSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -452,7 +452,13 @@ const EXTENSION_PROOFS=[
  ['document-curve-ui','plans',62,'.vercel/private/plan-document-curve-evidence/current-browser.json','UI_DOCUMENT_CURVE']
 ];
 function sourcePath(value){if(typeof value!=='string'||value.length>500||/[\\\x00-\x1f]/.test(value)||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'))deny('UNSAFE_SOURCE_PATH');return value;}
-function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const cache=new Map();return filename=>{sourcePath(filename);if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:40*1024*1024}));return cache.get(filename);};}
+function gitSource(root,expectedHead){
+ if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');
+ // Import closures probe an exact path before its .js/.mjs alternatives.
+ // Only absence from this immutable Git tree is optional; Git errors propagate.
+ const committed=new Set(execFileSync('git',['ls-tree','-r','--name-only','-z',expectedHead],{cwd:root,encoding:'utf8',maxBuffer:40*1024*1024}).split('\0').filter(Boolean)),cache=new Map();
+ return filename=>{sourcePath(filename);if(!committed.has(filename))return null;if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:40*1024*1024}));return cache.get(filename);};
+}
 function manifestDigest(references){return hash(canonical([...references].sort((a,b)=>a.path.localeCompare(b.path))));}
 function expectedSourceDigest(spec,readSource){if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');return manifestDigest(spec.sourceFiles.map(file=>{const bytes=readSource(file);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');return {path:file,sha256:hash(bytes)};}));}
 const utf8=bytes=>{if(!Buffer.isBuffer(bytes))deny('PROOF_BYTES');const text=bytes.toString('utf8');if(!bytes.equals(Buffer.from(text)))deny('PROOF_ENCODING');return text;};
@@ -1952,6 +1958,30 @@ export function assertSourceIdentity({actualHead,expectedHead,dirtyTrackedPaths}
  if(dirtyTrackedPaths.length)deny('TRACKED_SOURCE_DIRTY');
  return actualHead;
 }
+// Only the authenticated current metadata inverse can move the complete UI39
+// to business. Historical assertions below still run on the genuine predecessor.
+function fieldUiAssignmentPreviousContract(contract){
+ const patches=contract?.planBudgetCurrentRevision?.pilotCompletionAdvance?.metadataInverse;
+ if(!Array.isArray(patches)||!patches.some(row=>row.pointer==='/lanes/field/blocks'))return contract;
+ const previous=restorePilotCompletionPreviousContract(contract),folder='.vercel/field-operations-evidence/',pg=folder+'postgres.json',ui=folder+'browser*.json',png=folder+'*.png';
+ const field=clone(previous.lanes.field),business=clone(previous.lanes.business),producer=previous.evidenceProducers[40];
+ equal(field.blocks,[20,39,40,52,65],'FIELD_UI_LANE_ASSIGNMENT');
+ equal(business.blocks,[13,21,31,32,34,43,44,45,58],'FIELD_UI_LANE_ASSIGNMENT');
+ if(producer?.producer!=='scripts/verify-field-operations-ui.mjs'||producer.blockId!==39||producer.lane!=='field'||producer.path!==folder+'browser.json'||producer.retained!==true||field.artifacts.filter(value=>value===folder).length!==1)deny('FIELD_UI_LANE_ASSIGNMENT');
+ field.blocks=field.blocks.filter(id=>id!==39);business.blocks.splice(1,0,39);
+ field.artifacts=field.artifacts.map(value=>value===folder?pg:value);field.requiredRetainedEvidence=field.requiredRetainedEvidence.filter(value=>value!==producer.path);
+ business.artifacts.splice(1,0,ui,png);business.optionalArtifactPatterns=business.artifacts.filter(value=>value.includes('*'));
+ business.requiredRetainedEvidence=previous.evidenceProducers.filter(row=>row.retained&&(row.lane==='business'||row.blockId===39)).map(row=>row.path);
+ equal(contract.lanes.field,field,'FIELD_UI_LANE_ASSIGNMENT');equal(contract.lanes.business,business,'FIELD_UI_LANE_ASSIGNMENT');
+ equal(contract.evidenceProducers[40],{...producer,lane:'business'},'FIELD_UI_LANE_ASSIGNMENT');
+ equal(contract.artifactPatterns.filter(value=>value.startsWith(folder)),[pg,ui,png],'FIELD_UI_LANE_ASSIGNMENT');
+ const at=(value,pointer)=>pointer.slice(1).split('/').reduce((owner,key)=>owner[key],value);
+ for(const pointer of ['/artifactPatterns','/evidenceProducers/40/lane','/lanes/business/artifacts','/lanes/business/blocks','/lanes/business/optionalArtifactPatterns','/lanes/business/requiredRetainedEvidence','/lanes/field/artifacts','/lanes/field/blocks','/lanes/field/requiredRetainedEvidence']){
+  const rows=patches.filter(row=>row.pointer===pointer);if(rows.length!==1)deny('FIELD_UI_LANE_ASSIGNMENT');
+  equal(rows[0].before,at(previous,pointer),'FIELD_UI_LANE_ASSIGNMENT');equal(rows[0].after,at(contract,pointer),'FIELD_UI_LANE_ASSIGNMENT');
+ }
+ return previous;
+}
 function validateEvidenceContract(contract){
  const infra=contract.infrastructureCheck;
  exactKeys(infra,['id','lane','producer','step','producedNotUploaded'],'INFRASTRUCTURE_CHECK_SHAPE');
@@ -2504,9 +2534,11 @@ export function selftest(workflow,contract,root=process.cwd()){
    {path:'.vercel/private/field-overtime-postgres-proof.json',lane:'field',retained:true},
    {path:'.vercel/private/field-overtime-ui-proof.json',lane:'field',retained:true}
   ],'OVERTIME_PRODUCER_CONTRACT');
+  ((contract)=>{
   const overtimeHistoricalContract=contract.whatsappFieldContinuityCurrentRevision?restoreWhatsappFieldContinuityPreviousContract(contract):contract;
   equal(overtimeHistoricalContract.lanes.field.blocks,[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
   equal(contract.lanes.field.blocks,contract.whatsappFieldContinuityCurrentRevision?[20,39,40,52,65]:[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
+  })(fieldUiAssignmentPreviousContract(contract));
  });
  for(const [name,code,edit] of [
   ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==52);}],
@@ -3071,9 +3103,11 @@ good('overtime-block-52-three-canonical-proofs',()=>{
    {path:'.vercel/private/field-overtime-postgres-proof.json',lane:'field',retained:true},
    {path:'.vercel/private/field-overtime-ui-proof.json',lane:'field',retained:true}
   ],'OVERTIME_PRODUCER_CONTRACT');
+  ((contract)=>{
   const overtimeHistoricalContract=contract.whatsappFieldContinuityCurrentRevision?restoreWhatsappFieldContinuityPreviousContract(contract):contract;
   equal(overtimeHistoricalContract.lanes.field.blocks,[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
   equal(contract.lanes.field.blocks,contract.whatsappFieldContinuityCurrentRevision?[20,39,40,52,65]:[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
+  })(fieldUiAssignmentPreviousContract(contract));
  });
 for(const [name,code,edit] of [
   ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==52);}],
@@ -3464,6 +3498,26 @@ function runParallelSelftest(root,options){
  })();
 }
 
+// Diagnostic-only metadata. It never supplies IPC rows, receipts or acceptance.
+// One owned A worker can emit at most nine short records to its existing stderr.
+export function createSelftestPhaseDiagnostic(){
+ const sequence=[['preflight-before',null],['preflight-after',null],['oracle-enter',null],['phase-start','F0'],['phase-end','F0'],['phase-start','F1'],['phase-end','F1'],['phase-start','F3'],['phase-end','F3']];
+ let started=null,last=null,next=0;
+ try{started=process.hrtime.bigint();}catch{/* Diagnostics cannot alter the oracle. */}
+ return(event,phase=null)=>{
+  try{
+   const expected=sequence[next];if(started===null||!expected||event!==expected[0]||phase!==expected[1])return;
+   const at=process.hrtime.bigint();if(typeof at!=='bigint'||at<started||last!==null&&at<last)return;
+   const elapsedNs=String(at-started),pid=process.pid,parentPid=process.ppid;
+   if(!/^[0-9]{1,24}$/.test(elapsedNs)||!Number.isSafeInteger(pid)||pid<=0||!Number.isSafeInteger(parentPid)||parentPid<=0)return;
+   const bytes=Buffer.from('OBRASAAS_SELFTEST_PHASE_DIAGNOSTIC_V1 '+JSON.stringify({type:'selftest-phase-diagnostic-v1',pid,parentPid,event:expected[0],phase:expected[1],elapsedNs})+'\n');
+   if(bytes.length>512)return;next++;last=at;
+   // A failed/partial diagnostic write is never retried or promoted to a verdict.
+   writeSync(2,bytes);
+  }catch{/* Fail-passive: diagnostic failure must not affect IPC or validation. */}
+ };
+}
+
 async function selftestWorkerMain(opts){
  const fail=code=>{throw Object.assign(new Error(code),{code});};
  const expected=['root','expected-head','workflow','contract','worker','session','parent-pid'];
@@ -3493,10 +3547,14 @@ async function selftestWorkerMain(opts){
  };
  let waitingControl=null;
  let terminal,scope='preflight';const tracker={segments:[],phase:null,statement:null,started:process.hrtime.bigint(),progress:[]};
+ const diagnostic=opts.worker==='A'?createSelftestPhaseDiagnostic():null;
  try{
   waitingControl=control('start');await send({...base,kind:'ready'});await waitingControl.promise;waitingControl=null;
+  diagnostic?.('preflight-before');
   const contract=loadContract(path.resolve(before.root,before.context.contractPath)),workflow=yaml.load(readFileSync(path.resolve(before.root,before.context.workflowPath),'utf8'));equivalent(workflow,contract);dependencies(before.root,contract);
-  tracker.mark=(phase,statement,stage='start')=>{tracker.phase=phase;tracker.statement=statement;tracker.progress.push({...base,kind:'progress',phase,statement,stage,elapsedNs:String(process.hrtime.bigint()-tracker.started)});};
+  diagnostic?.('preflight-after');
+  tracker.mark=(phase,statement,stage='start')=>{tracker.phase=phase;tracker.statement=statement;tracker.progress.push({...base,kind:'progress',phase,statement,stage,elapsedNs:String(process.hrtime.bigint()-tracker.started)});diagnostic?.(stage==='start'?'phase-start':'phase-end',phase);};
+  diagnostic?.('oracle-enter');
   scope='oracle';const checks=(opts.worker==='A'?selftestWorkerA:selftestWorkerB)(workflow,contract,before.root,tracker),owned=tracker.segments.flatMap(segment=>segment.rows);
   if(controlError)throw controlError;
   if(JSON.stringify(checks)!==JSON.stringify(owned))throw fail('SELFTEST_LOCAL_SEGMENT_COVERAGE');

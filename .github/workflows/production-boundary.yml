@@ -61,7 +61,23 @@ jobs:
           const universe=discover();
           assert.ok(universe.length>0,'The production test universe must not be empty');
           assert.equal(new Set(universe).size,universe.length,'Production tests must be distinct');
-          const selected=universe.filter((_,index)=>index%shardCount===shard-1);
+          const reviewedOwners=new Map([
+            ['tests/production-plan-measurement-ci.test.mjs',1],
+            ['tests/production-focused-workspace-ci.test.mjs',4],
+            ['tests/production-organization-usage-ci.test.mjs',3],
+          ]);
+          assert.equal(reviewedOwners.size,3,'Exactly three reviewed ownership changes are required');
+          for(const [file,owner] of reviewedOwners){
+            assert.ok(universe.includes(file),'Every reviewed ownership source must be present: '+file);
+            assert.ok(Number.isInteger(owner)&&owner>=1&&owner<=shardCount,'The reviewed target owner must be a configured shard: '+file);
+          }
+          const ownerOf=(file,index)=>reviewedOwners.get(file)??index%shardCount+1;
+          const partitions=Array.from({length:shardCount},(_,slot)=>universe.filter((file,index)=>ownerOf(file,index)===slot+1));
+          const assigned=partitions.flat();
+          assert.equal(new Set(assigned).size,universe.length,'Every production file must have exactly one owner');
+          assert.deepEqual([...assigned].sort(),universe,'The complete production universe must be assigned exactly once');
+          assert.ok(partitions.every(files=>files.length>0),'Every configured shard must contain a production test');
+          const selected=partitions[shard-1];
           assert.ok(selected.length>0,'Every configured shard must contain a production test');
           const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
           const sourcePins=files=>files.map(file=>{const stat=lstatSync(file);assert.ok(stat.isFile()&&!stat.isSymbolicLink(),'Production test must remain a regular file: '+file);return {path:file,sha256:createHash('sha256').update(readFileSync(file)).digest('hex')};});
