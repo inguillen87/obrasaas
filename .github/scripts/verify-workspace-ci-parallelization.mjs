@@ -1388,7 +1388,7 @@ function monthlyCurveContractSelftest(workflow,contract,root){
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure contract and source read; no PG/UI/provider execution'});};
  const bad=(name,code,edit)=>{const changed=clone(restoreParticipantPreanalysisPreviousContract(contract));edit(changed);assert.throws(()=>validateContract(changed),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure contract fixture'});};
  good('historical-block-and-current-command-both-pinned',()=>{
-  assert.equal(hash(canonical(contract.blocks.slice(0,46))),BASELINE_BLOCKS_SHA256);
+  assert.equal(hash(canonical(restoreParticipantPreanalysisPreviousContract(contract).blocks.slice(0,46))),BASELINE_BLOCKS_SHA256);
   assert.notEqual(currentCommandBlock(contract,12).commandSha256,contract.blocks.find(block=>block.id===12).commandSha256);
   equal(currentCommandBlock(contract,12).step,workflow.jobs.plans.steps.find(step=>step.name===contract.monthlySourceCurve.step.name),'WORKFLOW_NOT_EQUIVALENT');
  });

@@ -316,7 +316,7 @@ async function restrictedChannel(page,{loaded=true}={}){
 }
 async function startPrivacy(width,status='PENDING_REVIEW'){
  const current=newState('privacy-'+status);current.row.kyc={...current.row.kyc,status};
- const value=await createPage(width,current);await click(value.page,'Obra A');await privacySurface(value.page);return {current,...value};
+ const value=await createPage(width,current);await click(value.page,'Obra A');await waitText(value.page,'Persona de ensayo');await privacySurface(value.page);return {current,...value};
 }
 async function withdraw(page,action){
  if(action==='REVOKE_TEMPLATE_MESSAGES')return click(page,'Retirar autorización de avisos');
@@ -324,6 +324,9 @@ async function withdraw(page,action){
 }
 async function privacyWithdrawal(width,status,action,{reload=false}={}){
  const {current,context,page}=await startPrivacy(width,status);current.channelLoseReply=reload;
+ const ownProfileGet={path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null},profileReads=()=>current.requests.filter(row=>row.path==='/api/identity/participants');
+ assert.deepEqual(profileReads(),[ownProfileGet],'Initial visible identity loads exactly its canonical own profile');
+ assert.equal(await page.$eval('#participant-title',node=>node.closest('[data-workspace-screen]').hidden),true,'Mi WhatsApp keeps the identity panel hidden');
  await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');await restrictedChannel(page);assert.equal(ownChannel(current,'p-a').eligible,false);assert.equal(ownChannel(current,'p-a').templateConsent.canGrant,false);
  await withdraw(page,action);
  if(reload){
@@ -332,8 +335,13 @@ async function privacyWithdrawal(width,status,action,{reload=false}={}){
   assert.equal(current.channelPosts.length,1);assert.deepEqual(current.channelReceiptQueries,[]);safeReferences(await references(page),1);
   await click(page,'Consultar resultado pendiente');await waitText(page,'Recibo confirmado');assert.deepEqual(current.channelReceiptQueries,[current.channelPosts[0].operationId]);safeReferences(await references(page),0);
   await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');
+  assert.deepEqual(profileReads(),[ownProfileGet],'Reloading Mi WhatsApp must not fetch the hidden identity profile');
+  assert.equal(await page.$eval('#participant-title',node=>node.closest('[data-workspace-screen]').hidden),true);
+  await privacyDisclosure(page,false);await waitText(page,'Persona de ensayo');
+  assert.deepEqual(profileReads(),[ownProfileGet,ownProfileGet],'Returning to visible identity after reload performs its fresh canonical read');
+  await privacySurface(page);await waitText(page,'Titular propio WhatsApp A');safeReferences(await references(page),0);
  }else await waitText(page,action==='UNLINK'?'WhatsApp desvinculado.':'Autorización retirada.');
- await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel','/api/identity/participants'].includes(row.path)));assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/participants'),Array.from({length:reload?2:1},()=>({path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null})),'Exactly one canonical own-profile metadata GET per initial load or explicit reload is allowed');
+ await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel','/api/identity/participants'].includes(row.path)));assert.deepEqual(profileReads(),Array.from({length:reload?2:1},()=>({...ownProfileGet})),'Own-profile reads occur only for initial visible identity and explicit return after reload');assert.equal(current.posts.length,0,'Private withdrawal and section navigation never submit identity');
  const screenshot=path.join(evidence,'privacy-'+status+'-'+action+'-'+width+(reload?'-reload':'')+'.png');await page.screenshot({path:screenshot,fullPage:true});screenshots.push(path.relative(root,screenshot).split(path.sep).join('/'));
  checks.push({name:reload?'own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST':'own-private-withdrawal-without-KYC-admission',width,status,action,reload,posts:current.channelPosts.length,receiptGets:current.channelReceiptQueries.length,...(reload?{sameOperationId:true,durableReference:true}:{})});await context.close();
 }
