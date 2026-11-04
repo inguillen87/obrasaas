@@ -39,6 +39,10 @@ jobs:
       - run: npm ci --no-audit --no-fund
         env:
           DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+      - name: Safe preflight diagnostics, fixed labels and argument rejection
+        run: |
+          node --test tests/production-office-native-ci-preflight-diagnostic.test.mjs
+          npx --no-install eslint scripts/lib/office-chat-native-ci-preflight-error.mjs scripts/verify-office-chat-native-ci.mjs tests/production-office-native-ci-preflight-diagnostic.test.mjs --max-warnings 0
       - name: Native dedicated15 and own5, original cases plus canonical transfer
         env:
           OBRASAAS_OFFICE_CI_SERVICE_ID: ${{ job.services.postgres.id }}

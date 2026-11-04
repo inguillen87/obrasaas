@@ -1,7 +1,6 @@
 // Source-only proposal644. This envelope never authenticates CI by env alone.
 // Final acceptance requires the independently fetched GitHub run/job/artifact
 // (including digest) for these committed bytes. No local fake-CI positive run.
-import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {existsSync,readFileSync,mkdirSync,writeFileSync} from 'node:fs';
@@ -9,6 +8,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parse} from '@babel/parser';
 import {OFFICE_NATIVE_CI_EVIDENCE,OFFICE_NATIVE_CI_WORKFLOW_PATH,officeCiSnapshot,officeCiContext,inspectOfficeCiService,officeCiSqlIdentity,officeCiOwnedDatabaseCatalog} from './lib/office-chat-native-ci-context.mjs';
+import {formatOfficeNativeCiPreflightError} from './lib/office-chat-native-ci-preflight-error.mjs';
 const root=path.resolve(fileURLToPath(new URL('../',import.meta.url)));
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -54,4 +54,4 @@ async function main(){
  const receipt={schema:'office-chat-native-ci-envelope.v1',status:failure?'FAIL_OR_INCOMPLETE':'NATIVE_CASES_PASSED_EXTERNAL_CI_VERIFICATION_REQUIRED',ciRun:context,node,workflow:ref(OFFICE_NATIVE_CI_WORKFLOW_PATH),sourceBefore:ref(OFFICE_NATIVE_CI_EVIDENCE+'/source-before.json'),sourceAfter:after?ref(OFFICE_NATIVE_CI_EVIDENCE+'/source-after.json'):null,results,acceptedChecksCompleted:results.filter(row=>row.accepted).reduce((sum,row)=>sum+row.observedNative.checksCompleted,0),checksPlanned:20,databaseOwnership:databaseOwnership?ref(OFFICE_NATIVE_CI_EVIDENCE+'/database-ownership.json'):null,productionDataWritten:false,realProviderRequests:0,sourceRetagged:false,externalGitHubRunArtifactVerification:'REQUIRED_NOT_PERFORMED_BY_THIS_PROCESS',databaseCleanup:'Job-owned service lifecycle; synthetic child databases retained until GitHub destroys its service; no PID kill, DROP of foreign DBs or container stop',failure};
  save('envelope.json',receipt);console.log(JSON.stringify({status:receipt.status,acceptedChecksCompleted:receipt.acceptedChecksCompleted,checksPlanned:receipt.checksPlanned}));if(failure)process.exitCode=1;
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{console.error(error?.code||'OFFICE_NATIVE_CI_PREFLIGHT_FAILED');process.exitCode=1;});
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{console.error(formatOfficeNativeCiPreflightError(error));process.exitCode=1;});

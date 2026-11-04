@@ -45,7 +45,7 @@ test('cached SDK cannot authorize after a fresh PREPARED response disables Meta 
  const enabled=invoke(prepared);assert.equal(enabled.logins.length,1);assert.equal(enabled.logins[0].options.config_id,prepared.readiness.configId);
  assert.equal(enabled.auth.current.transferId,prepared.transferId);assert.equal(enabled.effects[0][0],'authorizing');assert.equal(enabled.effects[0][1],true);
  // The rendered button uses the same predicate; the handler separately rechecks it at click time.
- assert.ok(panel.includes('disabled={disabled||Boolean(attempt)||!companyTransferCanLaunchMeta(value,sdk,Date.now())} onClick={authorize}>Autorizar en Meta'));
+ assert.ok(panel.includes('disabled={disabled||Boolean(attempt)||!companyTransferCanLaunchMeta(value,sdk,clock)} onClick={authorize}>Autorizar en Meta'));
  assert.ok(handler.startsWith('function authorize(){if(disabled||attempt||!companyTransferCanLaunchMeta(value,sdk,Date.now()))return;'));
  assert.equal((handler.match(/window\.FB\.login\(/g)||[]).length,1);
 });
@@ -103,4 +103,53 @@ test('first-seen account_update is attributed before current routing; unscoped n
  const event={wabaId,phoneNumberId:null,externalId:'unseen',payload:{field:'account_update',type:'account_update',providerTimestamp:String(Date.parse('2026-11-03T09:59:59Z')/1000),value:{event:'partner_removed'}}};
  assert.equal((await historicalAssetRoute(client,event)).history,history);assert.equal((await historicalAssetRoute(client,{...event,payload:{...event.payload,providerTimestamp:undefined}})).quarantine,true);assert.equal(await historicalAssetRoute(client,{...event,payload:{...event.payload,providerTimestamp:String(Date.parse('2026-11-03T10:00:01Z')/1000)}}),null);
  assert.equal((await historicalAssetRoute(client,{...event,payload:{field:'smb_message_echoes',type:'smb_message_echoes',value:{}}})).quarantine,true);
+});
+function actualTransferPanelPart(marker,endMarker){
+ const source=readFileSync(new URL('../src/app/(identity)/cuenta/company-number-transfer-panel.js',import.meta.url),'utf8').replaceAll('\r\n','\n');
+ const start=source.indexOf(marker),end=source.indexOf(endMarker,start+marker.length);
+ assert.ok(start>=0&&end>start&&source.indexOf(marker,start+marker.length)===-1,'One bounded actual panel fragment');
+ const part=source.slice(start,end);assert.ok(part.length<8000);return part;
+}
+function actualExpiryEffect(value,initialNow,{opened=true}={}){
+ let now=initialNow,cleanup,clock;const timers=[],writes=[],cleared=[];
+ runInNewContext(actualTransferPanelPart(' useEffect(()=>{\n  const expiresAt=Date.parse(value?.expiresAt);','\n function authorize(){'),{
+  value,opened,Date:{parse:Date.parse,now:()=>now},useEffect:setup=>{cleanup=setup();},
+  setClock:next=>{clock=next;writes.push(next);},setTimeout:(callback,delay)=>{timers.push({callback,delay});return timers.length;},clearTimeout:id=>cleared.push(id),
+ },{timeout:1000});
+ return {timers,writes,cleared,get clock(){return clock;},setNow:next=>{now=next;},fire:id=>timers[id-1].callback(),cleanup:()=>cleanup?.()};
+}
+test('accepted transfer time is sampled outside render and actual expiry callback disables the launch at its boundary',()=>{
+ const now=Date.parse('2026-11-03T12:00:00Z'),expires=now+60000,sdk='14000679001:v25.0';
+ const value={state:'PREPARED',expiresAt:new Date(expires).toISOString(),readiness:{canLaunchMeta:true,appId:'14000679001',version:'v25.0',configId:'14000679002'}};
+ const accepted=[],pending={current:{action:'PREPARE'}};let clock;
+ const accept=actualTransferPanelPart(' function accept(result){','\n async function load(').trim();
+ runInNewContext('('+accept+')(value)',{value,Date:{now:()=>now},setClock:next=>{clock=next;},setValue:next=>accepted.push(next),setAttempt:()=>{},pending,setConfirmed:()=>{},setNotice:()=>{}},{timeout:1000});
+ assert.equal(clock,now);assert.equal(accepted[0],value);assert.equal(pending.current,null);
+ assert.equal(companyTransferCanLaunchMeta(value,sdk,clock),true);
+ const effect=actualExpiryEffect(value,now);assert.deepEqual(effect.writes,[],'No synchronous setState in effect setup');assert.equal(effect.timers[0].delay,60000);
+ effect.setNow(expires-1000);effect.fire(1);assert.deepEqual(effect.writes,[],'An early callback must rearm instead of expiring early');assert.equal(effect.timers[1].delay,1000);
+ effect.setNow(expires);effect.fire(2);assert.deepEqual(effect.writes,[expires]);assert.equal(companyTransferCanLaunchMeta(value,sdk,effect.clock),false);
+ const render=readFileSync(new URL('../src/app/(identity)/cuenta/company-number-transfer-panel.js',import.meta.url),'utf8').split(' return <section')[1];assert.ok(render&&!render.includes('Date.now'));
+});
+test('actual expiry effect caps long delays and ignores callbacks after replacement or unmount',()=>{
+ const now=Date.parse('2026-11-03T12:00:00Z'),expires=now+2147483647+60000,value={state:'PREPARED',expiresAt:new Date(expires).toISOString()};
+ const effect=actualExpiryEffect(value,now);assert.equal(effect.timers[0].delay,2147483647);
+ effect.setNow(now+2147483647);effect.fire(1);assert.equal(effect.timers[1].delay,60000);assert.deepEqual(effect.writes,[]);
+ effect.cleanup();assert.deepEqual(effect.cleared,[2]);effect.setNow(expires+1);effect.fire(2);assert.deepEqual(effect.writes,[],'A stale timer cannot update the replacement or unmounted panel');
+ for(const invalid of [{...value,state:'CLOSED'},{...value,expiresAt:'invalid'}])assert.equal(actualExpiryEffect(invalid,now).timers.length,0);
+ assert.equal(actualExpiryEffect(value,now,{opened:false}).timers.length,0);
+});
+test('actual authorization rechecks wall time and cleanup invalidates the live epoch and already-open SDK callback',()=>{
+ const now=Date.parse('2026-11-03T12:00:00Z'),expires=now+60000,sdk='14000679001:v25.0';
+ const value={state:'PREPARED',transferId:'asset_transfer_'+'b'.repeat(64),stateToken:'d'.repeat(64),expiresAt:new Date(expires).toISOString(),readiness:{canLaunchMeta:true,appId:'14000679001',version:'v25.0',configId:'14000679002'}};
+ const handler=actualTransferPanelPart(' function authorize(){','\n return <section').trim();
+ const logins=[],effects=[],sent=[],mounted={current:true},auth={current:null},epoch={current:0};let wall=now,cleanup;
+ const context={value,sdk,disabled:false,attempt:null,companyTransferCanLaunchMeta,Date:{now:()=>wall},mounted,auth,epoch,
+  setAuthorizing:next=>effects.push(next),setNotice:next=>effects.push(next),send:(...args)=>sent.push(args),window:{FB:{login:callback=>logins.push(callback)}},useEffect:setup=>{cleanup=setup();}};
+ assert.equal(companyTransferCanLaunchMeta(value,sdk,now),true,'A captured render time can still be unexpired');
+ wall=expires;runInNewContext('('+handler+')()',context,{timeout:1000});assert.equal(logins.length,0,'The actual click handler rejects expiry independently of captured render time');
+ wall=now;runInNewContext('('+handler+')()',context,{timeout:1000});assert.equal(logins.length,1);
+ runInNewContext(actualTransferPanelPart(' useEffect(()=>{mounted.current=true;','\n async function api('),context,{timeout:1000});
+ epoch.current=41;const count=effects.length;cleanup();assert.equal(epoch.current,42,'Increment the live counter, never the value captured at effect setup');assert.equal(mounted.current,false);assert.equal(auth.current,null);
+ logins[0]({authResponse:{code:'synthetic-unused-code'}});assert.equal(effects.length,count);assert.deepEqual(sent,[]);
 });

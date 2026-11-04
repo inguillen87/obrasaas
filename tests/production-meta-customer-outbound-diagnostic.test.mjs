@@ -68,13 +68,15 @@ test('confirmed reply recovery clears the transient inbound error',async()=>{
  const f=processingFixture('SENT');await assert.rejects(f.processor.process(eventId));assert.equal((await f.processor.process(eventId)).replyState,'SENT');assert.equal(f.row.lastError,null);
 });
 
-function outboundFixture({afterReserve=async()=>{},channelActive=()=>true,sendError=null,completeError=null,diagnosticError=false}={}){
- const f=diagnosticFixture(),environment={META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,19).toString('base64')};let outbound=null,posts=0,connections=0;
- const connection={...f.reserved.connection,phoneNumberId:'990001100000002',metadata:{},encryptedAccessToken:encryptCustomerSecret('synthetic-private-token',{organizationId:'org-a',projectId:'project-a',purpose:'access-token',resourceId:'990001100000002'},environment)};
+function outboundFixture({afterReserve=async()=>{},channelActive=()=>true,sendError=null,completeError=null,diagnosticError=false,assetRetired=()=>false}={}){
+ const f=diagnosticFixture(),environment={META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,19).toString('base64')};let outbound=null,posts=0,connections=0,ownershipReads=0;
+ const connection={...f.reserved.connection,phoneNumberId:'990001100000002',whatsappBusinessId:'990001100000003',metadata:{},encryptedAccessToken:encryptCustomerSecret('synthetic-private-token',{organizationId:'org-a',projectId:'project-a',purpose:'access-token',resourceId:'990001100000002'},environment)};
  const event={...f.source,leaseExpiresAt:new Date(time+60000).toISOString()},reply={type:'text',body:'Synthetic private fixed reply'};
  const query=async(sql,args=[])=>{
   if(['BEGIN','COMMIT','ROLLBACK'].includes(sql)||sql.startsWith('SET LOCAL'))return {rows:[],rowCount:0};
   if(sql==='SELECT clock_timestamp() AS now'){assert.deepEqual(args,[]);return {rows:[{now:new Date(time)}]};}
+  if(sql===`SELECT to_regclass('public."WhatsAppAssetRetirement"') IS NOT NULL AS ready`){assert.deepEqual(args,[]);return {rows:[{ready:true}]};}
+  if(sql===`SELECT c.id,c."projectId",c."phoneNumberId",c."whatsappBusinessId",c.metadata,p."organizationId",h."transferId" AS retired FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" LEFT JOIN public."WhatsAppAssetRetirement" h ON h."sourceConnectionId"=c.id WHERE c.id=$1 FOR SHARE OF c`){assert.deepEqual(args,[connection.id]);ownershipReads++;return {rows:[{id:connection.id,projectId:connection.projectId,phoneNumberId:connection.phoneNumberId,whatsappBusinessId:connection.whatsappBusinessId,metadata:structuredClone(connection.metadata),organizationId:connection.organizationId,retired:assetRetired()?'asset_transfer_'+'f'.repeat(64):null}]};}
   if(sql.startsWith('SELECT id,"projectId",status::text'))return {rows:[structuredClone(event)]};
   if(sql.startsWith('SELECT id,')&&sql.includes("provider='meta-customer-outbound-v1'"))return {rows:outbound?[structuredClone(outbound)]:[]};
   if(sql.startsWith('INSERT INTO public."WebhookEvent"')){assert.equal(outbound,null);outbound={id:args[0],projectId:args[1],status:'PENDING',payload:JSON.parse(args[3]),outcome:JSON.parse(args[4]),leaseToken:args[5],leaseExpiresAt:args[6]};return {rows:[],rowCount:1};}
@@ -83,7 +85,7 @@ function outboundFixture({afterReserve=async()=>{},channelActive=()=>true,sendEr
   throw new Error('Unsupported synthetic outbound branch');
  };
  const lane=createMetaCustomerOutbound({connect:async()=>{connections++;return {query,release(){}};},environment,now:()=>time,afterReserve,channelActive,resolveIdentity:async()=>({kind:'CHANNEL_VERIFIED',project:{id:'project-a'},connection,event,member:{organizationId:'org-a',actorId:'actor-a'},proof:{type:'message',value:{id:'wamid.SyntheticSource0001',from:'5491100001111',timestamp:String(time/1000)}}}),provider:{async sendReply(){posts++;if(sendError)throw sendError;return {messageId:'wamid.SyntheticReply0001'};}}});
- return {lane,context:f.context,reply,marker:()=>outbound,posts:()=>posts,connections:()=>connections};
+ return {lane,context:f.context,reply,marker:()=>outbound,posts:()=>posts,connections:()=>connections,ownershipReads:()=>ownershipReads};
 }
 
 test('actual outbound records AFTER_RESERVE once and replay never invokes the provider',async()=>{
@@ -111,4 +113,14 @@ test('diagnostic write failure preserves the original exception and forbids retr
 
 test('unknown exception details are excluded from the durable outbound diagnostic',async()=>{
  const f=outboundFixture({sendError:new Error('private SQL token https://private.invalid/document')});assert.equal((await f.lane.send(f.context,f.reply)).state,'SEND_UNKNOWN');assert.equal(f.marker().outcome.diagnostic.code,'META_CUSTOMER_OUTBOUND_FAILURE_UNCONFIRMED');assert.doesNotMatch(JSON.stringify(f.marker().outcome),/private|SQL|token|https:/);
+});
+test('outbound diagnostic model represents an installed retirement catalogue and denies a retired source before reserve',async()=>{
+ const f=outboundFixture({assetRetired:()=>true});await assert.rejects(f.lane.send(f.context,f.reply),{code:'COMPANY_TRANSFER_OWNER_RETIRED'});
+ assert.equal(f.ownershipReads(),1);assert.equal(f.marker(),null);assert.equal(f.posts(),0);
+});
+test('outbound retirement after reserve is checked again before transport without changing the original diagnostic receipt',async()=>{
+ let retired=false;const f=outboundFixture({assetRetired:()=>retired,afterReserve:async()=>{retired=true;}});
+ await assert.rejects(f.lane.send(f.context,f.reply),{code:'COMPANY_TRANSFER_OWNER_RETIRED'});assert.ok(f.ownershipReads()>=2);assert.equal(f.posts(),0);
+ const before=structuredClone(f.marker());assert.equal(before.outcome.state,'SEND_STARTED');assert.equal(before.outcome.diagnostic.phase,'OWN_BEFORE_EXTERNAL');
+ await assert.rejects(f.lane.send(f.context,f.reply),{code:'COMPANY_TRANSFER_OWNER_RETIRED'});assert.equal(f.posts(),0);assert.deepEqual(f.marker(),before);
 });

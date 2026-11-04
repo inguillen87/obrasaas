@@ -151,3 +151,38 @@ test('tampered C row digest stops all owned work and retains a failed execution 
 test('final full source fence dominates successful synthetic phase terminals',async()=>{
  const f=fixture('dirty-final');await assert.rejects(f.run(),error=>error.code==='SELFTEST_SOURCE_CHANGED');const receipt=JSON.parse([...f.writes].find(([name])=>name.endsWith('execution.json'))[1]);assert.equal(receipt.sourceFinalFailure,'SELFTEST_SOURCE_CHANGED');assert.equal(receipt.workers.length,3);
 });
+
+
+// Derive this legacy row from its authentic oracle AST; no oracle is executed.
+function originalCurrent85DenialVectorRow(){
+ const fn=parse(declaration('current85TypedGateSelftest'),{sourceType:'module'}).program.body[0];
+ assert.equal(fn.type,'FunctionDeclaration');
+ const vars=fn.body.body.filter(node=>node.type==='VariableDeclaration').flatMap(node=>node.declarations);
+ const one=name=>{const found=vars.filter(node=>node.id.type==='Identifier'&&node.id.name===name);assert.equal(found.length,1);return found[0].init;};
+ const codes=one('sourceCodes'),boundary=one('boundary');assert.equal(codes.type,'ArrayExpression');assert.ok(codes.elements.every(node=>node?.type==='StringLiteral'));assert.equal(boundary.type,'StringLiteral');
+ const calls=fn.body.body.filter(node=>node.type==='ExpressionStatement'&&node.expression.type==='CallExpression').map(node=>node.expression).filter(node=>node.callee.type==='Identifier'&&node.callee.name==='bad'&&node.arguments[0]?.type==='StringLiteral'&&node.arguments[0].value==='live-source-reader-is-not-replaced-by-a-cached-verdict');
+ assert.equal(calls.length,1);assert.equal(calls[0].arguments[1].type,'Identifier');assert.equal(calls[0].arguments[1].name,'sourceCodes');
+ return{name:'current85-typed-'+calls[0].arguments[0].value,result:'PASS',boundary:boundary.value,expectedDenial:codes.elements.map(node=>node.value)};
+}
+function originalCurrent85VectorPacket(){
+ const f=fixture(),binding={worker:'A',pid:12001,context:f.context,contextSha256:f.contextSha256};
+ const packet={version:1,kind:'rows',worker:'A',session:f.context.session,contextSha256:f.contextSha256,pid:12001,parentPid:12000,phase:'F0',chunk:0,rows:[originalCurrent85DenialVectorRow()]};
+ return{api:f.api,binding,packet};
+}
+test('original current85 denial vector crosses IPC unchanged as an ordered array',()=>{
+ const {api,binding,packet}=originalCurrent85VectorPacket(),bytes=JSON.stringify(packet);
+ assert.equal(api.validate(JSON.stringify([packet,binding])),bytes);assert.equal(JSON.stringify(packet),bytes);
+ assert.ok(Array.isArray(JSON.parse(bytes).rows[0].expectedDenial));
+});
+test('IPC rejects foreign vectors rows boundaries and phases without accepting generic arrays',()=>{
+ const edits=[p=>{p.rows[0].expectedDenial=[];},p=>{p.rows[0].expectedDenial.reverse();},p=>{p.rows[0].expectedDenial[1]=p.rows[0].expectedDenial[0];},p=>{p.rows[0].expectedDenial.push('FOREIGN_CODE');},p=>{p.rows[0].expectedDenial[2]='FOREIGN_CODE';},p=>{p.rows[0].expectedDenial={};},p=>{p.rows[0].name='foreign-oracle-row';},p=>{p.rows[0].boundary='foreign-boundary';},p=>{delete p.rows[0].boundary;},p=>{p.phase='F3';}];
+ for(const edit of edits){const {api,binding,packet}=originalCurrent85VectorPacket();edit(packet);denied(()=>api.validate(JSON.stringify([packet,binding])),'SELFTEST_IPC_ROW');}
+ const {api,binding,packet}=originalCurrent85VectorPacket();binding.worker=packet.worker='C';binding.pid=packet.pid=12003;packet.phase='F1';denied(()=>api.validate(JSON.stringify([packet,binding])),'SELFTEST_IPC_ROW');
+});
+test('canonical merge retains the original vector and its phase digest detects mutation',()=>{
+ const {api}=fixture(),r=records(),a=r.find(row=>row.worker==='A'),phase=a.phases.get('F0');phase.rows.push(originalCurrent85DenialVectorRow());
+ phase.receipt={count:phase.rows.length,rowsSha256:hash(JSON.stringify(phase.rows))};const own=expectedPhases.A.flatMap(name=>a.phases.get(name).rows);a.terminal.count=own.length;a.terminal.rowsSha256=hash(JSON.stringify(own));
+ const expected=['F0','F1','F2','F3'].flatMap(name=>r.find(row=>row.phases.has(name)).phases.get(name).rows);
+ assert.equal(api.merge([r[2],r[1],r[0]]),JSON.stringify(expected));
+ phase.rows.at(-1).expectedDenial.reverse();denied(()=>api.merge(r),'SELFTEST_PHASE_INTEGRITY');
+});

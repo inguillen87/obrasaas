@@ -159,3 +159,17 @@ for(const phase of ['consume','menu','send','final-provider-fence'])test('curren
 for(const changed of [{organizationId:'foreign_company'},{actorId:'foreign_actor'},{metadata:{version:1,membershipId:'foreign_membership'}}])test('foreign office-review origin does not restrict current office account '+JSON.stringify(changed),async()=>{
  const f=officeChatFixture({role:'DIRECTOR'});restrictedOfficeReview(f,changed);const p=await bound(f);assert.equal(p.result.identityStatus,'OFFICE_NAVIGATION_ONLY');
 });
+test('retired office source is denied by the real ownership check before any outbound reservation',async()=>{
+ const f=officeChatFixture(),p=await bound(f);f.controls.assetRetired=true;
+ await assert.rejects(f.bridge.send(p.context,p.result.reply),{code:'COMPANY_TRANSFER_OWNER_RETIRED'});
+ assert.equal(f.controls.posts,0);assert.equal([...f.events.values()].filter(row=>row.provider==='meta-customer-outbound-v1').length,0);
+ assert.equal(f.queries.filter(row=>row.sql.includes('LEFT JOIN public."WhatsAppAssetRetirement"')).length,1);
+});
+test('retirement at the final office provider fence prevents POST and preserves the non-retryable reservation',async()=>{
+ const f=officeChatFixture(),p=await bound(f);f.controls.beforePost=()=>{f.controls.assetRetired=true;};
+ await assert.rejects(f.bridge.send(p.context,p.result.reply),{code:'COMPANY_TRANSFER_OWNER_RETIRED'});
+ assert.equal(f.controls.posts,0);const markers=[...f.events.values()].filter(row=>row.provider==='meta-customer-outbound-v1');assert.equal(markers.length,1);
+ const before=structuredClone(markers[0]);assert.equal(before.outcome.state,'SEND_UNKNOWN');assert.equal(before.outcome.diagnostic.phase,'OWN_BEFORE_EXTERNAL');
+ assert.ok(f.queries.filter(row=>row.sql.includes('LEFT JOIN public."WhatsAppAssetRetirement"')).length>=2);
+ await assert.rejects(f.bridge.send(p.context,p.result.reply),{code:'COMPANY_TRANSFER_OWNER_RETIRED'});assert.equal(f.controls.posts,0);assert.deepEqual(f.events.get(before.id),before);
+});

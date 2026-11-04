@@ -3358,7 +3358,10 @@ function validateSelftestWorkerPacket(packet,binding){
   if(!phases.includes(packet.phase)||!integer(packet.chunk,0,SELFTEST_WORKER_PROTOCOL.maxRows)||!Array.isArray(packet.rows)||packet.rows.length<1||packet.rows.length>SELFTEST_WORKER_PROTOCOL.chunkRows)fail('SELFTEST_IPC_ROWS');
   for(const row of packet.rows){
    if(!plain(row)||!Object.hasOwn(row,'name')||!Object.hasOwn(row,'result')||Object.keys(row).some(key=>!['name','result','boundary','expectedDenial'].includes(key))||row.result!=='PASS'||typeof row.name!=='string'||!row.name||row.name.length>8192)fail('SELFTEST_IPC_ROW');
-   for(const key of ['boundary','expectedDenial'])if(Object.hasOwn(row,key)&&(typeof row[key]!=='string'||!row[key]||row[key].length>8192))fail('SELFTEST_IPC_ROW');
+   for(const key of ['boundary','expectedDenial'])if(Object.hasOwn(row,key)){
+    const value=row[key],originalCurrent85Vector=key==='expectedDenial'&&packet.worker==='A'&&packet.phase==='F0'&&row.name==='current85-typed-live-source-reader-is-not-replaced-by-a-cached-verdict'&&row.boundary==='Explicit UNIT source/Git/evidence model only; no CI, browser, provider or environment mutation'&&Array.isArray(value)&&value.length===3&&Object.keys(value).length===3&&['CURRENT85_CI_REJECTED','CURRENT85_EVIDENCE_REJECTED','FOCUSED_WORKSPACE_CI_REJECTED'].every((code,index)=>Object.hasOwn(value,index)&&value[index]===code);
+    if(!originalCurrent85Vector&&(typeof value!=='string'||!value||value.length>8192))fail('SELFTEST_IPC_ROW');
+   }
   }return packet;
  }
  if(packet.kind==='done'){
