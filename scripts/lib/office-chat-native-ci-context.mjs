@@ -93,7 +93,7 @@ export async function officeCiSqlIdentity(observation){
  const {Client}=await import('pg'),client=new Client(officeCiConnection());
  try{
   await client.connect();
-  const row=(await client.query("SELECT system_identifier::text AS id,current_setting('data_directory') AS data,current_setting('port') AS port,current_setting('TimeZone') AS timezone,current_setting('server_version_num')::int AS version,current_user AS actor,current_database() AS database,inet_server_addr()::text AS address,inet_server_port() AS connection_port,pg_postmaster_start_time() AS started FROM pg_control_system()")).rows[0];
+  const row=(await client.query("SELECT system_identifier::text AS id,current_setting('data_directory') AS data,current_setting('port') AS port,current_setting('TimeZone') AS timezone,current_setting('server_version_num')::int AS version,current_user AS actor,current_database() AS database,host(inet_server_addr()) AS address,inet_server_port() AS connection_port,pg_postmaster_start_time() AS started FROM pg_control_system()")).rows[0];
   requireCi(/^[0-9]{10,22}$/.test(row?.id)&&row.data===observation.container.environment.PGDATA&&row.port==='5432'&&row.connection_port===5432&&row.address===observation.container.networks[observation.context.networkName].IPAddress&&row.timezone==='UTC'&&Number.isInteger(row.version)&&row.version>=170000&&row.version<180000&&row.actor==='cutover_test'&&row.database==='obrasaas_cutover_ci','Actual owned SQL PostgreSQL17 identity required');
   requireCi(Number.isFinite(Date.parse(observation.container.startedAt))&&row.started instanceof Date&&row.started.getTime()>=Date.parse(observation.container.startedAt)-1000,'SQL postmaster belongs to this service start');
   return {...row,started:row.started.toISOString()};
