@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import React from 'react';
 import {loadBindings,transform} from 'next/dist/build/swc/index.js';
+import {extractPlanBudgetCsvSource} from '../src/lib/plan-budget-csv-source.mjs';
+import {syntheticBudgetCsv} from './fixtures/plan-budget-csv-synthetic.mjs';
 
 const accountRoot=new URL('../src/app/(identity)/cuenta/',import.meta.url);
 const reactUrl=import.meta.resolve('react'),returnUrl=new URL('../src/lib/identity-return-path.mjs',import.meta.url).href;
@@ -55,6 +57,23 @@ function initialize({seed={},queue=[{data:listing()},{data:detail()}],extraProps
  panel.reset({open:true,recoveryReady:true,...seed});panel.configure({queue,...config});const currentProps={...props,...extraProps},tree=panel.render(currentProps);return {currentProps,tree};
 }
 async function complete(fixture){panel.flushEffects();await tick();const tree=panel.render(fixture.currentProps);panel.flushEffects();await tick();return tree;}
+
+const visibleCopy=tree=>typeof tree==='string'||typeof tree==='number'?String(tree):React.Children.toArray(tree?.props?.children).map(visibleCopy).join(' ');
+test('actual CSV selection offers private deterministic consent and read-only scope without AI consent or task decisions',async()=>{
+ const f=initialize({extraProps:{initialPlanId:''},seed:{canApprove:true},queue:[]});let tree=await complete(f);
+ fileInput(tree).props.onChange({target:{files:[new File(['synthetic'],'synthetic.CSV',{type:'application/vnd.ms-excel'})]}});tree=panel.render(f.currentProps);
+ assert.equal(panel.snapshot().file.type,'text/csv');assert.equal(panel.snapshot().spreadsheetSelection,'SOURCE_BUDGET_CSV_V1');const copy=visibleCopy(tree);assert.match(copy,/Presupuesto de obra \(lectura\)/);assert.match(copy,/códigos, cantidades, unidades, precios, importes y procedencia/);assert.doesNotMatch(copy,/OpenAI|Alcance del Excel|Apruebo|Aplicar tareas/);
+ const consent=nodes(tree,node=>node.type==='input'&&node.props.type==='checkbox');assert.equal(consent.length,1);consent[0].props.onChange({target:{checked:true}});tree=panel.render(f.currentProps);const submit=nodes(tree,node=>node.type==='button'&&node.props.type==='submit');assert.equal(submit.length,1);assert.equal(visibleCopy(submit[0]),'Leer presupuesto');assert.equal(Boolean(submit[0].props.disabled),false);assert.equal(panel.requests().length,0);panel.unmount();
+});
+
+test('existing CSV draft is consulted through GET only and shows no upload/AI or application form',async()=>{
+ const bytes=syntheticBudgetCsv({count:68}),source=extractPlanBudgetCsvSource(bytes,'text/csv'),descriptor={version:1,profile:'SOURCE_BUDGET_CSV_V1',purpose:'READ_ONLY_BUDGET_SOURCE',projectId,sourceSha256:source.sourceSha256,sourceDigest:source.sourceDigest,rowCount:source.rows.length,currency:{code:null,status:'UNKNOWN'}},saved=draft({createdAt:'2026-10-01T12:00:00.000Z',rows:[],source:{contentType:'text/csv',bytes:bytes.length,sha256:source.sourceSha256},budgetImport:true,financialSource:true,budgetDescriptor:descriptor}),full={...saved,budgetSource:source};
+ const f=initialize({queue:[{data:listing(true,[saved])},{data:{...detail(),canApprove:true,draft:full}}]});let tree=await complete(f);tree=panel.render(f.currentProps);assert.equal(panel.snapshot().draft,full);assert.equal(panel.snapshot().spreadsheetSelection,'SOURCE_BUDGET_CSV_V1');assert.deepEqual(panel.requests().map(call=>call.method),['GET','GET']);const copy=visibleCopy(tree);assert.match(copy,/Presupuesto de obra \(lectura\)/);assert.match(copy,/Lectura privada guardada/);assert.doesNotMatch(copy,/OpenAI|Extraer borrador|Autorizo enviar/);assert.equal(nodes(tree,node=>node.type==='form'||node.type==='input'&&node.props.type==='checkbox').length,0);panel.unmount();
+});
+
+test('failed or processing CSV drafts keep CSV guidance without a document/AI upload form',async()=>{
+ for(const status of ['UPLOADING','PROCESSING','FAILED']){const saved=draft({status,createdAt:'2026-10-01T12:00:00.000Z',rows:[],source:{contentType:'text/csv',bytes:30,sha256:'c'.repeat(64)},budgetImport:true,financialSource:true,budgetDescriptor:null}),f=initialize({queue:[{data:listing(true,[saved])},{data:{...detail(),canApprove:true,draft:saved}}]});let tree=await complete(f);tree=panel.render(f.currentProps);assert.equal(panel.snapshot().draft,saved);assert.equal(panel.snapshot().spreadsheetSelection,'SOURCE_BUDGET_CSV_V1');const copy=visibleCopy(tree);assert.match(copy,/Presupuesto de obra \(lectura\)/);assert.match(copy,/Consulta de presupuesto CSV registrada/);assert.doesNotMatch(copy,/OpenAI|Autorizo enviar|Extraer borrador/);assert.equal(nodes(tree,node=>node.type==='form').length,0);panel.unmount();}
+});
 
 test('actual linked panel waits for recovery and current canonical access, then reads list and exact draft with zero POST',async()=>{
  const fixture=initialize();await complete(fixture);const requests=panel.requests();assert.equal(requests.length,2);
@@ -127,7 +146,7 @@ test('another pending journal reference wins over a late linked draft',async()=>
 
 const workspaceSource=source('workspace-client.js');
 const componentNames=[...readFileSync(new URL('workspace-client.js',accountRoot),'utf8').matchAll(/^import \{([^}]+)\} from/gm)].flatMap(match=>match[1].split(',')).map(value=>value.trim()).filter(value=>/^[A-Z]/.test(value)&&value!=='WorkspaceScreen');
-const workspacePrefix=`import {collectRetainedPages,retainedRows} from ${JSON.stringify(new URL('workspace-live-read.mjs',accountRoot).href)};const useWorksiteLiveRefresh=()=>({status:{state:'IDLE',checkedAt:null,updates:false},check(){throw Error('Live refresh is outside the historical plan-link fixture');}});import {workspaceLocationView,workspaceViewAllowed} from ${JSON.stringify(new URL('workspace-view-routing.mjs',accountRoot).href)};const useSyncExternalStore=(_subscribe,_getSnapshot,getServerSnapshot)=>getServerSnapshot();`+`const {WorkspaceScreen,useWorkspaceView,revealWorkspaceDestination}=(()=>{${source('workspace-screen.js').replace(/^export /gm,'')}return {WorkspaceScreen,useWorkspaceView,revealWorkspaceDestination};})();`+componentNames.map(name=>`const ${name}=function ${name}(){return null;};`).join('')+`const transport=async()=>{throw Error('Unexpected workspace HTTP');},useWorkspaceRequest=()=>transport;const portfolioOverviewMatches=()=>false,projectCreationReceiptOutcome=()=>null,participantOnboardingNavigationTarget=()=>null;const calendarDay=value=>value,loadedScheduleOverview=()=>({loaded:0,total:0,partial:false,missingDates:0,invalidDates:0}),mergeLoadedTasks=()=>[],refreshLoadedTasks=()=>[],updateLoadedTask=()=>[];`;
+const workspacePrefix=`import {collectRetainedPages,retainedRows} from ${JSON.stringify(new URL('workspace-live-read.mjs',accountRoot).href)};const useWorksiteLiveRefresh=options=>{globalThis.__workspaceLiveRefresh?.push(options);return {status:{state:'IDLE',checkedAt:null,updates:false},check(){throw Error('Live refresh is outside the historical plan-link fixture');}};};import {workspaceLocationView,workspaceViewAllowed,workspacePendingProjectSection} from ${JSON.stringify(new URL('workspace-view-routing.mjs',accountRoot).href)};const useSyncExternalStore=(_subscribe,_getSnapshot,getServerSnapshot)=>getServerSnapshot();`+`const {WorkspaceScreen,useWorkspaceView,useWorkspaceRequestedSection,revealWorkspaceDestination}=(()=>{${source('workspace-screen.js').replace(/^export /gm,'')}return {WorkspaceScreen,useWorkspaceView,useWorkspaceRequestedSection,revealWorkspaceDestination};})();`+componentNames.map(name=>`const ${name}=function ${name}(){return null;};`).join('')+`const transport=async()=>{throw Error('Unexpected workspace HTTP');},useWorkspaceRequest=()=>transport;const portfolioOverviewMatches=()=>false,projectCreationReceiptOutcome=()=>null,participantOnboardingNavigationTarget=()=>null;const calendarDay=value=>value,loadedScheduleOverview=()=>({loaded:0,total:0,partial:false,missingDates:0,invalidDates:0}),mergeLoadedTasks=()=>[],refreshLoadedTasks=()=>[],updateLoadedTask=()=>[];`;
 const workspace=await compile(workspaceSource,workspacePrefix,resetExport(stateNames(workspaceSource))+'export const render=props=>{cursors();return AccountWorkspace(props);};');
 function workspaceReady(extra={},extraProps={}){
  const account={scope,role:'ADMIN',projects:[{id:projectId,name:'Obra sintética'}]},view={scope,project:{id:projectId,name:'Obra sintética'},canPlanSchedule:true,tasks:[],totalTasks:0,nextCursor:null};workspace.reset({account,view,loading:false,...extra});return workspace.render({getSessionToken:props.getSessionToken,initialProjectId:projectId,initialPlanId:planId,...extraProps});
@@ -138,6 +157,21 @@ test('actual AccountWorkspace forwards the strict plan hint only to the matching
  assert.equal(nodes(workspaceReady({}, {initialProjectId:'other-project'}),node=>node.type?.name==='PlanImportPanel')[0].props.initialPlanId,'');
  const mismatched=nodes(workspaceReady({view:{scope:'d'.repeat(64),project:{id:projectId,name:'Obra'},canPlanSchedule:true,tasks:[],totalTasks:0}}),node=>node.type?.name==='PlanImportPanel')[0];assert.equal(mismatched.props.canonicalAccess,false);
  assert.equal(nodes(workspaceReady({draft:{task:{id:'local-task',title:'Local'}}}),node=>node.type?.name==='PlanImportPanel').length,0);
+});
+
+// Regression: the preparation and creation panels mount with their own initial read and report busy
+// from an effect. The render that mounts them must already lock the context; otherwise the live
+// schedule/Decisions read starts in that render and the lock cancels it one render later.
+test('actual AccountWorkspace locks live reads from the render that mounts a panel until that panel reports',()=>{
+ const scheduleBlocked=extra=>{const calls=[];globalThis.__workspaceLiveRefresh=calls;try{workspaceReady(extra);}finally{delete globalThis.__workspaceLiveRefresh;}const schedule=calls.filter(options=>options.contextKey.endsWith(':schedule'));assert.equal(schedule.length,1);return schedule[0].blocked;};
+ const reported={projectPreparation:`project-preparation:${scope}:${projectId}:0`,projectCreation:`project-creation:${scope}:${projectId}:0`};
+ assert.equal(scheduleBlocked(),true,'Mounted but unreported panels lock the context in the same render');
+ assert.equal(scheduleBlocked({moduleReported:reported}),false,'Once both mounted panels reported idle the context is free');
+ assert.equal(scheduleBlocked({moduleReported:reported,modulePending:{projectPreparation:true}}),true,'A reported busy panel still locks');
+ assert.equal(scheduleBlocked({moduleReported:{...reported,projectCreation:`project-creation:${scope}:other-project:0`}}),true,'A report from another obra does not unlock this one');
+ assert.equal(scheduleBlocked({moduleReported:reported,observationEpoch:1}),true,'Remounting the same obra in a new generation cannot reuse the previous idle reports');
+ const currentReports={projectPreparation:`project-preparation:${scope}:${projectId}:1`,projectCreation:`project-creation:${scope}:${projectId}:1`};
+ assert.equal(scheduleBlocked({moduleReported:currentReports,observationEpoch:1}),false,'Only reports for the current generation release its mounted panels');
 });
 
 const identitySource=source('workspace-identity.js');

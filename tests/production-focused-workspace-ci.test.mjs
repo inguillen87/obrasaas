@@ -16,17 +16,32 @@ const previousUnitFiles=['tests/production-focused-workspace-navigation.test.mjs
 const unitFiles=[...previousUnitFiles,'tests/production-focused-workspace-continuity-ui.test.mjs','tests/production-company-bootstrap-receipt.test.mjs','tests/production-focused-workspace-task-pagination.test.mjs'];
 // This unit shadow never emits, rewrites, retags or claims real browser evidence.
 const historicalFocusedCounts=result=>({checks:result.historicalChecks,unitSuites:result.historicalUnitSuites});
+// Unit setup snapshot only. It is never a runtime or CI authority and does not
+// memoize a validator result. Each validation still reads its own live sources.
+let unitFixtureBlueprint;
+function freezeUnitFixtureValue(value){
+ if(value&&typeof value==='object'){assert.ok(!Buffer.isBuffer(value),'The unit blueprint must contain no mutable byte buffers');for(const child of Object.values(value))freezeUnitFixtureValue(child);Object.freeze(value);}
+ return value;
+}
+function unitFixtureBase(readSource){
+ if(!unitFixtureBlueprint){
+  const sourceFiles=focusedWorkspaceCiSourceClosure(readSource),workspace=focusedWorkspaceUiSourceClosure(readSource),bootstrap=focusedCompanyBootstrapUiSourceClosure(readSource),rawSourceFiles=focusedWorkspaceUiSourceFiles(readSource),copied=focusedWorkspaceTaskPagingCopy(readSource);
+  const taskPagingFixture={version:1,route:'/task-pages',actualParentAndPagerCopies:true,copiedSources:copied.files.map(row=>({path:row.path,sha256:hash(row.bytes)})),overrides:copied.overrides.map(row=>({path:row.path,exportName:row.exportName,originalSha256:hash(readSource(row.path)),controlledConsumerSha256:hash(row.source)})),pageSha256:currentFocused.taskPagingFixture.pageSha256,consumerAuthority:currentFocused.taskPagingFixture.consumerAuthority,original45TreeUnmodified:true};
+  unitFixtureBlueprint=freezeUnitFixtureValue(clone({sourceFiles,workspace,bootstrap,rawSourceFiles,taskPagingFixture,unitCases:unitFiles.map(file=>focusedWorkspaceUnitCases(readSource,file))}));
+ }
+ return unitFixtureBlueprint;
+}
 function fixture(){
  const current=currentFocused,sourceOverrides=new Map(),evidence=new Map();
- const readSource=file=>{if(sourceOverrides.has(file))return sourceOverrides.get(file);const target=path.join(root,file);if(existsSync(target)&&lstatSync(target).isFile())return readFileSync(target);if(file==='scripts/lib/integrated-identity-current-ci-lineage.mjs')return Buffer.from('export const pendingSyntheticShadowOnly=true;');if(file==='tests/production-integrated-identity-current-ci-lineage.test.mjs')return Buffer.from("import test from 'node:test';test('synthetic pending lineage shadow only',()=>{});");return null;};
- const ref=files=>files.map(file=>({path:file,sha256:hash(readSource(file))})),sourceFiles=focusedWorkspaceCiSourceClosure(readSource);
+ const readSource=file=>{if(sourceOverrides.has(file)){const value=sourceOverrides.get(file);return Buffer.isBuffer(value)?Buffer.from(value):value;}const target=path.join(root,file);if(existsSync(target)&&lstatSync(target).isFile())return readFileSync(target);if(file==='scripts/lib/integrated-identity-current-ci-lineage.mjs')return Buffer.from('export const pendingSyntheticShadowOnly=true;');if(file==='tests/production-integrated-identity-current-ci-lineage.test.mjs')return Buffer.from("import test from 'node:test';test('synthetic pending lineage shadow only',()=>{});");return null;};
+ const base=unitFixtureBase(readSource),ref=files=>files.map(file=>({path:file,sha256:hash(readSource(file))})),sourceFiles=[...base.sourceFiles];
  let operation=0;const requests=current.requestMatrix.map(row=>{const value=clone(row);if(row.mode==='wizard'&&row.method==='POST'){value.operationId='00000000-0000-4000-8000-'+String(++operation).padStart(12,'0');value.recoveryReferenceSha256=String(operation+4).repeat(64);value.syntheticImageSha256=['1'.repeat(64),'2'.repeat(64),'3'.repeat(64)];}return value;});
- const workspace=focusedWorkspaceUiSourceClosure(readSource),bootstrap=focusedCompanyBootstrapUiSourceClosure(readSource);
- const raw={version:current.rawVersion,status:'PASS',sourceState:'EXACT_CI_SOURCE',ciRun:clone(identity),sourceRevision:head,sourceTree:tree,trackedClean:true,checkedAt:'2026-10-16T00:00:00.000Z',widths:[390,1440],continuityWidths:[...current.continuityWidths],historicalCheckCount:20,continuityCheckLedger:[...current.continuityCheckNames],previousTotalCheckCount:current.previousTotalCheckCount,taskPagingWidths:[...current.taskPagingWidths],taskPagingCheckLedger:[...current.taskPagingCheckNames],taskPagingFixture:null,expectedTotalCheckCount:current.checkNames.length,bootstrapSourceManifest:ref(bootstrap.files),bootstrapExternalImports:bootstrap.externalImports,checks:current.checkNames.map(name=>name.startsWith('hidden-panel-')?name+':8':name),totalCheckCount:current.checkNames.length,sourceManifest:ref(focusedWorkspaceUiSourceFiles(readSource)),sourceBytesUnchanged:true,externalImports:workspace.externalImports,requests,errors:[],screenshots:[],providerCalls:0,businessPosts:2,navigationPosts:0,productionDataTouched:false,actualAccountWorkspaceMounted:true,actualClerkOrSSRVerified:false,syntheticPixelsOnly:true,transport:'Controlled synthetic shadow only; no browser or provider is executed by this unit fixture.',cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,attempts:[{attempt:1,phase:'POSTCONDITION',removalAttempted:true,rmCompleted:true,postcondition:'ABSENT',retryScheduled:false}],postcondition:{absent:true}}}};
- const copied=focusedWorkspaceTaskPagingCopy(readSource);raw.taskPagingFixture={version:1,route:'/task-pages',actualParentAndPagerCopies:true,copiedSources:copied.files.map(row=>({path:row.path,sha256:hash(row.bytes)})),overrides:copied.overrides.map(row=>({path:row.path,exportName:row.exportName,originalSha256:hash(readSource(row.path)),controlledConsumerSha256:hash(row.source)})),pageSha256:current.taskPagingFixture.pageSha256,consumerAuthority:current.taskPagingFixture.consumerAuthority,original45TreeUnmodified:true};
+ const workspace=clone(base.workspace),bootstrap=clone(base.bootstrap);
+ const raw={version:current.rawVersion,status:'PASS',sourceState:'EXACT_CI_SOURCE',ciRun:clone(identity),sourceRevision:head,sourceTree:tree,trackedClean:true,checkedAt:'2026-10-16T00:00:00.000Z',widths:[390,1440],continuityWidths:[...current.continuityWidths],historicalCheckCount:20,continuityCheckLedger:[...current.continuityCheckNames],previousTotalCheckCount:current.previousTotalCheckCount,taskPagingWidths:[...current.taskPagingWidths],taskPagingCheckLedger:[...current.taskPagingCheckNames],taskPagingFixture:null,expectedTotalCheckCount:current.checkNames.length,bootstrapSourceManifest:ref(bootstrap.files),bootstrapExternalImports:bootstrap.externalImports,checks:current.checkNames.map(name=>name.startsWith('hidden-panel-')?name+':8':name),totalCheckCount:current.checkNames.length,sourceManifest:ref(base.rawSourceFiles),sourceBytesUnchanged:true,externalImports:workspace.externalImports,requests,errors:[],screenshots:[],providerCalls:0,businessPosts:2,navigationPosts:0,productionDataTouched:false,actualAccountWorkspaceMounted:true,actualClerkOrSSRVerified:false,syntheticPixelsOnly:true,transport:'Controlled synthetic shadow only; no browser or provider is executed by this unit fixture.',cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,attempts:[{attempt:1,phase:'POSTCONDITION',removalAttempted:true,rmCompleted:true,postcondition:'ABSENT',retryScheduled:false}],postcondition:{absent:true}}}};
+ raw.taskPagingFixture=clone(base.taskPagingFixture);
  const browserPath=FOCUSED_WORKSPACE_CI_EVIDENCE+'run-synthetic/browser.json';
  for(const[i,name]of current.screenshotNames.entries()){const b=Buffer.from('synthetic nonpersonal pixels '+i),width=Number(/-(320|390|1440)\.png$/.exec(name)?.[1]);evidence.set(path.posix.dirname(browserPath)+'/'+name,b);raw.screenshots.push({path:name,sha256:hash(b),geometry:{width,height:1000,scrollWidth:width,identityActionTop:null}});}
- const unitSuites=unitFiles.map((file,index)=>{const cases=focusedWorkspaceUnitCases(readSource,file),text=['TAP version 13',...cases.map((name,i)=>'ok '+(i+1)+' - '+name),'1..'+cases.length,'# tests '+cases.length,'# pass '+cases.length,'# fail 0','# cancelled 0','# skipped 0','# todo 0',''].join('\n'),tap=Buffer.from(text),tapPath=FOCUSED_WORKSPACE_CI_EVIDENCE+'unit-'+index+'.tap';evidence.set(tapPath,tap);return{file,sourceSha256:hash(readSource(file)),exitCode:0,tap:{path:tapPath,bytes:tap.length,sha256:hash(tap)},result:parseFocusedWorkspaceTap(tap)};});
+ const unitSuites=unitFiles.map((file,index)=>{const cases=[...base.unitCases[index]],text=['TAP version 13',...cases.map((name,i)=>'ok '+(i+1)+' - '+name),'1..'+cases.length,'# tests '+cases.length,'# pass '+cases.length,'# fail 0','# cancelled 0','# skipped 0','# todo 0',''].join('\n'),tap=Buffer.from(text),tapPath=FOCUSED_WORKSPACE_CI_EVIDENCE+'unit-'+index+'.tap';evidence.set(tapPath,tap);return{file,sourceSha256:hash(readSource(file)),exitCode:0,tap:{path:tapPath,bytes:tap.length,sha256:hash(tap)},result:parseFocusedWorkspaceTap(tap)};});
  const spec={id:FOCUSED_WORKSPACE_CI_PROOF_ID,kind:FOCUSED_WORKSPACE_CI_KIND,lane:'workspace-ui',blockId:64,path:FOCUSED_WORKSPACE_CI_EVIDENCE+'current-ci.json',producer:'scripts/verify-focused-workspace-ci.mjs',producerSha256:hash(readSource('scripts/verify-focused-workspace-ci.mjs')),sourceFiles,checkNames:[...current.checkNames]};
  const proof={version:FOCUSED_WORKSPACE_CI_VERSION,status:'PASS',sourceRevision:head,sourceTree:tree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,ciRun:clone(identity),harnessSha256:spec.producerSha256,sourceManifest:ref(sourceFiles),checks:[...current.checkNames],historicalCheckCount:20,continuityCheckLedger:[...current.continuityCheckNames],historicalUnitSuiteCount:3,previousTotalCheckCount:current.previousTotalCheckCount,taskPagingCheckLedger:[...current.taskPagingCheckNames],rawBrowser:null,unitSuites,providerCalls:0,realClerkOrSsrVerified:false,productionDataTouched:false,humanAccepted:false};
  // Preserve the historical59 mutation surface for all inherited negatives.
@@ -38,8 +53,9 @@ function fixture(){
   const currentRaw={...raw,checks:Array.isArray(raw.checks)?[...raw.checks,...home.addedCheckNames]:raw.checks,totalCheckCount:raw.totalCheckCount+home.addedCheckNames.length,expectedTotalCheckCount:raw.expectedTotalCheckCount+home.addedCheckNames.length,homeDecisionsWidths:[...home.widths],homeDecisionsCheckLedger:[...home.addedCheckNames],requests:currentRequests,screenshots:Array.isArray(raw.screenshots)&&raw.screenshots.length===home.previousScreenshotNames.length?[...raw.screenshots,...homeScreenshots]:raw.screenshots};
   const b=Buffer.from(JSON.stringify(currentRaw));evidence.set(browserPath,b);proof.rawBrowser={path:browserPath,bytes:b.length,sha256:hash(b)};
  };reseal();
- const validate=()=>validateFocusedWorkspaceCi(proof,{expectedHead:head,expectedTree:tree,readSource,readEvidence:file=>evidence.get(file)||null,spec,runId:42,runAttempt:1});
- return{raw,proof,spec,evidence,sourceOverrides,readSource,validate,reseal};
+ const readEvidence=file=>{const value=evidence.get(file);return Buffer.isBuffer(value)?Buffer.from(value):null;};
+ const validate=()=>validateFocusedWorkspaceCi(proof,{expectedHead:head,expectedTree:tree,readSource,readEvidence,spec,runId:42,runAttempt:1});
+ return{raw,proof,spec,evidence,sourceOverrides,readSource,readEvidence,validate,reseal};
 }
 const denied=fn=>assert.throws(fn,{code:'FOCUSED_WORKSPACE_CI_REJECTED'});
 
@@ -97,9 +113,28 @@ test('focused current v2 keeps the exact historical twenty while requiring every
 });
 test('focused current bootstrap subtree external imports and original producer hashes are independently mandatory',()=>{
  for(const edit of [r=>{r.bootstrapSourceManifest.pop();},r=>{r.bootstrapSourceManifest.push(clone(r.bootstrapSourceManifest[0]));},r=>{r.bootstrapSourceManifest[0].sha256='0'.repeat(64);},r=>{r.bootstrapExternalImports.push('foreign-provider');},r=>{r.externalImports.push('foreign-package');},r=>{r.sourceManifest.find(row=>row.path==='scripts/verify-focused-workspace-ui.mjs').sha256='6d61015a48202dc0affe71afe37bd026618dda325b055f1863589bdecee2963d';}]){const f=fixture();edit(f.raw);f.reseal();denied(f.validate);}
- const absent=fixture();absent.sourceOverrides.set('src/app/(identity)/cuenta/company-bootstrap-panel.js',null);assert.throws(absent.validate,{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'});
+ const absent=fixture();absent.sourceOverrides.set('src/app/(identity)/cuenta/company-bootstrap-panel.js',null);assert.throws(absent.validate,{code:'FOCUSED_WORKSPACE_CI_REJECTED',message:'Worksite live/hours source revision rejected: Pilot completion source lineage rejected: PILOT_SOURCE_BYTES_src/app/(identity)/cuenta/company-bootstrap-panel.js'});assert.throws(()=>focusedCompanyBootstrapUiSourceClosure(absent.readSource),{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'});
  const unit='tests/production-company-bootstrap-receipt.test.mjs',original=fixture(),unitBytes=original.readSource(unit),imports=focusedWorkspaceCiLocalImports(unitBytes,unit,original.readSource);assert.ok(imports.includes('../src/app/(identity)/cuenta/company-bootstrap-panel.js'));assert.ok(imports.includes('next/dist/build/swc/index.js'));assert.ok(imports.includes('react'));assert.ok(imports.includes('react-dom/server'));
  denied(()=>focusedWorkspaceCiLocalImports(unitBytes,'tests/foreign-bootstrap-receipt.test.mjs',original.readSource));
+ // This branch is proposed only with the exact 424 sources and a genuinely
+ // composed authenticated metadata frame. No import, compiler or pin is mocked.
+ const lfUnit=Buffer.from(unitBytes.toString('utf8').replaceAll('\r\n','\n'));
+ assert.equal(hash(lfUnit),'08b38bcced2c5e8700e193ac4f45223073c97b829c46a9ca61e4f5d0198c3d78');
+ const panel='src/app/(identity)/cuenta/company-bootstrap-panel.js',panelBytes=original.readSource(panel);
+ assert.equal(hash(Buffer.from(panelBytes.toString('utf8').replaceAll('\r\n','\n'))),'7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e');
+ assert.equal(WORKSPACE_CONTINUITY_FOCUSED_UI.controlledSourceTransforms[0].sourceLfSha256,'44676be514b092d8146f6f8ade5c4b0867f8bceb1b9f5c7ab204bb5f90e503af');
+ const withoutMetadata=file=>file==='.github/workspace-acceptance-contract.json'?null:original.readSource(file);
+ denied(()=>focusedWorkspaceCiLocalImports(unitBytes,unit,withoutMetadata));
+ const malformedMetadata=file=>file==='.github/workspace-acceptance-contract.json'?Buffer.from('{'):original.readSource(file);
+ denied(()=>focusedWorkspaceCiLocalImports(unitBytes,unit,malformedMetadata));
+ const changedPanel=file=>file===panel?Buffer.concat([panelBytes,Buffer.from('\n')]):original.readSource(file);
+ denied(()=>focusedWorkspaceCiLocalImports(unitBytes,unit,changedPanel));
+ const alternateRaw=unitBytes.equals(lfUnit)?Buffer.from(lfUnit.toString('utf8').replaceAll('\n','\r\n')):lfUnit;
+ assert.equal(hash(Buffer.from(alternateRaw.toString('utf8').replaceAll('\r\n','\n'))),hash(lfUnit));assert.equal(alternateRaw.equals(unitBytes),false);
+ denied(()=>focusedWorkspaceCiLocalImports(alternateRaw,unit,original.readSource));
+ for(const[before,after]of [["const acceptSource=source.slice(acceptNode.start,acceptNode.end);","const acceptSource=foreignBody;"],["return accept(value,openWorkspace);","return foreignAccept(value,openWorkspace);"],["alreadyConfiguredBodies.map(body=>","foreignBodies.map(body=>"]]){
+  assert.ok(unitBytes.toString().includes(before));denied(()=>focusedWorkspaceCiLocalImports(Buffer.from(unitBytes.toString().replace(before,after)),unit,original.readSource));
+ }
  for(const[before,after]of [["../src/app/(identity)/cuenta/company-bootstrap-panel.js","../src/app/(identity)/cuenta/foreign-panel.js"],["const source=readFileSync(new URL(","const source=foreignRead(new URL("],["next/dist/build/swc/index.js","next/dist/build/swc/foreign.js"],["const compiled=await transform(","const compiled=await foreignTransform("],["import.meta.resolve('react')","import.meta.resolve('foreign-react')"],["Buffer.from(compiled.code)","Buffer.from(source)"],[".toString('base64')",".toString('hex')"],["data:text/javascript;base64,","https://example.invalid/module/"]]){assert.ok(unitBytes.toString().includes(before));denied(()=>focusedWorkspaceCiLocalImports(Buffer.from(unitBytes.toString().replace(before,after)),unit,original.readSource));}
  denied(()=>focusedWorkspaceCiLocalImports(Buffer.from('await import(specifier);'),'scripts/foreign-transform.mjs',original.readSource));
  const remote=fixture();remote.sourceOverrides.set(unit,Buffer.from("await import('https://example.invalid/module.mjs');"));denied(()=>focusedWorkspaceCiSourceClosure(remote.readSource));
@@ -131,4 +166,17 @@ test('focused parent fixture original source copies and exactly two controlled c
 
 test('focused current page requests cannot omit denial observations change cursor or introduce business POST',()=>{
  for(const edit of [r=>{r.requests.splice(298,1);},r=>{r.requests.find(row=>row.mode.startsWith('task-paging-')&&row.afterTask).afterTask='foreign-task';},r=>{r.requests.find(row=>row.responseStatus===404).responseStatus=200;},r=>{r.requests.find(row=>row.mode.startsWith('task-paging-')).method='POST';}]){const f=fixture();edit(f.raw);f.reseal();denied(f.validate);}
+});
+
+test('focused unit setup snapshots never share mutable fixture metadata maps or evidence',()=>{
+ const first=fixture(),second=fixture(),path=second.proof.rawBrowser.path,before=second.readEvidence(path),sourcePath=second.spec.sourceFiles[0],secondSource=second.readSource(sourcePath);
+ first.raw.checks[0]='foreign-check';first.proof.sourceManifest[0].sha256='f'.repeat(64);first.spec.sourceFiles.push('foreign/source.mjs');first.sourceOverrides.set(sourcePath,Buffer.from('foreign source'));first.evidence.get(path).fill(0);
+ assert.notEqual(first.raw.checks[0],second.raw.checks[0]);assert.notEqual(first.proof.sourceManifest[0].sha256,second.proof.sourceManifest[0].sha256);assert.equal(second.spec.sourceFiles.includes('foreign/source.mjs'),false);assert.equal(second.sourceOverrides.has(sourcePath),false);assert.ok(second.readEvidence(path).equals(before));assert.ok(second.readSource(sourcePath).equals(secondSource));
+ denied(first.validate);assert.equal(second.validate().status,'PASS');
+});
+test('focused fixture byte readers isolate caller buffers and keep changed sources denied',()=>{
+ const first=fixture(),second=fixture(),sourcePath='src/app/(identity)/cuenta/workspace-client.js',original=first.readSource(sourcePath),evidencePath=first.proof.rawBrowser.path;
+ first.sourceOverrides.set(sourcePath,Buffer.from(original));const returned=first.readSource(sourcePath);returned.fill(0);assert.ok(first.readSource(sourcePath).equals(original));assert.ok(second.readSource(sourcePath).equals(original));
+ const evidenceBefore=first.readEvidence(evidencePath),returnedEvidence=first.readEvidence(evidencePath);returnedEvidence.fill(0);assert.ok(first.readEvidence(evidencePath).equals(evidenceBefore));assert.ok(second.readEvidence(evidencePath).equals(evidenceBefore));
+ first.sourceOverrides.set(sourcePath,Buffer.from('export const substituted=true;'));denied(first.validate);assert.equal(second.validate().status,'PASS');
 });

@@ -37,7 +37,7 @@ test('cursor and exact ALL reference remain exclusive canonical ID selectors',as
 test('invalid, incomplete, repeated and mixed review selectors cannot reach any store path',async()=>{
  const {calls,handlers}=harness(),invalid=[
   {...context,reviewSection:'EVIDENCE'}, {...context,reviewFilter:'PENDING'},
-  {...query,reviewSection:'ATTENDANCE'}, {...query,reviewFilter:'OPEN'},
+  {...query,reviewSection:'UNKNOWN_SECTION'}, {...query,reviewFilter:'OPEN'},
   {...query,afterReview:''}, {...query,afterReview:'../evidence'},
   {...query,reviewId:'evidence-old'}, {...query,reviewFilter:'ALL',afterReview:'one',reviewId:'two'},
   {...query,scope:'stale'}, {...query,projectId:''},
@@ -86,7 +86,7 @@ test('review failures expose only safe error codes and preserve status and no-st
 
 test('store rejects invalid review selectors before opening canonical project transaction',()=>{
  let transactions=0;const operations=createFieldOperations({workspace:{projectOperation:()=>{transactions++;throw new Error('Must not open database');}}});
- for(const change of [{reviewSection:'ATTENDANCE'},{reviewFilter:'OPEN'},{afterReview:''},{afterReview:'a/b'},{reviewId:'a/b'},{afterReview:'one',reviewId:'two',reviewFilter:'ALL'},{reviewId:'one'},{afterReview:'one',reviewAccessStamp:undefined},{reviewId:'one',reviewFilter:'ALL',reviewAccessStamp:undefined},{reviewAccessStamp:'bad'}])assert.throws(()=>operations.reviewPage(session,{...query,...change}),{code:'FIELD_QUERY_INVALID'});
+ for(const change of [{reviewSection:'UNKNOWN_SECTION'},{reviewFilter:'OPEN'},{afterReview:''},{afterReview:'a/b'},{reviewId:'a/b'},{afterReview:'one',reviewId:'two',reviewFilter:'ALL'},{reviewId:'one'},{afterReview:'one',reviewAccessStamp:undefined},{reviewId:'one',reviewFilter:'ALL',reviewAccessStamp:undefined},{reviewAccessStamp:'bad'}])assert.throws(()=>operations.reviewPage(session,{...query,...change}),{code:'FIELD_QUERY_INVALID'});
  assert.equal(transactions,0);
 });
 

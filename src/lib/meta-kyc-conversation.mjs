@@ -1,3 +1,4 @@
+import {isMetaGreeting} from './meta-greeting.mjs';
 import {participantIdentityNoticeSummary} from './participant-kyc-notice-links.mjs';
 import {digest,WorkspaceError} from './workspace-policy.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from './participant-policy.mjs';
@@ -11,8 +12,14 @@ export const META_KYC_CONVERSATION_TTL_MS=30*60*1000;
 export const EMPLOYEE_INTAKE_NOTICE_VERSION='employee-intake-v1';
 export const EMPLOYEE_INTAKE_NOTICE='Tu nombre, oficio solicitado, correo y teléfono se guardarán en privado para que el responsable de esta empresa revise tu solicitud y pueda invitarte a una obra. La solicitud no concede acceso ni verifica tu identidad. No envíes documentos todavía.';
 const intakeText=body=>({type:'text',body});
+const entryRows=[['CREATE_COMPANY','Crear mi empresa'],['JOIN_WORKSITE','Sumarme a una obra'],['ACCOUNT','Ya tengo cuenta']];
+function intakeEntryPrompt(state,eventId){
+ const nonce=digest(['employee-intake-entry-v1',eventId]).slice(0,20);
+ return {state:{...state,nonce,choices:entryRows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:'Hola. Elegí cómo querés continuar en ObraSaaS.',button:'Elegir',sections:[{title:'Empezar en ObraSaaS',rows:entryRows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title}))}]}};
+}
 function intakePrompt(state,eventId){
- const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado.',ADMITTED:'Tu ficha ya está registrada.\n\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\n\nSi te enviaron una invitación, aceptala desde tu correo.\n\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\n\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};
+ if(state.entryChoicePending===true)return intakeEntryPrompt(state,eventId);
+ const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado. Para retirar esta solicitud pendiente, escribí CANCELAR.',ADMITTED:'Tu ficha ya está registrada.\n\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\n\nSi te enviaron una invitación, aceptala desde tu correo.\n\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\n\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};
  if(['ADMITTED','JOB','CONFIRM'].includes(state.step)){
   const rows=state.step==='ADMITTED'?[['ACCOUNT','Abrir mi cuenta'],['IDENTITY_GUIDANCE','Consultar identidad']]:state.step==='JOB'?Object.entries(SITE_ROLES):[['CONFIRM','Enviar solicitud'],['CANCEL','Cancelar']];
   const nonce=digest(['employee-intake-choice-v1',eventId,state.step]).slice(0,20);
@@ -20,10 +27,22 @@ function intakePrompt(state,eventId){
  }
  return {state,reply:intakeText(descriptions[state.step]||'Escribí ESTADO para consultar tu solicitud.')};
 }
-export function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'NAME',noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}
+export function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'NAME',entryChoicePending:true,noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}
 export function planEmployeeIntakeConversation({message,state,eventId,promptConfirmed=false,draftTextConfirmed=false}){
  if(state?.version!==1||!['NAME','JOB','EMAIL','CONFIRM','WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.step))throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);
  const body=message.type==='text'?message.text?.body?.trim():null;
+ if(Object.hasOwn(state,'entryChoicePending')){
+  if(state.entryChoicePending!==true||state.step!=='NAME'||state.consent!==false||state.name!==null||state.job!==null||state.email!==null)throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);
+  if(body?.toUpperCase()==='CANCELAR'){const next={...state,step:'CANCELLED',consent:false};delete next.entryChoicePending;return intakePrompt(next,eventId);}
+  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^intake:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
+  if(!promptConfirmed||!match||match[1]!==state.nonce||!state.choices?.[Number(match[2])])return intakeEntryPrompt(state,eventId);
+  const next={...state},selected=state.choices[Number(match[2])].value;delete next.nonce;delete next.choices;
+  if(selected==='JOIN_WORKSITE'){delete next.entryChoicePending;return intakePrompt(next,eventId);}
+  if(selected==='CREATE_COMPANY')return {state:next,reply:intakeText('Creá tu cuenta personal y verificá tu correo para dar de alta una empresa:\nhttps://obrasaas.com/sign-up\n\nEste enlace inicia el alta en la plataforma. No conecta WhatsApp ni concede permisos. Si ya tenés una cuenta, ingresá con ella. Para volver a las opciones, escribí HOLA.')};
+  if(selected==='ACCOUNT')return {state:next,reply:intakeText('Ingresá con tu cuenta personal:\nhttps://obrasaas.com/cuenta\n\nAllí verás las empresas, obras y opciones que te corresponden. Este chat no concede un rol ni confirma tu identidad. Para volver a las opciones, escribí HOLA.')};
+  return intakeEntryPrompt(state,eventId);
+ }
+ if(state.step==='WAITING_RESPONSIBLE'&&body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);
  if(['WAITING_RESPONSIBLE','REJECTED','CANCELLED'].includes(state.step))return intakePrompt(state,eventId);
  if(state.step==='ADMITTED'){
   const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^intake:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
@@ -35,7 +54,7 @@ export function planEmployeeIntakeConversation({message,state,eventId,promptConf
   return intakePrompt(state,eventId);
  }
  if(body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);
- if(['HOLA','ESTADO','AYUDA'].includes(body?.toUpperCase())||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);
+ if(isMetaGreeting(body)||['ESTADO','AYUDA'].includes(body?.toUpperCase())||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);
  const next={...state};delete next.nonce;delete next.choices;
  if(state.step==='NAME'){
   try{return intakePrompt({...next,name:siteText(body,100,2),step:'JOB'},eventId);}catch{return intakePrompt(state,eventId);}

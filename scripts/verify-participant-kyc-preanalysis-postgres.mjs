@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {randomUUID, createHash, createHmac} from 'node:crypto';
 import {existsSync, readFileSync, mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
@@ -83,6 +84,103 @@ export function participantPreanalysisTargetSelfTest() {
   return {status: 'TARGET_GUARDS_PASS_POSTGRES_NOT_EXECUTED', accepted: 2, rejected: changes.length, clientsConstructed: 0, providerRequests: 0};
 }
 
+export const PARTICIPANT_PREANALYSIS_OWNED_CI_IMAGE = 'docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
+const ownedCiImageDigest = 'sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
+const ownedCiContextKeys = ['repository', 'sourceRevision', 'sourceTree', 'runId', 'runAttempt', 'event', 'workflow', 'job', 'serviceId', 'networkName', 'publishedPort'];
+const serviceEnvironmentKeys = ['OBRASAAS_PREANALYSIS_CI_SERVICE_ID', 'OBRASAAS_PREANALYSIS_CI_NETWORK', 'OBRASAAS_PREANALYSIS_CI_PUBLISHED_PORT'];
+const serviceDeny = label => {throw Object.assign(new Error('Owned CI PostgreSQL service required: ' + label), {code: 'KYC_PREANALYSIS_CI_SERVICE_REJECTED'});};
+const serviceRequire = (condition, label) => {if (!condition) serviceDeny(label);};
+const serviceSame = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+const serviceKeys = (value, expected, label) => serviceRequire(value && typeof value === 'object' && !Array.isArray(value) && serviceSame(Object.keys(value).sort(), [...expected].sort()), label);
+const serviceHex = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const serviceInstant = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+const serviceIpv4 = value => typeof value === 'string' && /^(?:0|[1-9]\d{0,2})(?:\.(?:0|[1-9]\d{0,2})){3}$/.test(value) && value.split('.').every(part => Number(part) <= 255) && !['0.0.0.0', '127.0.0.1'].includes(value);
+
+export function participantPreanalysisOwnedCiContext(environment, observed) {
+  // Any CI/service marker enters the strict CI path; incomplete context never
+  // falls back to the legacy local endpoint (including the local 6549 target).
+  const target = participantPreanalysisDisposableTarget(environment);
+  serviceRequire(environment.CI === 'true' && environment.GITHUB_ACTIONS === 'true' && environment.RUNNER_OS === 'Linux' && observed?.platform === 'linux', 'GitHub Linux job');
+  serviceRequire(target.port === '5432', 'CI target port');
+  serviceRequire(environment.GITHUB_REPOSITORY === 'inguillen87/obrasaas' && ['https://github.com/inguillen87/obrasaas', 'https://github.com/inguillen87/obrasaas.git'].includes(observed.remote), 'repository');
+  serviceRequire(/^[a-f0-9]{40}$/.test(environment.GITHUB_SHA) && environment.GITHUB_SHA === observed.head && /^[a-f0-9]{40}$/.test(observed.tree), 'actual Git HEAD/tree');
+  serviceRequire(environment.GITHUB_WORKFLOW === 'Authorized workspace acceptance' && environment.GITHUB_JOB === 'people' && ['push', 'workflow_dispatch'].includes(environment.GITHUB_EVENT_NAME), 'workflow/job/event');
+  serviceRequire(/^[1-9]\d*$/.test(environment.GITHUB_RUN_ID) && /^[1-9]\d*$/.test(environment.GITHUB_RUN_ATTEMPT), 'run/attempt');
+  serviceRequire(typeof environment.GITHUB_WORKSPACE === 'string' && path.resolve(environment.GITHUB_WORKSPACE) === observed.workspace, 'actual workspace');
+  serviceRequire(!environment.DOCKER_HOST && !environment.DOCKER_CONTEXT && !environment.DOCKER_TLS_VERIFY && !environment.DOCKER_CERT_PATH, 'local Docker daemon only');
+  serviceRequire(serviceHex(environment.OBRASAAS_PREANALYSIS_CI_SERVICE_ID) && /^github_network_[a-f0-9]{32}$/.test(environment.OBRASAAS_PREANALYSIS_CI_NETWORK) && environment.OBRASAAS_PREANALYSIS_CI_PUBLISHED_PORT === '5432', 'explicit job.services.postgres context');
+  return {repository: environment.GITHUB_REPOSITORY, sourceRevision: observed.head, sourceTree: observed.tree, runId: environment.GITHUB_RUN_ID,
+    runAttempt: environment.GITHUB_RUN_ATTEMPT, event: environment.GITHUB_EVENT_NAME, workflow: environment.GITHUB_WORKFLOW, job: environment.GITHUB_JOB,
+    serviceId: environment.OBRASAAS_PREANALYSIS_CI_SERVICE_ID, networkName: environment.OBRASAAS_PREANALYSIS_CI_NETWORK, publishedPort: 5432};
+}
+
+export function participantPreanalysisOwnedCiEndpoint(observation, expectedContext) {
+  serviceKeys(observation, ['version', 'checkedAt', 'context', 'inspection'], 'observation shape');
+  serviceRequire(observation.version === 1 && serviceInstant(observation.checkedAt), 'observation time');
+  const context = observation.context;
+  serviceKeys(context, ownedCiContextKeys, 'context shape');
+  serviceRequire(serviceSame(context, expectedContext), 'independent context equality');
+  serviceRequire(context.repository === 'inguillen87/obrasaas' && /^[a-f0-9]{40}$/.test(context.sourceRevision) && /^[a-f0-9]{40}$/.test(context.sourceTree) && /^[1-9]\d*$/.test(context.runId) && /^[1-9]\d*$/.test(context.runAttempt) && ['push', 'workflow_dispatch'].includes(context.event) && context.workflow === 'Authorized workspace acceptance' && context.job === 'people', 'recorded execution identity');
+  serviceRequire(serviceHex(context.serviceId) && /^github_network_[a-f0-9]{32}$/.test(context.networkName) && context.publishedPort === 5432, 'recorded service context');
+  serviceKeys(observation.inspection, ['container', 'image', 'network'], 'inspection shape');
+  const {container, image, network} = observation.inspection;
+  serviceKeys(container, ['id', 'imageId', 'imageReference', 'running', 'health', 'networks', 'ports'], 'container shape');
+  serviceRequire(container.id === context.serviceId && /^sha256:[a-f0-9]{64}$/.test(container.imageId) && container.imageReference === PARTICIPANT_PREANALYSIS_OWNED_CI_IMAGE && container.running === true && container.health === 'healthy', 'exact running service/image');
+  serviceKeys(image, ['id', 'repoDigests'], 'image shape');
+  const allowedDigests = ['postgres@' + ownedCiImageDigest, 'docker.io/library/postgres@' + ownedCiImageDigest];
+  serviceRequire(image.id === container.imageId && Array.isArray(image.repoDigests) && image.repoDigests.length > 0 && image.repoDigests.length <= 2 && new Set(image.repoDigests).size === image.repoDigests.length && image.repoDigests.every(value => allowedDigests.includes(value)), 'actual pinned image digest');
+  serviceKeys(container.networks, [context.networkName], 'one exact job network');
+  const endpoint = container.networks[context.networkName];
+  serviceKeys(endpoint, ['networkId', 'endpointId', 'address', 'prefix', 'aliases'], 'container network shape');
+  serviceRequire(serviceHex(endpoint.networkId) && serviceHex(endpoint.endpointId) && serviceIpv4(endpoint.address) && Number.isInteger(endpoint.prefix) && endpoint.prefix > 0 && endpoint.prefix <= 32 && Array.isArray(endpoint.aliases) && endpoint.aliases.includes('postgres') && endpoint.aliases.every(value => typeof value === 'string'), 'network endpoint');
+  serviceKeys(network, ['id', 'name', 'driver', 'internal', 'containers'], 'network shape');
+  serviceRequire(network.id === endpoint.networkId && network.name === context.networkName && network.driver === 'bridge' && network.internal === false, 'actual job bridge');
+  serviceKeys(network.containers, [context.serviceId], 'one exact network container');
+  serviceKeys(network.containers[context.serviceId], ['endpointId', 'ipv4Address'], 'network member shape');
+  serviceRequire(network.containers[context.serviceId].endpointId === endpoint.endpointId && network.containers[context.serviceId].ipv4Address === endpoint.address + '/' + endpoint.prefix, 'container/network independent join');
+  serviceKeys(container.ports, ['5432/tcp'], 'one published PostgreSQL port');
+  const mappings = container.ports['5432/tcp'];
+  serviceRequire(Array.isArray(mappings) && mappings.length > 0 && mappings.length <= 2 && new Set(mappings.map(value => value?.hostIp)).size === mappings.length, 'unambiguous port mappings');
+  for (const mapping of mappings) {
+    serviceKeys(mapping, ['hostIp', 'hostPort'], 'port mapping shape');
+    serviceRequire(['0.0.0.0', '127.0.0.1', '::', '::1'].includes(mapping.hostIp) && mapping.hostPort === '5432', 'published endpoint');
+  }
+  serviceRequire(mappings.some(value => ['0.0.0.0', '127.0.0.1'].includes(value.hostIp)), 'loopback client reaches published IPv4 port');
+  return {host: endpoint.address, port: 5432};
+}
+
+// The only live resolver. Callers cannot inject JSON, an expected IP, a CIDR or
+// an alternate executable. Each invocation obtains its own daemon observations.
+export function inspectParticipantPreanalysisOwnedCiService(environment = process.env) {
+  const ciMarker = ['CI', 'GITHUB_ACTIONS', 'GITHUB_REPOSITORY', 'GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_JOB', 'GITHUB_WORKFLOW', 'GITHUB_EVENT_NAME', 'GITHUB_WORKSPACE', 'RUNNER_OS', ...serviceEnvironmentKeys].some(key => environment[key] !== undefined);
+  if (!ciMarker) return null;
+  serviceRequire(process.platform === 'linux', 'Linux live inspection only');
+  const command = (executable, args) => {
+    try {return execFileSync(executable, args, {cwd: root, env: environment, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: 10000, stdio: ['ignore', 'pipe', 'pipe']});}
+    catch {serviceDeny('read-only process inspection failed');}
+  };
+  const git = (...args) => command('/usr/bin/git', args).trim();
+  const context = participantPreanalysisOwnedCiContext(environment, {head: git('rev-parse', 'HEAD'), tree: git('rev-parse', 'HEAD^{tree}'), remote: git('config', '--get', 'remote.origin.url'), workspace: root, platform: process.platform});
+  const inspect = (type, id) => {
+    let rows; try {rows = JSON.parse(command('/usr/bin/docker', ['--host=unix:///var/run/docker.sock', 'inspect', '--type=' + type, id]));} catch {serviceDeny('invalid daemon inspection');}
+    serviceRequire(Array.isArray(rows) && rows.length === 1, 'one exact inspected ' + type); return rows[0];
+  };
+  const projectContainer = value => ({id: value?.Id, imageId: value?.Image, imageReference: value?.Config?.Image, running: value?.State?.Running, health: value?.State?.Health?.Status,
+    networks: Object.fromEntries(Object.entries(value?.NetworkSettings?.Networks || {}).map(([name, entry]) => [name, {networkId: entry.NetworkID, endpointId: entry.EndpointID, address: entry.IPAddress, prefix: entry.IPPrefixLen, aliases: entry.Aliases}])),
+    ports: Object.fromEntries(Object.entries(value?.NetworkSettings?.Ports || {}).map(([port, entries]) => [port, Array.isArray(entries) ? entries.map(entry => ({hostIp: entry.HostIp, hostPort: entry.HostPort})).sort((a, b) => a.hostIp.localeCompare(b.hostIp)) : null]))});
+  const container = projectContainer(inspect('container', context.serviceId));
+  serviceRequire(container.id === context.serviceId && /^sha256:[a-f0-9]{64}$/.test(container.imageId), 'exact container/image ID');
+  const imageRaw = inspect('image', container.imageId), networkRaw = inspect('network', context.networkName);
+  const observation = {version: 1, checkedAt: new Date().toISOString(), context, inspection: {container,
+    image: {id: imageRaw?.Id, repoDigests: Array.isArray(imageRaw?.RepoDigests) ? [...imageRaw.RepoDigests].sort() : null},
+    network: {id: networkRaw?.Id, name: networkRaw?.Name, driver: networkRaw?.Driver, internal: networkRaw?.Internal,
+      containers: Object.fromEntries(Object.entries(networkRaw?.Containers || {}).map(([id, entry]) => [id, {endpointId: entry.EndpointID, ipv4Address: entry.IPv4Address}]))}}};
+  participantPreanalysisOwnedCiEndpoint(observation, context);
+  serviceRequire(serviceSame(container, projectContainer(inspect('container', context.serviceId))), 'container changed during inspection');
+  serviceRequire(git('rev-parse', 'HEAD') === context.sourceRevision && git('rev-parse', 'HEAD^{tree}') === context.sourceTree, 'source changed during inspection');
+  return observation;
+}
+
 export function participantPreanalysisSourceManifest() {
   const files = new Set(), visit = relative => {
     if (files.has(relative)) return;
@@ -110,6 +208,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
   const target = participantPreanalysisDisposableTarget(environment), database = prefix + randomUUID().replaceAll('-', '');
   assert.match(database, databasePattern);
   const sources = participantPreanalysisSourceManifest(), sourceDigest = digest(sources), startedAt = new Date().toISOString();
+  const ownedCiService = inspectParticipantPreanalysisOwnedCiService(environment);
   const nativeEnvironment = {...lifecycleEnvironment};
   const admin = new Client({connectionString: target.href, options: '-c statement_timeout=8000 -c lock_timeout=5000 -c TimeZone=UTC'});
   const checks = [], sqlFailures = [], lockObservations = [], releases = new Set(), inFlight = new Set(), observedPids = new Set();
@@ -210,7 +309,8 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
     await admin.connect();
     const boundary = (await admin.query(`SELECT current_database() AS database,session_user AS actor,current_user AS role,host(inet_server_addr()) AS host,inet_server_port() AS port,current_setting('server_version_num')::int AS version`)).rows[0];
     assert.equal(boundary.database, 'obrasaas_cutover_ci'); assert.equal(boundary.actor, 'cutover_test'); assert.equal(boundary.role, 'cutover_test');
-    assert.equal(boundary.host, '127.0.0.1'); assert.equal(boundary.port, Number(target.port)); assert.ok(boundary.version >= 170000 && boundary.version < 180000); engine = boundary;
+    const expectedEndpoint = ownedCiService ? participantPreanalysisOwnedCiEndpoint(ownedCiService, ownedCiService.context) : {host: '127.0.0.1', port: Number(target.port)};
+    assert.equal(boundary.host, expectedEndpoint.host); assert.equal(boundary.port, expectedEndpoint.port); assert.ok(boundary.version >= 170000 && boundary.version < 180000); engine = boundary;
     assert.equal((await admin.query('SELECT oid FROM pg_database WHERE datname=$1', [database])).rows.length, 0);
     await admin.query('CREATE DATABASE "' + database + '"'); created = true;
     ownership = (await admin.query(`SELECT d.oid,d.datname,pg_get_userbyid(d.datdba) AS owner FROM pg_database d WHERE d.datname=$1`, [database])).rows[0];
@@ -557,7 +657,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
   if (!cleanup.sourceBytesUnchanged) failure ||= {code: 'KYC_PREANALYSIS_NATIVE_SOURCE_CHANGED', name: 'Error'};
   if (created && !cleanup.databaseRemoved) failure ||= {code: 'KYC_PREANALYSIS_DATABASE_CLEANUP_UNCONFIRMED', name: 'Error'};
   return {version: 1, status: failure ? 'FAIL' : 'PASS', startedAt, finishedAt: new Date().toISOString(), postgresExecuted: Boolean(engine),
-    engine, ownership, ownedConnectionPids: [...observedPids].sort((a, b) => a - b), checks, completedCheckCount: checks.length, failure: failure ? {...failure, check: activeCheck} : null,
+    ...(ownedCiService ? {ownedCiService} : {}), engine, ownership, ownedConnectionPids: [...observedPids].sort((a, b) => a - b), checks, completedCheckCount: checks.length, failure: failure ? {...failure, check: activeCheck} : null,
     sourceManifest: sources, sourceDigest, harnessSha256: sha(readFileSync(fileURLToPath(import.meta.url))), blobManifest, cleanup, sqlFailures, lockObservations, counts,
     providerRequests: 0, productionDataWritten: false, realConsentOrIdentityVerified: false, humanApprovalPerformed: false,
     leaseFixtures: {normalServiceMs: 150000, expiryOnlyFixtureMs: 1000, sqlClockObservedBeforeRelease: true, productionLeaseConfigurationChanged: false},

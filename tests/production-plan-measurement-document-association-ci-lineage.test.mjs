@@ -1,4 +1,5 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePilotCompletionPreviousProofSpec as pilotPriorProof,restorePilotCompletionPreviousContract as pilotPriorContract,restorePilotCompletionPreviousSourceText as pilotPriorText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePilotCompletionPreviousSourceSet,verifyPlanBudgetActualClosure,PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -38,6 +39,14 @@ function historicalCompactFiles(files,contract){
  return historical;
 }
 
+
+// Only an exact compiled current proof may enter the inherited metadata oracle.
+// RAW producer/source closure validation continues to use the unmodified proof.
+// Capture the exact compiled mapping before any negative mutation. The same
+// physical row stays addressable after tampering, so the validator rejects it.
+const currentProofIds=new Map(current().extension.proofs.map(proof=>[pilotPriorProof(proof).id,proof.id]));
+function currentProofByHistoricalId(contract,id){const proof=contract.extension.proofs.find(row=>row.id===id)||contract.extension.proofs.find(row=>row.id===currentProofIds.get(id));assert.ok(proof,'Exact current proof for historical id '+id);return proof;}
+
 test('document association outer inverse restores complete a203 before every historical checkpoint and original H49',()=>{
  const contract=current(),before=JSON.stringify(contract),prior=restoreDocumentTaskAssociationPreviousContract(contract);
  assert.equal(sha(bytes(prior)),previousSha);assert.deepEqual(prior,checkpoint);assert.equal(JSON.stringify(contract),before);
@@ -75,15 +84,17 @@ test('a foreign old49 pin or omitted duplicate and unreviewed delta cannot resea
 });
 
 test('UI node runtime17 restores the exact old14 without altering original manifests',()=>{
- const contract=current(),files=planMeasurementUiSourceClosure(read,{runtime:true}).files,before=JSON.stringify(files),restored=restoreDocumentTaskAssociationSourceSet('MEASUREMENT_UI_RUNTIME',files,contract);
- const beforeBudget=restorePlanBudgetSourceSet(contract,'MEASUREMENT_UI_RUNTIME',files),budget=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='MEASUREMENT_UI_RUNTIME');assert.equal(beforeBudget.length,17);assert.equal(sha(JSON.stringify(beforeBudget)),budget.previousPathsSha256);assert.deepEqual(files,[...beforeBudget,...budget.additions].sort());assert.equal(restored.length,14);assert.equal(sha(JSON.stringify(restored)),measurement.runtimePreviousPathsSha256);assert.equal(JSON.stringify(files),before);
+ const contract=current(),closure=planMeasurementUiSourceClosure(read,{runtime:true}),files=closure.files,before=JSON.stringify(files);
+ assert.equal(verifyPlanBudgetActualClosure(contract,'MEASUREMENT_UI_RUNTIME',closure,read).sourceCount,files.length);
+ const pilotPreviousFiles=restorePilotCompletionPreviousSourceSet(contract,'MEASUREMENT_UI_RUNTIME',files),restored=restoreDocumentTaskAssociationSourceSet('MEASUREMENT_UI_RUNTIME',files,contract);
+ const beforeBudget=restorePlanBudgetSourceSet(contract,'MEASUREMENT_UI_RUNTIME',files),budget=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='MEASUREMENT_UI_RUNTIME');assert.equal(beforeBudget.length,17);assert.equal(sha(JSON.stringify(beforeBudget)),budget.previousPathsSha256);assert.deepEqual(pilotPreviousFiles,[...beforeBudget,...budget.additions].sort());assert.equal(restored.length,14);assert.equal(sha(JSON.stringify(restored)),measurement.runtimePreviousPathsSha256);assert.equal(JSON.stringify(files),before);
  for(const list of [restored,files.slice(1),[...files,files[0]],[...files.slice(1),'src/lib/foreign.mjs'].sort()])reject(()=>restoreDocumentTaskAssociationSourceSet('MEASUREMENT_UI_RUNTIME',list,contract));
 });
 
 test('CI-only import growth reconstructs exact a203 source sets and never expands a native manifest',()=>{
- const contract=current();for(const delta of contract[section].proofSourceDeltas){const spec=contract.extension.proofs.find(row=>row.id===delta.id),before=JSON.stringify(spec),old=restoreDocumentTaskAssociationSourceSet(delta.family,spec.sourceFiles,contract);
-  assert.equal(old.length,delta.previousCount);assert.equal(sha(JSON.stringify(old)),delta.previousPathsSha256);assert.deepEqual(old,checkpoint.extension.proofs.find(row=>row.id===spec.id).sourceFiles);assert.equal(JSON.stringify(spec),before);
-  const changed=structuredClone(contract);changed.extension.proofs.find(row=>row.id===spec.id).sourceFiles=old;reject(()=>restoreDocumentTaskAssociationPreviousContract(changed));const historical=structuredClone(originalDocumentContract);historical.extension.proofs.find(row=>row.id===spec.id).sourceFiles=old;reject(()=>restoreDocumentTaskAssociationPreviousContract(historical));
+ const contract=current();for(const delta of contract[section].proofSourceDeltas){const actualSpec=currentProofByHistoricalId(contract,delta.id),prePilot=pilotPriorContract(contract,read),spec=prePilot.extension.proofs.find(row=>row.id===delta.id),before=JSON.stringify(actualSpec),old=restoreDocumentTaskAssociationSourceSet(delta.family,spec.sourceFiles,prePilot);
+  assert.equal(old.length,delta.previousCount);assert.equal(sha(JSON.stringify(old)),delta.previousPathsSha256);assert.deepEqual(old,checkpoint.extension.proofs.find(row=>row.id===spec.id).sourceFiles);assert.equal(JSON.stringify(actualSpec),before);
+  const changed=structuredClone(contract);currentProofByHistoricalId(changed,spec.id).sourceFiles=old;reject(()=>restoreDocumentTaskAssociationPreviousContract(changed));const historical=structuredClone(originalDocumentContract);historical.extension.proofs.find(row=>row.id===spec.id).sourceFiles=old;reject(()=>restoreDocumentTaskAssociationPreviousContract(historical));
  }
  assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeSourceFiles,checkpoint.participantPreanalysisCurrentRevision.nativeSourceFiles);
  const id='participant-kyc-preanalysis-postgres',prior=checkpoint.extension.proofs.find(row=>row.id===id),inner=checkpoint.integratedIdentityCurrentRevision.proofSourceDeltas.find(row=>row.id===id),historic=prior.sourceFiles.filter(file=>!inner.additions.includes(file));
@@ -107,7 +118,10 @@ test('the immutable a203 JSON is an explicit authenticated validation dependency
 test('current outer composition changes no workflow command lane artifact or historical proof labels',()=>{
  const actual=current(),contract=restoreWorkspaceContinuityPreviousContract(actual),rebuilt=composeDocumentTaskAssociationContract(contract[section]);assert.deepEqual(rebuilt,contract);assert.deepEqual(contract.blocks,checkpoint.blocks);assert.deepEqual(contract.lanes,checkpoint.lanes);assert.deepEqual(contract.artifactPatterns,checkpoint.artifactPatterns);assert.equal(contract.extension.proofs.length,20);
  for(const spec of contract.extension.proofs){const old=checkpoint.extension.proofs.find(row=>row.id===spec.id);assert.deepEqual(spec.checkNames,old.checkNames);assert.equal(spec.producerSha256,old.producerSha256);}
- const previousWa=restoreWhatsappFieldContinuityPreviousContract(actual),focused=previousWa.extension.proofs.find(row=>row.id==='focused-workspace-ui'),prior=contract.extension.proofs.find(row=>row.id===focused.id);assert.equal(prior.checkNames.length,20);assert.equal(focused.checkNames.length,45);assert.deepEqual(focused.checkNames.slice(0,20),prior.checkNames);assert.equal(focused.producerSha256,'b7d134ed370e7984f8aed315127b82e4d2bdebe20a6d0d79a7453bf7e1f63dab');assert.equal(previousWa.evidenceProducers.find(row=>row.path===focused.path).producerSha256,focused.producerSha256);const currentFocused=actual.extension.proofs.find(row=>row.id===focused.id),change=actual.whatsappFieldContinuityCurrentRevision.currentProofChanges.find(row=>row.id===focused.id);assert.equal(currentFocused.checkNames.length,59);assert.deepEqual(currentFocused.checkNames.slice(0,45),focused.checkNames);
+ const previousWa=restoreWhatsappFieldContinuityPreviousContract(actual),focused=previousWa.extension.proofs.find(row=>row.id==='focused-workspace-ui'),prior=contract.extension.proofs.find(row=>row.id===focused.id);assert.equal(prior.checkNames.length,20);assert.equal(focused.checkNames.length,45);assert.deepEqual(focused.checkNames.slice(0,20),prior.checkNames);assert.equal(focused.producerSha256,'b7d134ed370e7984f8aed315127b82e4d2bdebe20a6d0d79a7453bf7e1f63dab');assert.equal(previousWa.evidenceProducers.find(row=>row.path===focused.path).producerSha256,focused.producerSha256);const rawFocused=currentProofByHistoricalId(actual,focused.id),currentFocused=pilotPriorProof(rawFocused),change=actual.whatsappFieldContinuityCurrentRevision.currentProofChanges.find(row=>row.id===focused.id);assert.equal(currentFocused.checkNames.length,59);assert.deepEqual(currentFocused.checkNames.slice(0,45),focused.checkNames);
  const homePredecessor=restoreHomeDecisionsPreviousContract(actual),historicalFocused=homePredecessor.extension.proofs.find(row=>row.id===focused.id);assert.equal(sha(bytes(homePredecessor)),'fe3fbd513518951d4e9625f0c76d89bd5c178919d923d3a385f32ab7c787590e');assert.equal(historicalFocused.producerSha256,change.currentProducerSha256);assert.deepEqual(historicalFocused.checkNames,currentFocused.checkNames);assert.equal(homePredecessor.evidenceProducers.find(row=>row.path===historicalFocused.path).producerSha256,historicalFocused.producerSha256);
- assert.equal(currentFocused.producerSha256,homeDecisionsCurrentSourcePin(actual,{path:currentFocused.producer,sha256:change.currentProducerSha256}));assert.equal(actual.evidenceProducers.find(row=>row.path===currentFocused.path).producerSha256,currentFocused.producerSha256);
+ const currentProducerPin=homeDecisionsCurrentSourcePin(actual,{path:currentFocused.producer,sha256:change.currentProducerSha256}),focusedRaw=read(currentFocused.producer).toString('utf8').replaceAll('\r\n','\n');
+  assert.equal(sha(focusedRaw),currentProducerPin);
+  assert.equal(sha(pilotPriorText(actual,currentFocused.producer,focusedRaw)),currentFocused.producerSha256);
+  assert.throws(()=>pilotPriorText(actual,currentFocused.producer,focusedRaw+'\n'),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'PILOT_SOURCE_TEXT_CURRENT'});assert.equal(actual.evidenceProducers.find(row=>row.path===rawFocused.path).producerSha256,rawFocused.producerSha256);assert.equal(sha(read(rawFocused.producer).toString('utf8').replaceAll('\r\n','\n')),rawFocused.producerSha256);
 });

@@ -1,0 +1,11 @@
+import {clerkClient} from '@clerk/nextjs/server';
+import {verifyWorkspaceSession} from '../../../../lib/verified-session.mjs';
+import {productionWorkspace} from '../../../../lib/workspace-runtime.mjs';
+import {createParticipantIdentityProvider} from '../../../../lib/participant-identity-provider.mjs';
+import {createMetaCustomerProvider} from '../../../../lib/meta-customer-provider.mjs';
+import {createCompanyNumberTransferStore} from '../../../../lib/company-number-transfer-store.mjs';
+import {createCompanyNumberTransferHandlers} from '../../../../lib/company-number-transfer-http.mjs';
+export const runtime='nodejs';export const dynamic='force-dynamic';export const maxDuration=300;
+const store=createCompanyNumberTransferStore({workspace:productionWorkspace,identity:createParticipantIdentityProvider({client:clerkClient}),provider:createMetaCustomerProvider()});
+const handlers=createCompanyNumberTransferHandlers({verify:verifyWorkspaceSession,store});
+export const GET=handlers.GET;export const POST=handlers.POST;

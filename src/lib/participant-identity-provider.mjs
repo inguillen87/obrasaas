@@ -67,6 +67,15 @@ export function createParticipantIdentityProvider({client,environment=()=>proces
      return address.emailAddress.toLowerCase();
     }catch(error){if(error instanceof WorkspaceError)throw error;throw unavailable();}
    },
+  async verifyAdminMembership({userId,organizationId}){
+   if(!/^user_[A-Za-z0-9]+$/.test(userId||'')||!/^org_[A-Za-z0-9]+$/.test(organizationId||''))throw unavailable();
+   const api=await trustedClient();try{
+    const user=await api.users.getUser(userId),page=await api.organizations.getOrganizationMembershipList({organizationId,userId:[userId],limit:2});
+    const row=page?.data?.[0];
+    if(user?.id!==userId||user.banned!==false||user.locked!==false||!Number.isSafeInteger(user.updatedAt)||page.totalCount!==1||page.data.length!==1||row?.organization?.id!==organizationId||row?.publicUserData?.userId!==userId||row.role!=='org:admin'||!/^orgmem_[A-Za-z0-9]+$/.test(row.id||'')||!Number.isSafeInteger(row.updatedAt))throw new WorkspaceError('COMPANY_TRANSFER_ADMIN_REQUIRED',403);
+    return {userId,organizationId,role:row.role,providerMembershipId:row.id,providerMembershipRevision:row.updatedAt,providerUserRevision:user.updatedAt};
+   }catch(error){if(error instanceof WorkspaceError)throw error;throw unavailable();}
+  },
   async verifyMembership({userId,organizationId,invitationId=null}){const api=await trustedClient();try{const page=await api.organizations.getOrganizationMembershipList({organizationId,userId:[userId],limit:2});if(page?.totalCount!==1||page.data?.length!==1)throw new WorkspaceError('PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED',403);const member=page.data[0];if(member.organization?.id!==organizationId||member.publicUserData?.userId!==userId||! /^org:[a-z][a-z0-9_]{0,63}$/.test(member.role||'')||(invitationId&&member.publicMetadata?.obrasaasInvitationId!==invitationId))throw new WorkspaceError('PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED',403);return {userId,organizationId,role:member.role};}catch(error){if(error instanceof WorkspaceError)throw error;throw unavailable();}},
  };
 }

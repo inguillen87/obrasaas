@@ -4,6 +4,7 @@ import {createPlanImportAnalyzer} from '../../src/lib/plan-import-analyzer.mjs';
 import {decodePlanSource,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,PLAN_CYP_INVESTMENT_CONSENT,PLAN_IMPORT_DOCUMENT_CURVE_CONSENT} from '../../src/lib/plan-import-policy.mjs';
 import {WorkspaceError} from '../../src/lib/workspace-policy.mjs';
 import {PLAN_BUDGET_SOURCE_CONSENT,PLAN_BUDGET_SOURCE_PURPOSE} from '../../src/lib/plan-budget-source.mjs';
+import {PLAN_BUDGET_CSV_CONSENT} from '../../src/lib/plan-budget-csv-source.mjs';
 import {PLAN_MEASUREMENT_PURPOSE,PLAN_MEASUREMENT_CONSENT,PLAN_MEASUREMENT_DOCUMENT_CONSENT} from '../../src/lib/plan-measurement-source.mjs';
 import {DOCUMENT_CURVE_PURPOSE} from '../../src/lib/plan-import-document-curve.mjs';
 import {PLAN_CYP_INVESTMENT_PURPOSE} from '../../src/lib/plan-import-cyp-curve.mjs';
@@ -31,14 +32,14 @@ export function invalidBudgetZipSource(){
  return decodePlanSource(bytes,budgetMime);
 }
 
-export function budgetStoreHarness(){
+export function budgetStoreHarness({usage=null}={}){
  let logs=new Map(),tasks=new Map(),role='ADMIN',channelProof=null,afterGet=null,afterPut=null;
  const blobs=new Map(),clone=value=>structuredClone(value),result=rows=>({rows:clone(rows)});
  const calls={sql:[],operations:[],budgetProjections:[],sensitivityReads:[],get:0,put:0,analyzer:0,provider:0,providerConfiguration:0,storageConfiguration:0,taskReads:0,taskWrites:0};
- const isBudget=row=>{const m=row.metadata||{};return m.sourcePurpose===PLAN_BUDGET_SOURCE_PURPOSE||m.consent?.version===PLAN_BUDGET_SOURCE_CONSENT||m.sourceConsent===PLAN_BUDGET_SOURCE_CONSENT||Boolean(m.analysis?.budgetSource)||m.outcome?.draft?.budgetImport===true;};
+ const isBudget=row=>{const m=row.metadata||{};return m.sourcePurpose===PLAN_BUDGET_SOURCE_PURPOSE||[PLAN_BUDGET_SOURCE_CONSENT,PLAN_BUDGET_CSV_CONSENT].includes(m.consent?.version)||[PLAN_BUDGET_SOURCE_CONSENT,PLAN_BUDGET_CSV_CONSENT].includes(m.sourceConsent)||Boolean(m.analysis?.budgetSource)||m.outcome?.draft?.budgetImport===true;};
  const isRestricted=row=>{
   const m=row.metadata||{},purposes=[PLAN_BUDGET_SOURCE_PURPOSE,PLAN_MEASUREMENT_PURPOSE,DOCUMENT_CURVE_PURPOSE,PLAN_CYP_INVESTMENT_PURPOSE];
-  const consents=[PLAN_BUDGET_SOURCE_CONSENT,PLAN_MEASUREMENT_CONSENT,PLAN_MEASUREMENT_DOCUMENT_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,PLAN_CYP_INVESTMENT_CONSENT,PLAN_IMPORT_DOCUMENT_CURVE_CONSENT];
+  const consents=[PLAN_BUDGET_SOURCE_CONSENT,PLAN_BUDGET_CSV_CONSENT,PLAN_MEASUREMENT_CONSENT,PLAN_MEASUREMENT_DOCUMENT_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,PLAN_CYP_INVESTMENT_CONSENT,PLAN_IMPORT_DOCUMENT_CURVE_CONSENT];
   return purposes.includes(m.sourcePurpose)||purposes.includes(m.purpose)||consents.includes(m.consent?.version)||consents.includes(m.sourceConsent)||[3,4,5].includes(m.analysis?.spreadsheet?.version)||Boolean(m.analysis?.budgetSource);
  };
  function selectLogs(sql,values){
@@ -60,7 +61,7 @@ export function budgetStoreHarness(){
   const sensitivity=outer.startsWith('SELECT f.id,f.metadata FROM public."AuditLog" f ');let budgetOnly=false;
   if(sensitivity){
    const prefix='SELECT f.id,f.metadata FROM public."AuditLog" f WHERE f."organizationId"=$1 AND f."entityId"=$2 AND f.action=\'plan.import.draft\' AND f.metadata->\'source\'->>\'sha256\'=$3 AND ';
-   const budgetPredicate=`(COALESCE(f.metadata->>'sourcePurpose','')='${PLAN_BUDGET_SOURCE_PURPOSE}' OR COALESCE(f.metadata->'consent'->>'version','')='${PLAN_BUDGET_SOURCE_CONSENT}' OR COALESCE(f.metadata->>'sourceConsent','')='${PLAN_BUDGET_SOURCE_CONSENT}' OR f.metadata->'analysis'->'budgetSource' IS NOT NULL OR COALESCE(f.metadata->'outcome'->'draft'->>'budgetImport','')='true')`;
+   const budgetPredicate=`(COALESCE(f.metadata->>'sourcePurpose','')='${PLAN_BUDGET_SOURCE_PURPOSE}' OR COALESCE(f.metadata->'consent'->>'version','') IN ('${PLAN_BUDGET_SOURCE_CONSENT}','${PLAN_BUDGET_CSV_CONSENT}') OR COALESCE(f.metadata->>'sourceConsent','') IN ('${PLAN_BUDGET_SOURCE_CONSENT}','${PLAN_BUDGET_CSV_CONSENT}') OR f.metadata->'analysis'->'budgetSource' IS NOT NULL OR COALESCE(f.metadata->'outcome'->'draft'->>'budgetImport','')='true')`;
    if(!outer.startsWith(prefix)||!outer.endsWith(' LIMIT 1'))throw Error('Unexpected synthetic source-sensitivity query');
    const predicate=outer.slice(prefix.length,-' LIMIT 1'.length);budgetOnly=predicate===budgetPredicate;
    if(!budgetOnly&&(!predicate.includes(budgetPredicate)||!predicate.includes(PLAN_MEASUREMENT_PURPOSE)||!predicate.includes(PLAN_IMPORT_MONTHLY_CURVE_CONSENT)))throw Error('Unexpected synthetic source-sensitivity predicate');
@@ -109,6 +110,6 @@ export function budgetStoreHarness(){
  };
  const localAnalyzer=createPlanImportAnalyzer({environment:()=>{calls.providerConfiguration++;throw Error('Local budget must not inspect AI configuration');},fetchImpl:async()=>{calls.provider++;throw Error('Forbidden provider');}});
  const analyzer={async analyze(...args){calls.analyzer++;return localAnalyzer.analyze(...args);}};
- const imports=createPlanImport({workspace,put,get,analyzer,environment:()=>{calls.storageConfiguration++;return {PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-unused-token'};}});
+ const imports=createPlanImport({workspace,put,get,analyzer,usage,environment:()=>{calls.storageConfiguration++;return {PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-unused-token'};}});
  return {imports,calls,workspace,state:()=>clone({logs,tasks}),setRole:value=>{role=value;},setChannelProof:value=>{channelProof=value;},setAfterGet:value=>{afterGet=value;},setAfterPut:value=>{afterPut=value;},mutateDraft:(id,mutate)=>mutate(logs.get(id).metadata),addLog:row=>logs.set(row.id,clone(row)),addTask:row=>tasks.set(row.id,clone(row)),mutateBlob:(path,mutate)=>mutate(blobs.get(path))};
 }

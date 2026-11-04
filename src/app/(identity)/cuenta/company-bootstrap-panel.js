@@ -47,7 +47,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
  async function inspect(){
   if(busy||attempt)return;setBusy(true);setNotice('');const current=++version.current;
   try{const value=await api('GET');if(!mounted.current||current!==version.current)return;
-   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setStage('ready');}else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
+   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setNotice('');setStage('ready');}else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
   }catch(error){if(mounted.current&&current===version.current){setNotice(error.message);setStage('failed');}}
   finally{if(mounted.current&&current===version.current)setBusy(false);}
  }
@@ -55,7 +55,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
   const epoch=version;mounted.current=true;let cancelled=false;const current=++epoch.current;
   api('GET').then(value=>{
    if(cancelled||!mounted.current||current!==version.current)return;
-   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setStage('ready');}else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
+   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setNotice('');setStage('ready');}else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
   }).catch(error=>{if(!cancelled&&mounted.current&&current===version.current){setNotice(error.message);setStage('failed');}});
   return()=>{cancelled=true;mounted.current=false;epoch.current++;request.current?.abort();retainedProfileProof.current=null;};
  },[api]);
@@ -80,7 +80,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
  async function recover(){
   if(!attempt||busy)return;const current=++version.current;setBusy(true);setCanRetry(false);
   try{const value=await api('GET',null,attempt.operationId);if(!mounted.current||current!==version.current)return;
-   if(value.state==='CREATED')accept(value);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);retainedProfileProof.current=null;setAttempt(null);setStage('ready');}else if(['NOT_OBSERVED','NOT_CREATED'].includes(value.state)&&value.canCreate===true){setCanRetry(true);setNotice('Todavía no se observa el alta. Podés reenviar este mismo intento con su identificador y sus datos originales. Actualizaremos la verificación de tu cuenta. No se reenvía automáticamente.');}else throw new Error('No se pudo comprobar el alta de la empresa.');
+   if(value.state==='CREATED')accept(value);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setNotice('');retainedProfileProof.current=null;setAttempt(null);setStage('ready');}else if(['NOT_OBSERVED','NOT_CREATED'].includes(value.state)&&value.canCreate===true){setCanRetry(true);setNotice('Todavía no se observa el alta. Podés reenviar este mismo intento con su identificador y sus datos originales. Actualizaremos la verificación de tu cuenta. No se reenvía automáticamente.');}else throw new Error('No se pudo comprobar el alta de la empresa.');
   }catch(error){if(mounted.current&&current===version.current)setNotice(error.name==='AbortError'?'La consulta no se completó. Conservamos tu intento; volvé a comprobar.':error.message);}finally{if(mounted.current&&current===version.current)setBusy(false);}
  }
  const locked=busy||Boolean(attempt);
@@ -89,7 +89,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
   if(locked||stage!=='new')return;
   retainedProfileProof.current=null;setCompanyName(initialCompanyName);setProjectName('');setAddress('');setCompanyPhone('');setTasks([]);setConfirmed(false);setNotice('Se descartaron los datos del formulario. Podés cambiar de espacio de trabajo.');
  }
- if(stage==='ready')return <><CompanyTrialExpiry company={currentCompany}/>{receipt&&<details className={styles.created}><summary>Ver recibo original del alta</summary><section aria-labelledby="company-receipt-heading"><h2 id="company-receipt-heading">Alta confirmada</h2><p>Este recibo confirma el alta original. Tu espacio de trabajo muestra el estado vigente.</p><h3>Datos del alta</h3><dl><dt>Empresa declarada al crear el espacio</dt><dd>{receipt.companyName}</dd><dt>Primera obra registrada</dt><dd>{receipt.projectName}</dd><dt>Tareas cargadas en el plan inicial</dt><dd>{receipt.initialTaskCount}</dd></dl><p className={styles.caption}>La confirmación del alta no acredita una conexión de WhatsApp ni la aprobación de identidades.</p><small>Recibo: {receipt.receiptId}</small></section></details>}{children}</>;
+ if(stage==='ready')return <><CompanyTrialExpiry company={currentCompany}/>{receipt&&typeof notice==='string'&&notice.trim().length>0&&<p role="status" aria-live="polite" className={styles.notice}>{notice}</p>}{receipt&&<details className={styles.created}><summary>Ver recibo original del alta</summary><section aria-labelledby="company-receipt-heading"><h2 id="company-receipt-heading">Alta confirmada</h2><p>Este recibo confirma el alta original. Tu espacio de trabajo muestra el estado vigente.</p><h3>Datos del alta</h3><dl><dt>Empresa declarada al crear el espacio</dt><dd>{receipt.companyName}</dd><dt>Primera obra registrada</dt><dd>{receipt.projectName}</dd><dt>Tareas cargadas en el plan inicial</dt><dd>{receipt.initialTaskCount}</dd></dl><p className={styles.caption}>La confirmación del alta no acredita una conexión de WhatsApp ni la aprobación de identidades.</p><small>Recibo: {receipt.receiptId}</small></section></details>}{children}</>;
  return <section className={styles.panel} aria-labelledby="company-bootstrap-heading">
   <p className={styles.eyebrow}>ALTA DE CONSTRUCTORA</p><h2 id="company-bootstrap-heading">Tu empresa, desde cero.</h2>
   <p className={styles.intro}>Creá el espacio de esta organización y su primera obra. No necesitás el número de WhatsApp para empezar a organizar el trabajo.</p>

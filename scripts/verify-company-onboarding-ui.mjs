@@ -205,7 +205,11 @@ async function scenario(mode,width=390){
   if(mode==='reload-denied'){await wait(page,'Tu pertenencia a esta empresa no está habilitada');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal((await page.$$('form')).length,0);}
   else if(mode==='reload-not-committed'){await wait(page,'Crear empresa y primera obra');assert.equal(await page.$eval('input[autocomplete="organization"]',node=>node.value),'');assert.equal(await page.$eval('input[placeholder*="Edificio"]',node=>node.value),'');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal(created,false);}
   else if(['reload-other-actor','reload-missing-receipt'].includes(mode)){await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo: '+originalReceipt));}
-  else {await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}
+  else {
+   await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));
+   assert.equal(await page.$eval('summary',node=>node.textContent),'Ver recibo original del alta');assert.equal(await page.$eval('summary',node=>node.parentElement.tagName==='DETAILS'&&node.parentElement.open===false),true);
+   await page.click('summary');await wait(page,'Alta confirmada');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);
+  }
   assert.equal(posts.length,1,'Reload performed another company POST');assert.equal(recoveryIds.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,`company-${mode}-${width}.png`),fullPage:true});checks.push(`${mode}-company-receipt-readonly-after-reload-${width}`);await context.close();return;
  }
  if(mode==='uncertain'){await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);await click(page,'Comprobar creación');}
@@ -241,7 +245,21 @@ async function scenario(mode,width=390){
    await canonicalCreatedTask(page,createdTask);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,1);
   }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(external,[]);
-  if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await openCurrentFixtureProject(page);await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
+  if(mode==='empty'){
+   const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});
+   await wait(page,'Ver recibo original del alta');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});
+   assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));
+   const receiptDetails=await page.evaluateHandle(()=>document.getElementById('company-receipt-heading')?.closest('details'));
+   assert.ok(receiptDetails.asElement(),'The original company receipt has its own disclosure');
+   assert.equal(await page.evaluate(details=>details.open,receiptDetails),false,'The original receipt stays closed on ordinary return');
+   assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);
+   const receiptSummary=await receiptDetails.asElement().$('summary');assert.ok(receiptSummary,'The receipt disclosure has its own summary');
+   assert.equal(await page.evaluate(summary=>summary.textContent.trim(),receiptSummary),'Ver recibo original del alta');
+   await receiptSummary.click();await receiptSummary.dispose();await receiptDetails.dispose();
+   await wait(page,'Alta confirmada');await wait(page,'Recibo: '+result.receiptId);
+   assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);
+   await openCurrentFixtureProject(page);await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);
+  }
  assert.ok(subscriptionReads.length>=1,'Created administrator consults closed subscription status');checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
 }
 async function companySelectorContext(width){
@@ -360,6 +378,11 @@ async function organizationDraftProtection(mode,width){
   if(url.pathname==='/api/identity/project-preparation'){
    assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope(letter));assert.equal(url.searchParams.get('projectId'),project(letter).id);
    return respond(request,projectPreparationSnapshot({scope:scope(letter),projectId:project(letter).id,canManage:true,revision:0,detailsDigest:'d'.repeat(64),name:project(letter).name,clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope:scope(letter),projectId:project(letter).id}));
+  }
+  if(url.pathname==='/api/identity/operations-status'){
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','view']);
+   assert.equal(url.searchParams.get('scope'),scope(letter));assert.equal(url.searchParams.get('projectId'),project(letter).id);assert.equal(url.searchParams.get('view'),'decisions');
+   return respond(request,{scope:scope(letter),projectId:project(letter).id,view:'decisions',observedAt:'2026-10-28T00:00:00.000Z',evidence:{pending:0},proposals:{pending:0},inventory:{canManage:true,pendingCounts:{consumptions:0,adjustments:0}}});
   }
   assert.equal(url.pathname,'/api/identity/workspace');
   if(request.method()==='POST'){

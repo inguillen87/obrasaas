@@ -4,7 +4,7 @@ export const KYC_QUALITY_SAMPLE_LIMIT=640;
 export const KYC_QUALITY_MIN_SHORT_SIDE=320;
 export const KYC_QUALITY_MIN_LONG_SIDE=480;
 const messages={
- READY:'Luz y nitidez adecuadas. Revisá también la orientación y el contenido de la fotografía.',
+ READY:'Luz y nitidez adecuadas para preparar la foto. El encuadre se comprobará al enviar.',
  RESOLUTION:'La imagen es demasiado pequeña. Tomá otra fotografía con al menos 320 píxeles en su lado menor y 480 en su lado mayor.',
  DARK:'La imagen está muy oscura. Buscá luz pareja de frente y volvé a tomarla.',
  BRIGHT:'La imagen está casi toda blanca o sobreexpuesta. Evitá el reflejo y la luz directa y volvé a tomarla.',

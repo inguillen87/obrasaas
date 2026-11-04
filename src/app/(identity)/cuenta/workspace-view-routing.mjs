@@ -2,6 +2,8 @@
 const destinations = {
  'workspace-home-title': ['inicio', 'Resumen'],
  'schedule-title': ['cronograma', 'Cronograma'],
+ // Fixed legacy/current WhatsApp fragment; presentation only, no new capability.
+ 'schedule-gantt-title': ['cronograma', 'Gantt completo'],
  'plan-import-title': ['cronograma', 'Importar cronograma'],
  'plan-measurement-title': ['cronograma', 'Metrados por revisar'],
  'schedule-edit-title': ['cronograma', 'Planificar tarea'],
@@ -39,6 +41,12 @@ export function workspaceLocationView(location = '') {
 }
 export function workspaceDestination(id) {
  return Object.hasOwn(destinations,id) ? {section:destinations[id][0],label:destinations[id][1]} : null;
+}
+// A request for the identity section that arrives before any authorized obra
+// is open names only the pending destination. It never chooses, remembers or
+// trusts an obra: the person opens one from the existing selector.
+export function workspacePendingProjectSection(requested, {projectAvailable=false,privatePresentationAvailable=false,officeReviewOnly=false,projectCount=0,loading=false} = {}) {
+ return requested==='identidad'&&projectAvailable===false&&privatePresentationAvailable===false&&officeReviewOnly!==true&&loading===false&&Number.isSafeInteger(projectCount)&&projectCount>0?'identidad':null;
 }
 export function workspaceViewAllowed(section, {role,canManageIntegrations=false,projectAvailable=true,privatePresentationAvailable=false} = {}) {
  // This is presentation-only self-service, supplied by the validated private selection.

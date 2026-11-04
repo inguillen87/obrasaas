@@ -1,4 +1,5 @@
 import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
+import {ATTENDANCE_CLOSURE_ACTIONS,attendanceClosureOutcome} from './attendance-closure-view.mjs';
 import {planBaselineCommandDigest,planBaselineOutcome} from './plan-baseline-view.mjs';
 import {normalizeDocumentCurve,documentCurveCanonical,planDocumentDraftView,planInvestmentDraftView} from './plan-source-curve.mjs';
 import {PRIVATE_BANK_ACTIONS,validatePrivateBankOutcome} from './private-bank-account-format.mjs';
@@ -47,6 +48,8 @@ const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,12
 const channelReferenceValid=(action,connectionId)=>OWN_COMPANY_ACTIONS.includes(action)?(id(connectionId)||action==='CONNECT_OWN_NUMBER'&&connectionId===null):[...COMPANY_CHANNEL_ACTIONS,...OWN_TEMPLATE_ACTIONS].includes(action)&&id(connectionId);
 const PROGRESS_TEMPLATE_SEND_KEY='progress_review_notification';
 export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME','PROPOSE_OVERTIME','DECIDE_OVERTIME']);
+export const FIELD_ATTENDANCE_CLOSURE_RECOVERY_ACTIONS=ATTENDANCE_CLOSURE_ACTIONS;
+const correlatedFieldAction=action=>FIELD_OVERTIME_RECOVERY_ACTIONS.includes(action)||ATTENDANCE_CLOSURE_ACTIONS.includes(action);
 const fieldMeasurementAction='CONFIGURE_PROGRESS_MEASUREMENT';
 const fieldMeasurementCancelAction='CANCEL_PROGRESS_MEASUREMENT_CONFIGURATION';
 export const PARTICIPANT_INTAKE_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
@@ -111,6 +114,7 @@ function documentCurveReceiptOutcome(entry,result){
  return {state:'RECORDED',receiptId:result.receiptId};
 }
 const planUploadCodes=Object.freeze(['PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
+const planCsvUploadRejections=Object.freeze({PLAN_IMPORT_BUDGET_CSV_INVALID:400,PLAN_IMPORT_BUDGET_CSV_ENCODING_INVALID:400,PLAN_IMPORT_BUDGET_CSV_HEADERS_INVALID:400,PLAN_IMPORT_BUDGET_CSV_COLUMNS_INVALID:400,PLAN_IMPORT_BUDGET_CSV_QUOTES_INVALID:400,PLAN_IMPORT_BUDGET_CSV_ROW_INCOMPLETE:400,PLAN_IMPORT_BUDGET_CSV_DUPLICATE_CODES:400,PLAN_IMPORT_BUDGET_CSV_ROWS_LIMIT:413,PLAN_IMPORT_BUDGET_SOURCE_TOO_LARGE:413});
 const sha256=async bytes=>[...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
 const canonicalPlanCommand=value=>Array.isArray(value)?value.map(canonicalPlanCommand):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonicalPlanCommand(value[key])])):value;
 export async function planImportCommandDigest(body){
@@ -134,8 +138,8 @@ export async function planImportUploadDigest({scope,projectId,operationId,consen
   if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
   return sha256(new TextEncoder().encode(JSON.stringify(['plan-document-curve-upload-command-v1',{action:'UPLOAD',purpose:'FINANCIAL_MONTHLY_CURVE',consent,operationId:operationId.toLowerCase(),projectId,scope,source:{bytes:source.bytes,contentType:source.contentType,sha256:source.sha256}}])));
  }
- const spreadsheet=['application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source?.contentType);
- if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||!(spreadsheet?['plan-spreadsheet-monthly-rubros-v1','plan-spreadsheet-cyp-partidas-v2','plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4','plan-spreadsheet-cyp-investment-curves-v1','plan-source-budget-local-v1'].includes(consent):consent==='plan-document-openai-v1')||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp','application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
+ const csv=source?.contentType==='text/csv',spreadsheet=['application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source?.contentType);
+ if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||!(csv?consent==='plan-source-budget-csv-local-v1':spreadsheet?['plan-spreadsheet-monthly-rubros-v1','plan-spreadsheet-cyp-partidas-v2','plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4','plan-spreadsheet-cyp-investment-curves-v1','plan-source-budget-local-v1'].includes(consent):consent==='plan-document-openai-v1')||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp','text/csv','application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
  return sha256(new TextEncoder().encode(JSON.stringify(['plan-import-upload-command-v1',{action:'UPLOAD',consent,operationId:operationId.toLowerCase(),projectId,scope,source:{bytes:source.bytes,contentType:source.contentType,sha256:source.sha256}}])));
 }
 export async function planImportUploadFormDigest(form){
@@ -226,7 +230,7 @@ async function reference(url, options, now) {
   const bankAction=body.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT'?body.payload?.originalAction:body.action;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(bankAction)||!id(body.payload?.workerId)))throw unavailable();
   const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
-  const overtime=resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(body.action);
+  const overtime=resource==='field-operations'&&correlatedFieldAction(body.action);
   const measurement=resource==='field-operations'&&[fieldMeasurementAction,fieldMeasurementCancelAction].includes(body.action);
   if(measurement&&!id(body.payload?.taskId))throw unavailable();
   const intake=resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(body.action);
@@ -288,7 +292,7 @@ function valid(entry) {
   if(planUpload&&!/^[a-f0-9]{64}$/.test(entry.inputDigest||''))return false;
   if(plan&&!planUpload&&(!(measurementImport?measurementImportActions:planActions).includes(entry.action)||!id(entry.draftId)||!Number.isSafeInteger(entry.expectedRevision)||entry.expectedRevision<1||!/^[a-f0-9]{64}$/.test(entry.inputDigest||'')))return false;
   if(measurementImport&&!planUpload&&(!/^[a-f0-9]{64}$/.test(entry.sourceSha256||'')||!/^[a-f0-9]{64}$/.test(entry.sourceDigest||'')||(entry.action==='APPLY_MEASUREMENT'?!/^[a-f0-9]{64}$/.test(entry.reviewDigest||''):entry.reviewDigest!==null&&!/^[a-f0-9]{64}$/.test(entry.reviewDigest||''))))return false;
-  if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
+  if(overtime&&!correlatedFieldAction(entry.action))return false;
   if(measurement&&!id(entry.taskId))return false;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(entry.action)||!id(entry.workerId)))return false;
   if(intake&&(!PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)||!id(entry.connectionId)||entry.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(entry.applicationId||'')))return false;
@@ -358,6 +362,7 @@ export function recoveryResult(entry, result) {
     if(result.state==='RECORDED'&&result.saved===true&&/^company_phone_[a-f0-9]{64}$/.test(result.receipt?.id||'')&&Number.isSafeInteger(result.receipt.savedRevision)&&result.receipt.savedRevision>=1&&typeof result.savedDeclarationIsCurrent==='boolean'&&id(result.organizationId)&&result.currentCompany?.organizationId===result.organizationId&&result.currentCompany?.expectedClerkOrganizationId===entry.expectedClerkOrganizationId)return {state:'RECORDED',receiptId:result.receipt.id};
     if(result.state==='NOT_OBSERVED'&&result.definitive===false&&result.saved!==true&&!result.receipt)return {state:'NOT_OBSERVED'};return null;
   }
+  if(entry.resource==='field-operations'&&ATTENDANCE_CLOSURE_ACTIONS.includes(entry.action))return attendanceClosureOutcome(result,entry)?{state:result.state,...(result.receiptId?{receiptId:result.receiptId}:{})}:null;
   if(entry.resource==='field-operations' &&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){
     if(result.projectId!==entry.projectId||result.operationId!==entry.operationId)return null;
     if(result.state==='RECORDED'&&result.saved===true&&result.action===entry.action&&/^field_[a-f0-9]{64}$/.test(result.receiptId||''))return {state:'RECORDED',receiptId:result.receiptId};
@@ -395,6 +400,7 @@ export function recoveryResult(entry, result) {
       if(Object.keys(result).sort().join('|')!=='definitive|draft|operationId|projectId|saved|scope|state'||result.operationId!==entry.operationId||result.saved!==false||result.definitive!==true||!id(draft?.id)||!Number.isSafeInteger(draft.revision)||draft.revision<1||!Array.isArray(draft.rows)||!['UPLOADING','PROCESSING'].includes(draft.status)||draft.processingExpired!==true||typeof expiry!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(expiry)||!Number.isFinite(Date.parse(expiry))||new Date(expiry).toISOString()!==expiry||Date.parse(expiry)>Date.now())return null;
       return usagePending?{state:'PROCESSING'}:{state:'EXPIRED',draftId:draft.id};
     }
+    if(entry.resource==='plan-import'&&result.state==='REJECTED'&&Object.hasOwn(planCsvUploadRejections,result.code)&&Object.keys(result).sort().join('|')==='action|code|definitive|inputDigest|operationId|phase|projectId|reservationStarted|saved|scope|state'&&entry.action==='UPLOAD'&&result.action==='UPLOAD'&&result.operationId===entry.operationId&&/^[a-f0-9]{64}$/.test(entry.inputDigest||'')&&result.inputDigest===entry.inputDigest&&result.definitive===true&&result.saved===false&&result.reservationStarted===false&&result.phase==='PRE_RESERVATION')return {state:'REJECTED',phase:'PRE_RESERVATION',liveOnly:true,code:result.code};
     if(result.state==='REJECTED'&&result.operationId===entry.operationId&&result.definitive===true&&result.saved===false&&result.reservationStarted===false&&result.phase==='PRE_RESERVATION'&&['PLAN_IMPORT_FILE_INVALID','PLAN_IMPORT_FILE_TOO_LARGE'].includes(result.code)&&Object.keys(result).sort().join('|')==='code|definitive|operationId|phase|projectId|reservationStarted|saved|scope|state')return {state:'REJECTED',code:result.code};
     if(result.state==='NOT_OBSERVED'&&result.definitive===false&&!result.draft&&!result.receiptId)return {state:'NOT_OBSERVED'};
     const draft=result.draft;
@@ -775,7 +781,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         if(ticket.entry.resource==='plan-measurement'&&ticket.entry.action!=='UPLOAD'&&error.requestDispatched!==false){if(error.status===409&&error.code===error.result?.code&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED')await remove(ticket.entry);return;}
         if(ticket.entry.resource==='meta-onboarding'&&existingApiPlanAction(ticket.entry.action)){if(!ticket.existed&&error.requestDispatched===false)await remove(ticket.entry);return;}
         if(['office-review','project-creation'].includes(ticket.entry.resource)&&error.requestDispatched!==false)return;
-        const rejected=['plan-import','plan-measurement'].includes(ticket.entry.resource)&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413})[error.code];
+        const rejected=['plan-import','plan-measurement'].includes(ticket.entry.resource)&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413,...planCsvUploadRejections})[error.code];
         if(!ticket.existed&&(error.requestDispatched===false||rejected||!['plan-import','plan-measurement','company-channel','company-onboarding'].includes(ticket.entry.resource)&&!(ticket.entry.resource==='participants'&&(PRIVATE_BANK_ACTIONS.includes(ticket.entry.action)||PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(ticket.entry.action)))&&!(ticket.entry.resource==='meta-onboarding'&&ticket.entry.action==='reconcile')&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
       }
       const entry=ticket.entry;
@@ -793,7 +799,8 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(entry.resource==='company-onboarding'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='company-channel'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='plan-measurement'&&entry.action!=='UPLOAD'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
-      if(entry.resource==='plan-import'||entry.resource==='plan-measurement'&&entry.action==='UPLOAD'){const outcome=recoveryResult(entry,result);if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&(outcome.phase==='PRE_DECISION'||outcome.proof==='AUDITED_UPLOAD'||!ticket.existed))await remove(entry);return;}
+      if(entry.resource==='plan-import'||entry.resource==='plan-measurement'&&entry.action==='UPLOAD'){const outcome=recoveryResult(entry,result);if(outcome?.liveOnly===true)return;if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&(outcome.phase==='PRE_DECISION'||outcome.proof==='AUDITED_UPLOAD'||!ticket.existed))await remove(entry);return;}
+      if(entry.resource==='field-operations'&&ATTENDANCE_CLOSURE_ACTIONS.includes(entry.action)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='field-operations'&&entry.action===fieldMeasurementAction){if(['RECORDED','CANCELLED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))await remove(entry);

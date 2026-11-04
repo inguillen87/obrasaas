@@ -238,7 +238,7 @@ async function rejectedNavigation(name, query, expected='/sign-in') {
 async function recoveryFresh(width) {
   const f = await fixture('fresh-recovery', {width,ssr:'allow'}), {page,record} = f;
   await page.goto(origin + '/cuenta?participar=' + invitation, {waitUntil:'domcontentloaded'});
-  await wait(page, 'Seleccioná o creá tu organización');
+  await wait(page, 'Elegí o creá el espacio de tu empresa');
   assert.equal(record.sessionRequests.length, 1);assert.equal(record.refreshRequests.length, 1);assert.equal(record.businessReads.length, 0);
   assert.deepEqual(await page.evaluate(() => window.__tokenReads), [{skipCache:true}]);
   await click(page, 'Seleccionar organización sintética');await wait(page, 'Organización B de ensayo');
@@ -256,7 +256,7 @@ async function recoveryError(mode) {
   assert.equal(await page.$eval('a[href^="/sign-in"]', e => e.getAttribute('href')), '/sign-in?participar=' + invitation);
   await page.screenshot({path:path.join(output, `recovery-${mode}.png`),fullPage:true});
   record.responseMode='success';await page.evaluate(() => {window.__setClerkFixture({cookieSync:true});document.cookie='__fixture_ssr=allow; path=/';});
-  await click(page, 'Volver a verificar');await wait(page, 'Seleccioná o creá tu organización');
+  await click(page, 'Volver a verificar');await wait(page, 'Elegí o creá el espacio de tu empresa');
   assert.equal(record.sessionRequests.length, 2);assert.equal(record.refreshRequests.length, 1);assert.equal(record.businessReads.length, 0);
   checks.push(`${mode}-blocked-before-explicit-fresh-retry`);await f.close();
 }
@@ -265,7 +265,7 @@ async function initialProviderUnavailable() {
   await page.goto(origin + '/cuenta', {waitUntil:'domcontentloaded'});await wait(page, 'El servicio de acceso no respondió');
   assert.equal(record.sessionRequests.length, 0);assert.equal(record.refreshRequests.length, 0);
   await page.evaluate(() => {document.cookie='__fixture_ssr=allow; path=/';});
-  await click(page, 'Volver a verificar');await wait(page, 'Seleccioná o creá tu organización');
+  await click(page, 'Volver a verificar');await wait(page, 'Elegí o creá el espacio de tu empresa');
   assert.equal(record.sessionRequests.length, 1);checks.push('provider-unavailable-SSR-requires-explicit-retry');await f.close();
 }
 async function boundedLoading(kind) {
@@ -278,7 +278,7 @@ async function boundedLoading(kind) {
   if(kind==='SDK')assert.equal(await page.$$eval('button',buttons=>buttons.some(b=>b.textContent==='Recargar página')),true);
   else{
     await page.evaluate(()=>{window.__normalTimers=true;window.__setClerkFixture({tokenDelay:false});document.cookie='__fixture_ssr=allow; path=/';});
-    await click(page,'Volver a verificar');await wait(page,'Seleccioná o creá tu organización');
+    await click(page,'Volver a verificar');await wait(page,'Elegí o creá el espacio de tu empresa');
     assert.equal(record.sessionRequests.length,1);
   }
   checks.push(`bounded-${kind}-loading-explicit-recovery-controlled-clock`);await f.close();
@@ -320,7 +320,7 @@ async function boundedEntryLoading(kind, width = 390) {
   assert.equal(new URL(page.url()).pathname + new URL(page.url()).search, route + query);
   assert.equal(record.businessReads.length, 0);assert.equal(record.sessionRequests.length, 0);assert.equal(record.refreshRequests.length, 0);
   await page.evaluate(() => {window.__normalTimers=true;window.__setClerkFixture({isLoaded:true});});
-  if (account) await wait(page, 'Seleccioná o creá tu organización');
+  if (account) await wait(page, 'Elegí o creá el espacio de tu empresa');
   else await page.waitForSelector('[data-fixture-widget="' + (kind === 'sign-up' ? 'SignUp' : 'SignIn') + '"]');
   assert.equal(await page.$$eval('section[aria-label="Carga del servicio de acceso"]', nodes => nodes.length), 0, 'Late SDK completion clears the loading recovery');
   if (!account) assert.equal(await page.$eval('[data-fixture-widget]', node => node.dataset.return), returnPath);

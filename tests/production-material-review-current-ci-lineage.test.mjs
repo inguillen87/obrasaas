@@ -1,4 +1,4 @@
-import {restoreOwnRuntimeDiagnosticPreviousContract,restoreOwnRuntimeDiagnosticPreviousSourceText,planBudgetCurrentSourcePin,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePilotCompletionPreviousContract,restorePilotCompletionPreviousSourceText,restorePilotCompletionPreviousProofSpec,restorePilotCompletionPreviousSourceSet,verifyPlanBudgetCurrentSources,restoreOwnRuntimeDiagnosticPreviousContract,restoreOwnRuntimeDiagnosticPreviousSourceText,planBudgetCurrentSourcePin,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewSourceSet} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
@@ -17,6 +17,24 @@ const sha=value=>createHash('sha256').update(value).digest('hex');
 const serialize=value=>JSON.stringify(value,null,2)+'\n';
 const denied=fn=>assert.throws(fn,{code:'MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'});
 
+// Capture a whole-descriptor authenticated mapping before negative mutations.
+// A physical current row is never replaced by a historical alias or smaller set.
+const observedProofs=current().extension.proofs;
+const currentProofIds=new Map(observedProofs.map(proof=>[restorePilotCompletionPreviousProofSpec(proof).id,proof.id]));
+assert.equal(currentProofIds.size,observedProofs.length);
+function physicalProofByHistoricalId(contract,id){
+ const physicalId=contract.planBudgetCurrentRevision?.pilotCompletionAdvance?currentProofIds.get(id):id;
+ assert.equal(typeof physicalId,'string');const rows=contract.extension.proofs.filter(row=>row.id===physicalId);assert.equal(rows.length,1,'Exactly one bound physical proof for '+id);return rows[0];
+}
+function historicalPilotBFrame(){
+ const actual=current();assert.equal(verifyPlanBudgetCurrentSources(actual,read).nativeOrBrowserAcceptance,false);const previous=restorePilotCompletionPreviousContract(actual,read);assert.equal(sha(serialize(previous)),'4d813ad4f40496d1355b2820607d138d899ea51d336ab176c9fb2febe6ce9a00');
+ const changes=new Map(actual.planBudgetCurrentRevision.pilotCompletionAdvance.sourceChanges.map(row=>[row.path,row]));
+ const readSource=file=>{if(file==='.github/workspace-acceptance-contract.json')return Buffer.from(serialize(previous));if(changes.get(file)?.status==='ADDED')return null;const bytes=read(file);return bytes===null?null:Buffer.from(restorePilotCompletionPreviousSourceText(actual,file,bytes.toString('utf8')));};
+ return{contract:previous,readSource};
+}
+function historicalPilotBContract(){return historicalPilotBFrame().contract;}
+
+
 test('materials revision restores the whole published predecessor and preserves every historical proof',()=>{
  const actual=current(),actualBefore=serialize(actual),contract=restoreOwnRuntimeDiagnosticPreviousContract(actual,read),before=serialize(contract),publishedMaterialCurrent=restoreExistingApiPlanPreviousContract(contract),previous=restoreMaterialReviewPreviousContract(contract);
  assert.equal(sha(serialize(previous)),expected.previousContractSha256);
@@ -26,15 +44,16 @@ test('materials revision restores the whole published predecessor and preserves 
  const withoutCiPaths=value=>({...value,proofs:value.proofs.map(proof=>{const copy={...proof};delete copy.sourceFiles;return copy;})});
  assert.deepEqual(withoutCiPaths(previous.extension),withoutCiPaths(publishedMaterialCurrent.extension));
  const focusedProducer=value=>value.extension.proofs.find(row=>row.id==='focused-workspace-ui');// Project only the authenticated outer pin for the historical assertion; read current source bytes below.
- assert.equal(worksiteLiveHoursPreviousSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}),'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(contract).producerSha256,'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(worksiteLiveHoursCurrentSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24'}),'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(focusedProducer(actual).producerSha256,planBudgetCurrentSourcePin(actual,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}));assert.equal(sha(read('scripts/verify-focused-workspace-ci.mjs').toString('utf8').replaceAll('\r\n','\n')),focusedProducer(actual).producerSha256);assert.equal(focusedProducer(publishedMaterialCurrent).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
+ assert.equal(worksiteLiveHoursPreviousSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}),'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(contract).producerSha256,'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(worksiteLiveHoursCurrentSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24'}),'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(sha(read('scripts/verify-focused-workspace-ci.mjs').toString('utf8').replaceAll('\r\n','\n')),planBudgetCurrentSourcePin(actual,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}));const actualFocused=physicalProofByHistoricalId(actual,'focused-workspace-ui'),historicalFocused=focusedProducer(historicalPilotBContract());assert.deepEqual(restorePilotCompletionPreviousProofSpec(actualFocused),historicalFocused);assert.equal(sha(read(actualFocused.producer).toString('utf8').replaceAll('\r\n','\n')),actualFocused.producerSha256);assert.deepEqual(currentProducerSourceFiles(actualFocused,process.cwd()),actualFocused.sourceFiles);assert.equal(focusedProducer(publishedMaterialCurrent).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
  const {ciSourceFiles:priorCi,...priorPreanalysis}=previous.participantPreanalysisCurrentRevision,{ciSourceFiles:currentCi,...currentPreanalysis}=contract.participantPreanalysisCurrentRevision;
  assert.deepEqual(priorPreanalysis,currentPreanalysis);
  const actualProof=actual.extension.proofs.find(row=>row.id==='participant-kyc-preanalysis-postgres'),ownBaseProof=contract.extension.proofs.find(row=>row.id===actualProof.id);assert.deepEqual(currentProducerSourceFiles(actualProof,process.cwd()),actualProof.sourceFiles);const ownNativeAdditions=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'];for(const file of ownNativeAdditions){const row=actual.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);assert.equal(sha(read(file).toString('utf8').replaceAll('\r\n','\n')),row.currentSha256);}const git67Preanalysis=[...ownBaseProof.sourceFiles,'src/app/(identity)/cuenta/kyc-camera-session.mjs',...ownNativeAdditions].sort(),captureNativeAdditions=["src/app/(identity)/cuenta/kyc-image-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"];
  // Keep the exact Git67 native/UI graph as a historical stage; collect current sources unchanged above.
- assert.equal(ownBaseProof.sourceFiles.length,246);assert.equal(git67Preanalysis.length,250);assert.equal(sha(JSON.stringify(git67Preanalysis)),'aec1cd0f5025cd6c713b096b1acc8d993e4a2c680a20b16fb050de528497f3ab');const beforeFixtureFullCi=[...git67Preanalysis,...captureNativeAdditions].sort(),nativeFixtureAdditions=["scripts/lib/synthetic-capture-quality.mjs","tests/fixtures/meta-kyc-challenge-legacy-v2.mjs"];assert.equal(beforeFixtureFullCi.length,257);assert.equal(sha(JSON.stringify(beforeFixtureFullCi)),'29c7e008e61ee1d85710b0307f80da2067a1e842611e9251538025703ae7bb60');assert.deepEqual(actualProof.sourceFiles,[...beforeFixtureFullCi,...nativeFixtureAdditions].sort());assert.equal(actualProof.sourceFiles.length,259);assert.equal(sha(JSON.stringify(actualProof.sourceFiles)),'f76fdba0dd2f2fbe04bbad39a1c5a76e67ce1b670b4addee5dbed3198fa7a5c3');
+ const pilotPreviousPreanalysisFiles=restorePilotCompletionPreviousSourceSet(actual,actualProof.kind,actualProof.sourceFiles);
+ assert.equal(ownBaseProof.sourceFiles.length,246);assert.equal(git67Preanalysis.length,250);assert.equal(sha(JSON.stringify(git67Preanalysis)),'aec1cd0f5025cd6c713b096b1acc8d993e4a2c680a20b16fb050de528497f3ab');const beforeFixtureFullCi=[...git67Preanalysis,...captureNativeAdditions].sort(),nativeFixtureAdditions=["scripts/lib/synthetic-capture-quality.mjs","tests/fixtures/meta-kyc-challenge-legacy-v2.mjs"];assert.equal(beforeFixtureFullCi.length,257);assert.equal(sha(JSON.stringify(beforeFixtureFullCi)),'29c7e008e61ee1d85710b0307f80da2067a1e842611e9251538025703ae7bb60');assert.deepEqual(pilotPreviousPreanalysisFiles,[...beforeFixtureFullCi,...nativeFixtureAdditions].sort());assert.equal(pilotPreviousPreanalysisFiles.length,259);assert.equal(sha(JSON.stringify(pilotPreviousPreanalysisFiles)),'f76fdba0dd2f2fbe04bbad39a1c5a76e67ce1b670b4addee5dbed3198fa7a5c3');
  for(const file of nativeFixtureAdditions){const row=actual.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);assert.equal(sha(read(file).toString('utf8').replaceAll('\r\n','\n')),row.currentSha256);}
- for(const file of captureNativeAdditions){const row=actual.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);assert.equal(sha(read(file).toString('utf8').replaceAll('\r\n','\n')),row.currentSha256);}
- const missingCaptureFile='src/app/(identity)/cuenta/kyc-image-quality.mjs';assert.throws(()=>verifyMaterialReviewCurrentSources(actual,file=>file===missingCaptureFile?null:read(file)),error=>error?.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Budget current CI lineage rejected: OWN_SOURCE_BYTES_'+missingCaptureFile);
+ for(const file of captureNativeAdditions){const row=actual.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);assert.equal(sha(restorePilotCompletionPreviousSourceText(actual,file,read(file).toString('utf8'))),row.currentSha256);assert.equal(sha(read(file).toString('utf8').replaceAll('\r\n','\n')),planBudgetCurrentSourcePin(actual,{path:file,sha256:row.currentSha256}));}
+ const missingCaptureFile='src/app/(identity)/cuenta/kyc-image-quality.mjs',historicalFrame=historicalPilotBFrame();assert.throws(()=>verifyMaterialReviewCurrentSources(historicalFrame.contract,file=>file===missingCaptureFile?null:historicalFrame.readSource(file)),error=>error?.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Budget current CI lineage rejected: OWN_SOURCE_BYTES_'+missingCaptureFile);assert.throws(()=>verifyMaterialReviewCurrentSources(actual,file=>file===missingCaptureFile?null:read(file)),error=>error?.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Pilot completion source lineage rejected: PILOT_SOURCE_BYTES_'+missingCaptureFile);
  const proof={...ownBaseProof,sourceFiles:restorePlanBudgetSourceSet(contract,ownBaseProof.kind,ownBaseProof.sourceFiles)},delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='PG_PARTICIPANT_KYC_PREANALYSIS');
  assert.equal(delta.contractPointer,'/extension/proofs/18/sourceFiles');assert.equal(proof.kind,delta.family);
  const outer=contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===proof.kind),worksiteProofFiles=restorePlanPartidaPreviewSourceSet(contract,proof.kind,proof.sourceFiles);
@@ -89,7 +108,7 @@ test('material read projections retain inherited stock writers canonical composi
  }
  for(const row of expected.reviewedSourceChanges.filter(item=>item.unchangedSurfaceSha256)){
   const bytes=read(row.path),text=bytes.toString('utf8');assert.equal(sha(text.replaceAll('\r\n','\n')),materialReviewCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Authenticated current source '+row.path);
-  const inherited=['src/lib/field-operations-http.mjs','src/lib/field-operations-store.mjs'].includes(row.path)?Buffer.from(restoreOwnRuntimeDiagnosticPreviousSourceText(contract,row.path,text)):bytes;
+  const inherited=Buffer.from(restoreOwnRuntimeDiagnosticPreviousSourceText(contract,row.path,text));
   assert.equal(materialReviewUnchangedSurface(row.path,inherited),row.unchangedSurfaceSha256);assert.deepEqual(read(row.path),bytes,'Historical oracle must preserve current bytes '+row.path);
  }
  assert.equal(serialize(contract),metadataBefore);assert.equal(verifyMaterialReviewCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
@@ -111,7 +130,7 @@ test('only the new reviewed helper extends the three actual CI import graphs and
  const full=current(),contract=restoreExistingApiPlanPreviousContract(full),previous=restoreMaterialReviewPreviousContract(contract);
  assert.deepEqual(expected.proofSourceDeltas.map(row=>row.id),['participant-kyc-preanalysis-postgres','focused-workspace-ui','field-task-pagination-ui']);assert.deepEqual(expected.sourceSetDeltas,[]);
  for(const spec of contract.extension.proofs){
-  assert.deepEqual(currentProducerSourceFiles(full.extension.proofs.find(row=>row.id===spec.id),process.cwd()),full.extension.proofs.find(row=>row.id===spec.id).sourceFiles,'Actual producer import graph '+spec.id);
+  const actualSpec=physicalProofByHistoricalId(full,spec.id);assert.deepEqual(currentProducerSourceFiles(actualSpec,process.cwd()),actualSpec.sourceFiles,'Actual producer import graph '+spec.id);
   const delta=expected.proofSourceDeltas.find(row=>row.id===spec.id),prior=previous.extension.proofs.find(row=>row.id===spec.id);
   assert.deepEqual(spec.checkNames,prior.checkNames);assert.equal(spec.producerSha256,prior.producerSha256);
   if(!delta){assert.deepEqual(spec.sourceFiles,prior.sourceFiles);continue;}
@@ -122,7 +141,7 @@ test('only the new reviewed helper extends the three actual CI import graphs and
  assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeCheckNames,previous.participantPreanalysisCurrentRevision.nativeCheckNames);
 });
 test('material CI closure inverses reject omitted duplicate old unsorted foreign and extra paths without permissive filtering',()=>{
- for(const contract of [current(),restorePlanBudgetPreviousContract(current())]){const previous=restoreMaterialReviewPreviousContract(contract);
+ const actual=current();for(const contract of [historicalPilotBContract(),restorePlanBudgetPreviousContract(actual)]){const previous=restoreMaterialReviewPreviousContract(contract);
  for(const delta of expected.proofSourceDeltas){
   const spec=contract.extension.proofs.find(row=>row.id===delta.id),prior=previous.extension.proofs.find(row=>row.id===delta.id),files=spec.sourceFiles;
   for(const malformed of [prior.sourceFiles,files.slice(1),[...files,files[0]],[...files].reverse(),[...files,'scripts/foreign-extra.mjs'].sort(),files.map(file=>file===delta.additions[0]?'scripts/foreign-substitute.mjs':file).sort()]){
@@ -131,6 +150,14 @@ test('material CI closure inverses reject omitted duplicate old unsorted foreign
   for(const edit of [value=>{value[key].proofSourceDeltas.pop();},value=>{value[key].proofSourceDeltas[0].additions.push('scripts/foreign-extra.mjs');},value=>{value[key].proofSourceDeltas[0].previousCount=value[key].proofSourceDeltas[0].currentCount;value[key].proofSourceDeltas[0].previousPathsSha256=value[key].proofSourceDeltas[0].currentPathsSha256;},value=>{value.extension.proofs.find(row=>row.id===delta.id).sourceFiles=prior.sourceFiles;},value=>{value.participantPreanalysisCurrentRevision.ciSourceFiles.pop();}]){const changed=structuredClone(contract);edit(changed);denied(()=>restoreMaterialReviewPreviousContract(changed));}
  }
  }
+ // The inherited oracles above retain their exact original descriptor stage.
+ // Every same malformed list must also fail on the actual compiled current row.
+ const historical=historicalPilotBContract(),previous=restoreMaterialReviewPreviousContract(historical);
+ for(const delta of expected.proofSourceDeltas){
+  const spec=physicalProofByHistoricalId(historical,delta.id),prior=physicalProofByHistoricalId(previous,delta.id),files=spec.sourceFiles;
+  for(const malformed of [prior.sourceFiles,files.slice(1),[...files,files[0]],[...files].reverse(),[...files,'scripts/foreign-extra.mjs'].sort(),files.map(file=>file===delta.additions[0]?'scripts/foreign-substitute.mjs':file).sort()]){const changed=structuredClone(actual);physicalProofByHistoricalId(changed,delta.id).sourceFiles=malformed;denied(()=>restoreMaterialReviewPreviousContract(changed));}
+ }
+
 });
 
 
