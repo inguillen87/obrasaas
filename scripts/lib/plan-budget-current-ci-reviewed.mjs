@@ -1274,7 +1274,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-          "sha256": "490d218bc70e7e1470c3dbf5acb13771d43946f9ae12a626282a8ef12dfd1da9"
+          "sha256": "7662a9f5a88f88126bdba69352611e6fd7eeaa54c76ad98186d98e6b596923a1"
         },
         {
           "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -2141,7 +2141,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-          "sha256": "490d218bc70e7e1470c3dbf5acb13771d43946f9ae12a626282a8ef12dfd1da9"
+          "sha256": "7662a9f5a88f88126bdba69352611e6fd7eeaa54c76ad98186d98e6b596923a1"
         },
         {
           "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -3543,7 +3543,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/pilot-completion-current-ci-layer.mjs",
-          "sha256": "6eecddc9acc652aae657338d958ccb280800f262f098568ce91b4a8ef7f2fb35"
+          "sha256": "9310c1418869c59409f95021c61346d0957dded76fd3b04100bbbe98954fb3dc"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
@@ -3771,7 +3771,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-          "sha256": "490d218bc70e7e1470c3dbf5acb13771d43946f9ae12a626282a8ef12dfd1da9"
+          "sha256": "7662a9f5a88f88126bdba69352611e6fd7eeaa54c76ad98186d98e6b596923a1"
         },
         {
           "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -4677,7 +4677,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/pilot-completion-current-ci-layer.mjs",
-          "sha256": "6eecddc9acc652aae657338d958ccb280800f262f098568ce91b4a8ef7f2fb35"
+          "sha256": "9310c1418869c59409f95021c61346d0957dded76fd3b04100bbbe98954fb3dc"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
@@ -4797,7 +4797,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-          "sha256": "490d218bc70e7e1470c3dbf5acb13771d43946f9ae12a626282a8ef12dfd1da9"
+          "sha256": "7662a9f5a88f88126bdba69352611e6fd7eeaa54c76ad98186d98e6b596923a1"
         },
         {
           "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -5533,7 +5533,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+          "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -6680,7 +6680,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+          "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -7860,7 +7860,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+          "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -8778,7 +8778,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+          "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -9639,7 +9639,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+          "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -10289,7 +10289,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/pilot-completion-current-ci-layer.mjs",
-          "sha256": "6eecddc9acc652aae657338d958ccb280800f262f098568ce91b4a8ef7f2fb35"
+          "sha256": "9310c1418869c59409f95021c61346d0957dded76fd3b04100bbbe98954fb3dc"
         },
         {
           "path": "scripts/lib/plan-budget-browser-ui.mjs",
@@ -40056,39 +40056,14 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/lib/meta-kyc-conversation.mjs",
         "status": "MODIFIED",
         "previousSha256": "b8c4318d9a21bf260569ccc181f709c64a5f7df01e36ee730696481e8133a1d3",
-        "currentSha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3",
+        "currentSha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae",
         "previousBytes": 19703,
-        "currentBytes": 22258,
+        "currentBytes": 22826,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 0,
-            "currentText": "import {isMetaGreeting} from './meta-greeting.mjs';\n",
-            "previousText": ""
-          },
-          {
-            "currentOffsetCharacters": 1474,
-            "currentText": "const entryRows=[['CREATE_COMPANY','Crear mi empresa'],['JOIN_WORKSITE','Sumarme a una obra'],['ACCOUNT','Ya tengo cuenta']];\nfunction intakeEntryPrompt(state,eventId){\n const nonce=digest(['employee-intake-entry-v1',eventId]).slice(0,20);\n return {state:{...state,nonce,choices:entryRows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:'Hola. Elegí cómo querés continuar en ObraSaaS.',button:'Elegir',sections:[{title:'Empezar en ObraSaaS',rows:entryRows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title}))}]}};\n}\n",
-            "previousText": ""
-          },
-          {
-            "currentOffsetCharacters": 2059,
-            "currentText": " if(state.entryChoicePending===true)return intakeEntryPrompt(state,eventId);\n const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado. Para retirar esta solicitud pendiente, escribí CANCELAR.',ADMITTED:'Tu ficha ya está registrada.\\n\\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\\n\\nSi te enviaron una invitación, aceptala desde tu correo.\\n\\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\\n\\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};\n",
-            "previousText": " const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado.',ADMITTED:'Tu ficha ya está registrada.\\n\\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\\n\\nSi te enviaron una invitación, aceptala desde tu correo.\\n\\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\\n\\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};\n"
-          },
-          {
-            "currentOffsetCharacters": 4293,
-            "currentText": "export function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'NAME',entryChoicePending:true,noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}\n",
-            "previousText": "export function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'NAME',noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}\n"
-          },
-          {
-            "currentOffsetCharacters": 4943,
-            "currentText": " if(Object.hasOwn(state,'entryChoicePending')){\n  if(state.entryChoicePending!==true||state.step!=='NAME'||state.consent!==false||state.name!==null||state.job!==null||state.email!==null)throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);\n  if(body?.toUpperCase()==='CANCELAR'){const next={...state,step:'CANCELLED',consent:false};delete next.entryChoicePending;return intakePrompt(next,eventId);}\n  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^intake:([a-f0-9]{20}):(\\d{1,2})$/.exec(selection||'');\n  if(!promptConfirmed||!match||match[1]!==state.nonce||!state.choices?.[Number(match[2])])return intakeEntryPrompt(state,eventId);\n  const next={...state},selected=state.choices[Number(match[2])].value;delete next.nonce;delete next.choices;\n  if(selected==='JOIN_WORKSITE'){delete next.entryChoicePending;return intakePrompt(next,eventId);}\n  if(selected==='CREATE_COMPANY')return {state:next,reply:intakeText('Creá tu cuenta personal y verificá tu correo para dar de alta una empresa:\\nhttps://obrasaas.com/sign-up\\n\\nEste enlace inicia el alta en la plataforma. No conecta WhatsApp ni concede permisos. Si ya tenés una cuenta, ingresá con ella. Para volver a las opciones, escribí HOLA.')};\n  if(selected==='ACCOUNT')return {state:next,reply:intakeText('Ingresá con tu cuenta personal:\\nhttps://obrasaas.com/cuenta\\n\\nAllí verás las empresas, obras y opciones que te corresponden. Este chat no concede un rol ni confirma tu identidad. Para volver a las opciones, escribí HOLA.')};\n  return intakeEntryPrompt(state,eventId);\n }\n if(state.step==='WAITING_RESPONSIBLE'&&body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);\n",
-            "previousText": ""
-          },
-          {
-            "currentOffsetCharacters": 7939,
-            "currentText": " if(isMetaGreeting(body)||['ESTADO','AYUDA'].includes(body?.toUpperCase())||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);\n",
-            "previousText": " if(['HOLA','ESTADO','AYUDA'].includes(body?.toUpperCase())||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);\n"
+            "currentOffsetCharacters": 8,
+            "currentText": "isMetaGreeting} from './meta-greeting.mjs';\nimport {participantIdentityNoticeSummary} from './participant-kyc-notice-links.mjs';\nimport {digest,workspaceId,WorkspaceError} from './workspace-policy.mjs';\nimport {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from './participant-policy.mjs';\nimport {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-policy.mjs';\nimport {participantOcrNotice,participantBiometricNotice,PARTICIPANT_AUTO_OCR_NOTICE_VERSION,PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION} from './participant-analysis-consent.mjs';\nimport {SITE_ROLES,siteText} from './site-register-policy.mjs';\nimport {participantIdentityUrl} from './participant-kyc-chat-copy.mjs';\nimport {CAPTURE_QUALITY_NOTICE} from './capture-quality-policy.mjs';\n\nexport const META_KYC_CONVERSATION_TTL_MS=30*60*1000;\nexport const EMPLOYEE_INTAKE_NOTICE_VERSION='employee-intake-v1';\nexport const EMPLOYEE_INTAKE_NOTICE='Tu nombre, oficio solicitado, correo y teléfono se guardarán en privado para que el responsable de esta empresa revise tu solicitud y pueda invitarte a una obra. La solicitud no concede acceso ni verifica tu identidad. No envíes documentos todavía.';\nconst intakeText=body=>({type:'text',body});\nconst entryRows=[['CREATE_COMPANY','Crear mi empresa'],['JOIN_WORKSITE','Sumarme a una obra'],['ACCOUNT','Ya tengo cuenta']];\nfunction intakeEntryPrompt(state,eventId){\n const nonce=digest(['employee-intake-entry-v1',eventId]).slice(0,20);\n return {state:{...state,nonce,choices:entryRows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:'Hola. Elegí cómo querés continuar en ObraSaaS.',button:'Elegir',sections:[{title:'Empezar en ObraSaaS',rows:entryRows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title}))}]}};\n}\nfunction intakePrompt(state,eventId){\n if(state.entryChoicePending===true)return intakeEntryPrompt(state,eventId);\n const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado. Para retirar esta solicitud pendiente, escribí CANCELAR.',ADMITTED:'Tu ficha ya está registrada.\\n\\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\\n\\nSi te enviaron una invitación, aceptala desde tu correo.\\n\\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\\n\\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};\n if(['ADMITTED','JOB','CONFIRM'].includes(state.step)){\n  const rows=state.step==='ADMITTED'?[['ACCOUNT','Abrir mi cuenta'],['IDENTITY_GUIDANCE','Consultar identidad']]:state.step==='JOB'?Object.entries(SITE_ROLES):[['CONFIRM','Enviar solicitud'],['CANCEL','Cancelar']];\n  const nonce=digest(['employee-intake-choice-v1',eventId,state.step]).slice(0,20);\n  return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:state.step==='ADMITTED'?'Tu ficha está registrada. Elegí una opción para continuar.':state.step==='JOB'?'Elegí el oficio o función que solicitás. Un responsable decidirá la participación; esto no concede permisos.':EMPLOYEE_INTAKE_NOTICE+'\\nNombre: '+state.name+'\\nOficio solicitado: '+SITE_ROLES[state.job]+'\\nCorreo: '+state.email,button:'Elegir',sections:[{title:state.step==='ADMITTED'?'Tu participación':'Solicitud de ingreso',rows:rows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title:title.slice(0,24)}))}]}};\n }\n return {state,reply:intakeText(descriptions[state.step]||'Escribí ESTADO para consultar tu solicitud.')};\n}\nexport function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'NAME',entryChoicePending:true,noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}\nexport function planEmployeeIntakeConversation({message,state,eventId,promptConfirmed=false,draftTextConfirmed=false}){\n if(state?.version!==1||!['NAME','JOB','EMAIL','CONFIRM','WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.step))throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);\n const body=message.type==='text'?message.text?.body?.trim():null;\n if(Object.hasOwn(state,'entryChoicePending')){\n  if(state.entryChoicePending!==true||state.step!=='NAME'||state.consent!==false||state.name!==null||state.job!==null||state.email!==null)throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);\n  if(body?.toUpperCase()==='CANCELAR'){const next={...state,step:'CANCELLED',consent:false};delete next.entryChoicePending;return intakePrompt(next,eventId);}\n  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^intake:([a-f0-9]{20}):(\\d{1,2})$/.exec(selection||'');\n  if(!promptConfirmed||!match||match[1]!==state.nonce||!state.choices?.[Number(match[2])])return intakeEntryPrompt(state,eventId);\n  const next={...state},selected=state.choices[Number(match[2])].value;delete next.nonce;delete next.choices;\n  if(selected==='JOIN_WORKSITE'){delete next.entryChoicePending;return intakePrompt(next,eventId);}\n  if(selected==='CREATE_COMPANY')return {state:next,reply:intakeText('Creá tu cuenta personal y verificá tu correo para dar de alta una empresa:\\nhttps://obrasaas.com/sign-up\\n\\nEste enlace inicia el alta en la plataforma. No conecta WhatsApp ni concede permisos. Si ya tenés una cuenta, ingresá con ella. Para volver a las opciones, escribí HOLA.')};\n  if(selected==='ACCOUNT')return {state:next,reply:intakeText('Ingresá con tu cuenta personal:\\nhttps://obrasaas.com/cuenta\\n\\nAllí verás las empresas, obras y opciones que te corresponden. Este chat no concede un rol ni confirma tu identidad. Para volver a las opciones, escribí HOLA.')};\n  return intakeEntryPrompt(state,eventId);\n }\n if(state.step==='WAITING_RESPONSIBLE'&&body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);\n if(['WAITING_RESPONSIBLE','REJECTED','CANCELLED'].includes(state.step))return intakePrompt(state,eventId);\n if(state.step==='ADMITTED'){\n  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^intake:([a-f0-9]{20}):(\\d{1,2})$/.exec(selection||'');\n  if(!promptConfirmed||!match||match[1]!==state.nonce||!state.choices?.[Number(match[2])])return intakePrompt(state,eventId);\n  const next={...state};delete next.nonce;delete next.choices;\n  const selected=state.choices[Number(match[2])].value;\n  if(selected==='ACCOUNT')return {state:next,reply:intakeText('Abrí tu cuenta e iniciá sesión:\\nhttps://obrasaas.com/cuenta\\n\\nAllí podés consultar tus obras y accesos.')};\n  if(selected==='IDENTITY_GUIDANCE'){\n   const admission=state.admission;\n   // The sealed admission supplies a navigation hint. The account checks current worksite access.\n   const projectId=state.status==='ADMITTED'&&state.consent===true&&admission?.version===1\n    &&workspaceId(state.applicationId)&&admission.applicationId===state.applicationId\n    &&workspaceId(admission.workerId)&&workspaceId(admission.projectId)?admission.projectId:null;\n   const chooseProject=projectId?'':'Si ves varias obras, elegí la que corresponde a tu participación.\\n\\n';\n   return {state:next,reply:intakeText('Consultá tu identidad y el paso pendiente:\\n'+participantIdentityUrl(projectId)+'\\n\\n'+chooseProject+'Para enviarla por este chat, pedile al responsable el mensaje IDENTIDAD vigente. Esperá las indicaciones antes de enviar documentos. Presentar identidad no habilita permisos.')};\n  }\n  return intakePrompt(state,eventId);\n }\n if(body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);\n if(isMetaGreeting(body)||[",
+            "previousText": "participantIdentityNoticeSummary} from './participant-kyc-notice-links.mjs';\nimport {digest,WorkspaceError} from './workspace-policy.mjs';\nimport {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from './participant-policy.mjs';\nimport {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-policy.mjs';\nimport {participantOcrNotice,participantBiometricNotice,PARTICIPANT_AUTO_OCR_NOTICE_VERSION,PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION} from './participant-analysis-consent.mjs';\nimport {SITE_ROLES,siteText} from './site-register-policy.mjs';\nimport {participantIdentityUrl} from './participant-kyc-chat-copy.mjs';\nimport {CAPTURE_QUALITY_NOTICE} from './capture-quality-policy.mjs';\n\nexport const META_KYC_CONVERSATION_TTL_MS=30*60*1000;\nexport const EMPLOYEE_INTAKE_NOTICE_VERSION='employee-intake-v1';\nexport const EMPLOYEE_INTAKE_NOTICE='Tu nombre, oficio solicitado, correo y teléfono se guardarán en privado para que el responsable de esta empresa revise tu solicitud y pueda invitarte a una obra. La solicitud no concede acceso ni verifica tu identidad. No envíes documentos todavía.';\nconst intakeText=body=>({type:'text',body});\nfunction intakePrompt(state,eventId){\n const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado.',ADMITTED:'Tu ficha ya está registrada.\\n\\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\\n\\nSi te enviaron una invitación, aceptala desde tu correo.\\n\\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\\n\\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};\n if(['ADMITTED','JOB','CONFIRM'].includes(state.step)){\n  const rows=state.step==='ADMITTED'?[['ACCOUNT','Abrir mi cuenta'],['IDENTITY_GUIDANCE','Consultar identidad']]:state.step==='JOB'?Object.entries(SITE_ROLES):[['CONFIRM','Enviar solicitud'],['CANCEL','Cancelar']];\n  const nonce=digest(['employee-intake-choice-v1',eventId,state.step]).slice(0,20);\n  return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:state.step==='ADMITTED'?'Tu ficha está registrada. Elegí una opción para continuar.':state.step==='JOB'?'Elegí el oficio o función que solicitás. Un responsable decidirá la participación; esto no concede permisos.':EMPLOYEE_INTAKE_NOTICE+'\\nNombre: '+state.name+'\\nOficio solicitado: '+SITE_ROLES[state.job]+'\\nCorreo: '+state.email,button:'Elegir',sections:[{title:state.step==='ADMITTED'?'Tu participación':'Solicitud de ingreso',rows:rows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title:title.slice(0,24)}))}]}};\n }\n return {state,reply:intakeText(descriptions[state.step]||'Escribí ESTADO para consultar tu solicitud.')};\n}\nexport function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'NAME',noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}\nexport function planEmployeeIntakeConversation({message,state,eventId,promptConfirmed=false,draftTextConfirmed=false}){\n if(state?.version!==1||!['NAME','JOB','EMAIL','CONFIRM','WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.step))throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);\n const body=message.type==='text'?message.text?.body?.trim():null;\n if(['WAITING_RESPONSIBLE','REJECTED','CANCELLED'].includes(state.step))return intakePrompt(state,eventId);\n if(state.step==='ADMITTED'){\n  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^intake:([a-f0-9]{20}):(\\d{1,2})$/.exec(selection||'');\n  if(!promptConfirmed||!match||match[1]!==state.nonce||!state.choices?.[Number(match[2])])return intakePrompt(state,eventId);\n  const next={...state};delete next.nonce;delete next.choices;\n  const selected=state.choices[Number(match[2])].value;\n  if(selected==='ACCOUNT')return {state:next,reply:intakeText('Abrí tu cuenta e iniciá sesión:\\nhttps://obrasaas.com/cuenta\\n\\nAllí podés consultar tus obras y accesos.')};\n  if(selected==='IDENTITY_GUIDANCE')return {state:next,reply:intakeText('Consultá tu identidad y el paso pendiente:\\n'+participantIdentityUrl()+'\\n\\nPara enviarla por este chat, pedile al responsable el mensaje IDENTIDAD vigente. Esperá las indicaciones antes de enviar documentos. Presentar identidad no habilita permisos.')};\n  return intakePrompt(state,eventId);\n }\n if(body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);\n if(['HOLA',"
           }
         ]
       },
@@ -50616,7 +50591,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "490d218bc70e7e1470c3dbf5acb13771d43946f9ae12a626282a8ef12dfd1da9"
+            "sha256": "7662a9f5a88f88126bdba69352611e6fd7eeaa54c76ad98186d98e6b596923a1"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -51695,7 +51670,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "490d218bc70e7e1470c3dbf5acb13771d43946f9ae12a626282a8ef12dfd1da9"
+            "sha256": "7662a9f5a88f88126bdba69352611e6fd7eeaa54c76ad98186d98e6b596923a1"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -53505,7 +53480,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+            "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -54975,7 +54950,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+            "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -56325,7 +56300,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+            "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -57505,7 +57480,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/pilot-completion-current-ci-layer.mjs",
-            "sha256": "6eecddc9acc652aae657338d958ccb280800f262f098568ce91b4a8ef7f2fb35"
+            "sha256": "9310c1418869c59409f95021c61346d0957dded76fd3b04100bbbe98954fb3dc"
           },
           {
             "path": "scripts/lib/plan-budget-browser-ui.mjs",
@@ -60194,7 +60169,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/pilot-completion-current-ci-layer.mjs",
-            "sha256": "6eecddc9acc652aae657338d958ccb280800f262f098568ce91b4a8ef7f2fb35"
+            "sha256": "9310c1418869c59409f95021c61346d0957dded76fd3b04100bbbe98954fb3dc"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
@@ -60422,7 +60397,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "490d218bc70e7e1470c3dbf5acb13771d43946f9ae12a626282a8ef12dfd1da9"
+            "sha256": "7662a9f5a88f88126bdba69352611e6fd7eeaa54c76ad98186d98e6b596923a1"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -61627,7 +61602,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/pilot-completion-current-ci-layer.mjs",
-            "sha256": "6eecddc9acc652aae657338d958ccb280800f262f098568ce91b4a8ef7f2fb35"
+            "sha256": "9310c1418869c59409f95021c61346d0957dded76fd3b04100bbbe98954fb3dc"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
@@ -61747,7 +61722,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "490d218bc70e7e1470c3dbf5acb13771d43946f9ae12a626282a8ef12dfd1da9"
+            "sha256": "7662a9f5a88f88126bdba69352611e6fd7eeaa54c76ad98186d98e6b596923a1"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -62987,7 +62962,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+            "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -64749,7 +64724,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "7d5a90ba97b5bc19b07148b0b7e3b3a77447dd5987254abcae6c04ed3466ebe3"
+            "sha256": "523e55db2ad0b0a5d5872600ee3341956fea9f24d6b449e2703080e4dae9b5ae"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",

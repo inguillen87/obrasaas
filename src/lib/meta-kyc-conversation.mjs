@@ -1,6 +1,6 @@
 import {isMetaGreeting} from './meta-greeting.mjs';
 import {participantIdentityNoticeSummary} from './participant-kyc-notice-links.mjs';
-import {digest,WorkspaceError} from './workspace-policy.mjs';
+import {digest,workspaceId,WorkspaceError} from './workspace-policy.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from './participant-policy.mjs';
 import {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-policy.mjs';
 import {participantOcrNotice,participantBiometricNotice,PARTICIPANT_AUTO_OCR_NOTICE_VERSION,PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION} from './participant-analysis-consent.mjs';
@@ -50,7 +50,15 @@ export function planEmployeeIntakeConversation({message,state,eventId,promptConf
   const next={...state};delete next.nonce;delete next.choices;
   const selected=state.choices[Number(match[2])].value;
   if(selected==='ACCOUNT')return {state:next,reply:intakeText('Abrí tu cuenta e iniciá sesión:\nhttps://obrasaas.com/cuenta\n\nAllí podés consultar tus obras y accesos.')};
-  if(selected==='IDENTITY_GUIDANCE')return {state:next,reply:intakeText('Consultá tu identidad y el paso pendiente:\n'+participantIdentityUrl()+'\n\nPara enviarla por este chat, pedile al responsable el mensaje IDENTIDAD vigente. Esperá las indicaciones antes de enviar documentos. Presentar identidad no habilita permisos.')};
+  if(selected==='IDENTITY_GUIDANCE'){
+   const admission=state.admission;
+   // The sealed admission supplies a navigation hint. The account checks current worksite access.
+   const projectId=state.status==='ADMITTED'&&state.consent===true&&admission?.version===1
+    &&workspaceId(state.applicationId)&&admission.applicationId===state.applicationId
+    &&workspaceId(admission.workerId)&&workspaceId(admission.projectId)?admission.projectId:null;
+   const chooseProject=projectId?'':'Si ves varias obras, elegí la que corresponde a tu participación.\n\n';
+   return {state:next,reply:intakeText('Consultá tu identidad y el paso pendiente:\n'+participantIdentityUrl(projectId)+'\n\n'+chooseProject+'Para enviarla por este chat, pedile al responsable el mensaje IDENTIDAD vigente. Esperá las indicaciones antes de enviar documentos. Presentar identidad no habilita permisos.')};
+  }
   return intakePrompt(state,eventId);
  }
  if(body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);
