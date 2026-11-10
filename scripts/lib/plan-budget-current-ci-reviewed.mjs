@@ -5741,7 +5741,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+          "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
         },
         {
           "path": "src/lib/plan-measurement-configuration.mjs",
@@ -6884,7 +6884,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+          "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -8112,7 +8112,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+          "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -8998,7 +8998,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+          "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -9847,7 +9847,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+          "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -10549,7 +10549,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+          "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -40281,9 +40281,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/lib/plan-import-store.mjs",
         "status": "MODIFIED",
         "previousSha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920",
-        "currentSha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687",
+        "currentSha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3",
         "previousBytes": 67797,
-        "currentBytes": 69126,
+        "currentBytes": 70156,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 1955,
@@ -40341,29 +40341,59 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": " if(m.sourceConfirmed!==true||m.analysis?.provider!=='local-ooxml'||m.analysis.model!==null||m.analysis.requestedModel!==null||m.analysis.reviewed!==false||!d||typeof d!=='object'||Array.isArray(d)||Object.keys(d).sort().join('|')!==keys.sort().join('|')||d.version!==2||d.profile!==PLAN_BUDGET_SOURCE_PROFILE||d.purpose!==PLAN_BUDGET_SOURCE_PURPOSE||d.projectId!==m.projectId||d.sourceSha256!==m.source.sha256||!hash(d.sourceSha256)||!hash(d.sourceDigest)||d.sourceDigest!==m.analysis.budgetDigest||!hash(d.measurementSourceDigest)||!Number.isSafeInteger(d.rowCount)||d.rowCount<1||d.rowCount>200||!d.currency||Object.keys(d.currency).sort().join('|')!=='code|status'||d.currency.code!==null||d.currency.status!=='UNKNOWN')fail('PLAN_IMPORT_RECEIPT_INTEGRITY',503);\n"
           },
           {
-            "currentOffsetCharacters": 45747,
+            "currentOffsetCharacters": 17598,
+            "currentText": "const DOCUMENT_SCHEDULE_BASELINE_VERSION=2;\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 20468,
+            "currentText": " const baseline=async(client,projectId,version=1)=>{\n",
+            "previousText": " const baseline=async(client,projectId)=>{\n"
+          },
+          {
+            "currentOffsetCharacters": 20661,
+            "currentText": "  if(rows.length>5000)fail('PLAN_IMPORT_SCHEDULE_TOO_LARGE',413);\n  const snapshot={hash:digest(rows),count:rows.length};\n  // Keep the original hash readable on rollback. New document drafts also compare the plan without approved progress.\n  if(version===DOCUMENT_SCHEDULE_BASELINE_VERSION)snapshot.plannedHash=digest(rows.map(({id,title,startsOn,endsOn})=>[id,title,startsOn,endsOn]));\n  return snapshot;\n",
+            "previousText": "  if(rows.length>5000)fail('PLAN_IMPORT_SCHEDULE_TOO_LARGE',413);return {hash:digest(rows),count:rows.length};\n"
+          },
+          {
+            "currentOffsetCharacters": 46097,
             "currentText": "   planContext(input);if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,PLAN_CYP_INVESTMENT_CONSENT,DOCUMENT_CURVE_CONSENT,PLAN_MEASUREMENT_CONSENT,PLAN_MEASUREMENT_DOCUMENT_CONSENT,PLAN_BUDGET_SOURCE_CONSENT,PLAN_BUDGET_CSV_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED',400);\n",
             "previousText": "   planContext(input);if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,PLAN_CYP_INVESTMENT_CONSENT,DOCUMENT_CURVE_CONSENT,PLAN_MEASUREMENT_CONSENT,PLAN_MEASUREMENT_DOCUMENT_CONSENT,PLAN_BUDGET_SOURCE_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED',400);\n"
           },
           {
-            "currentOffsetCharacters": 46522,
+            "currentOffsetCharacters": 46872,
             "currentText": "   await run(session,input,false,async(client,member)=>{permission(member,financialConsent(input.consent)||measurementConsent(input.consent));if(budgetConsent(input.consent)&&member.channelProof)fail('PLAN_IMPORT_PERMISSION_REQUIRED',403);if(measurementConsent(input.consent)&&member.channelProof)fail('PLAN_MEASUREMENT_PERMISSION_REQUIRED',403);await sharedSensitivity(client,member,input.projectId,sourceFile.sha256);});\n",
             "previousText": "   await run(session,input,false,async(client,member)=>{permission(member,financialConsent(input.consent)||measurementConsent(input.consent));if(input.consent===PLAN_BUDGET_SOURCE_CONSENT&&member.channelProof)fail('PLAN_IMPORT_PERMISSION_REQUIRED',403);if(measurementConsent(input.consent)&&member.channelProof)fail('PLAN_MEASUREMENT_PERMISSION_REQUIRED',403);await sharedSensitivity(client,member,input.projectId,sourceFile.sha256);});\n"
           },
           {
-            "currentOffsetCharacters": 47000,
+            "currentOffsetCharacters": 47350,
             "currentText": "   const budget=budgetConsent(input.consent),measurement=isPlanMeasurementConsent(input.consent,sourceFile.contentType),doc=isDocumentCurveConsent(input.consent),investment=input.consent===PLAN_CYP_INVESTMENT_CONSENT,documentDigest=doc?documentCurveUploadDigest({...input,source:{bytes:sourceFile.bytes.length,contentType:sourceFile.contentType,sha256:sourceFile.sha256}}):null,requestDigest=doc?documentDigest:digest([input.projectId,input.scope,input.consent,sourceFile.sha256]),inputDigest=doc?documentDigest:measurement?planMeasurementUploadDigest(input,sourceFile):uploadInputDigest(input,sourceFile),lease=randomUUID();\n",
             "previousText": "   const budget=input.consent===PLAN_BUDGET_SOURCE_CONSENT,measurement=isPlanMeasurementConsent(input.consent,sourceFile.contentType),doc=isDocumentCurveConsent(input.consent),investment=input.consent===PLAN_CYP_INVESTMENT_CONSENT,documentDigest=doc?documentCurveUploadDigest({...input,source:{bytes:sourceFile.bytes.length,contentType:sourceFile.contentType,sha256:sourceFile.sha256}}):null,requestDigest=doc?documentDigest:digest([input.projectId,input.scope,input.consent,sourceFile.sha256]),inputDigest=doc?documentDigest:measurement?planMeasurementUploadDigest(input,sourceFile):uploadInputDigest(input,sourceFile),lease=randomUUID();\n"
           },
           {
-            "currentOffsetCharacters": 53072,
+            "currentOffsetCharacters": 49293,
+            "currentText": "    const baselineVersion=input.consent===PLAN_IMPORT_CONSENT?DOCUMENT_SCHEDULE_BASELINE_VERSION:1;\n    let schedule;try{if(measurement){const used=(await client.query(`SELECT id FROM public.\"AuditLog\" WHERE \"organizationId\"=$1 AND \"entityId\"=$2 AND action='plan.import.draft' AND metadata->>'sourcePurpose'=$3 AND metadata->>'status'='APPLIED' AND metadata->'source'->>'sha256'=$4 LIMIT 1`,[member.organizationId,input.projectId,PLAN_MEASUREMENT_PURPOSE,sourceFile.sha256])).rows;if(used.length)fail('PLAN_IMPORT_SOURCE_ALREADY_APPLIED');}else if(!budget)await assertSourceUnused(client,member,input.projectId,sourceFile.sha256,doc,investment);schedule=doc||measurement||investment||budget?{hash:null,count:null}:await baseline(client,input.projectId,baselineVersion);}catch(error){\n",
+            "previousText": "    let schedule;try{if(measurement){const used=(await client.query(`SELECT id FROM public.\"AuditLog\" WHERE \"organizationId\"=$1 AND \"entityId\"=$2 AND action='plan.import.draft' AND metadata->>'sourcePurpose'=$3 AND metadata->>'status'='APPLIED' AND metadata->'source'->>'sha256'=$4 LIMIT 1`,[member.organizationId,input.projectId,PLAN_MEASUREMENT_PURPOSE,sourceFile.sha256])).rows;if(used.length)fail('PLAN_IMPORT_SOURCE_ALREADY_APPLIED');}else if(!budget)await assertSourceUnused(client,member,input.projectId,sourceFile.sha256,doc,investment);schedule=doc||measurement||investment||budget?{hash:null,count:null}:await baseline(client,input.projectId);}catch(error){\n"
+          },
+          {
+            "currentOffsetCharacters": 51388,
+            "currentText": "    const metadata={version:1,projectId:input.projectId,requestDigest,baseline:schedule.hash,existingTaskCount:schedule.count,...(baselineVersion===DOCUMENT_SCHEDULE_BASELINE_VERSION?{baselineVersion,plannedBaseline:schedule.plannedHash}:{}),...(budget?{sourcePurpose:PLAN_BUDGET_SOURCE_PURPOSE,rows:[],extractedRows:[]}:{}),...(measurement?{sourcePurpose:PLAN_MEASUREMENT_PURPOSE,rows:[],extractedRows:[],measurementReview:null}:{}),...(doc?{sourcePurpose:DOCUMENT_CURVE_PURPOSE,rows:[],extractedRows:[],reviewedCurve:null,documentReview:null}:{}),...(investment?{sourcePurpose:PLAN_CYP_INVESTMENT_PURPOSE,rows:[],extractedRows:[],investmentReview:null}:{}),revision:1,status:'UPLOADING',source,sourceConfirmed:false,consent:{version:input.consent,actorId:member.actorId,recordedAt:now},lease:{token:lease,expiresAt:new Date(Date.now()+10*60000).toISOString()},createdAt:now,updatedAt:now};\n",
+            "previousText": "    const metadata={version:1,projectId:input.projectId,requestDigest,baseline:schedule.hash,existingTaskCount:schedule.count,...(budget?{sourcePurpose:PLAN_BUDGET_SOURCE_PURPOSE,rows:[],extractedRows:[]}:{}),...(measurement?{sourcePurpose:PLAN_MEASUREMENT_PURPOSE,rows:[],extractedRows:[],measurementReview:null}:{}),...(doc?{sourcePurpose:DOCUMENT_CURVE_PURPOSE,rows:[],extractedRows:[],reviewedCurve:null,documentReview:null}:{}),...(investment?{sourcePurpose:PLAN_CYP_INVESTMENT_PURPOSE,rows:[],extractedRows:[],investmentReview:null}:{}),revision:1,status:'UPLOADING',source,sourceConfirmed:false,consent:{version:input.consent,actorId:member.actorId,recordedAt:now},lease:{token:lease,expiresAt:new Date(Date.now()+10*60000).toISOString()},createdAt:now,updatedAt:now};\n"
+          },
+          {
+            "currentOffsetCharacters": 53654,
             "currentText": "     if(usage&&!PLAN_OOXML_TYPES[sourceFile.contentType]&&!budget){usageReservation=await usage.reserve(client,member,{projectId:input.projectId,draftId:reservation.id,operationId:input.operationId,stage:ORGANIZATION_USAGE_STAGE,sourceSha256:sourceFile.sha256,requestDigest,consentVersion:input.consent,requestedModel:'gpt-4o'});latestUsage=usageReservation.usage||null;\n",
             "previousText": "     if(usage&&!PLAN_OOXML_TYPES[sourceFile.contentType]){usageReservation=await usage.reserve(client,member,{projectId:input.projectId,draftId:reservation.id,operationId:input.operationId,stage:ORGANIZATION_USAGE_STAGE,sourceSha256:sourceFile.sha256,requestDigest,consentVersion:input.consent,requestedModel:'gpt-4o'});latestUsage=usageReservation.usage||null;\n"
           },
           {
-            "currentOffsetCharacters": 55409,
+            "currentOffsetCharacters": 55991,
             "currentText": "     if(budget){const source=extraction.budgetSource,contract=budgetContract(input.consent,sourceFile.contentType);if(extraction.provider!==contract.provider||extraction.model!==null||extraction.requestedModel!==null||!Array.isArray(extraction.rows)||extraction.rows.length||source?.profile!==contract.profile||source?.sourceSha256!==sourceFile.sha256||source?.contentType!==sourceFile.contentType||contract.digest(source)!==source?.sourceDigest)fail('PLAN_IMPORT_BUDGET_SOURCE_INVALID',400);extraction={success:true,provider:contract.provider,model:null,requestedModel:null,rows:[],warnings:[],budgetSource:source};}\n",
             "previousText": "     if(budget){const source=extraction.budgetSource;if(extraction.provider!=='local-ooxml'||extraction.model!==null||extraction.requestedModel!==null||!Array.isArray(extraction.rows)||extraction.rows.length||source?.sourceSha256!==sourceFile.sha256||source?.contentType!==sourceFile.contentType||planBudgetSourceDigest(source)!==source?.sourceDigest)fail('PLAN_IMPORT_BUDGET_SOURCE_INVALID',400);extraction={success:true,provider:'local-ooxml',model:null,requestedModel:null,rows:[],warnings:[],budgetSource:source};}\n"
+          },
+          {
+            "currentOffsetCharacters": 64493,
+            "currentText": "      const baselineVersion=Object.hasOwn(row.metadata,'baselineVersion')?row.metadata.baselineVersion:1;\n      if(baselineVersion!==1&&(baselineVersion!==DOCUMENT_SCHEDULE_BASELINE_VERSION||row.metadata.consent?.version!==PLAN_IMPORT_CONSENT))fail('PLAN_IMPORT_SCHEDULE_CHANGED');\n      const schedule=await baseline(client,input.projectId,baselineVersion);\n      if(baselineVersion===DOCUMENT_SCHEDULE_BASELINE_VERSION\n       ?schedule.plannedHash!==row.metadata.plannedBaseline\n       :schedule.hash!==row.metadata.baseline)fail('PLAN_IMPORT_SCHEDULE_CHANGED');\n",
+            "previousText": "      if((await baseline(client,input.projectId)).hash!==row.metadata.baseline)fail('PLAN_IMPORT_SCHEDULE_CHANGED');\n"
           }
         ]
       },
@@ -53732,7 +53762,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/plan-import-store.mjs",
-            "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+            "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
           },
           {
             "path": "src/lib/plan-measurement-policy.mjs",
@@ -55170,7 +55200,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/plan-import-store.mjs",
-            "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+            "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
           },
           {
             "path": "src/lib/plan-measurement-policy.mjs",
@@ -56508,7 +56538,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/plan-import-store.mjs",
-            "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+            "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
           },
           {
             "path": "src/lib/plan-measurement-policy.mjs",
@@ -57740,7 +57770,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/plan-import-store.mjs",
-            "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+            "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
           },
           {
             "path": "src/lib/plan-measurement-policy.mjs",
@@ -63170,7 +63200,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/plan-import-store.mjs",
-            "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+            "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
           },
           {
             "path": "src/lib/plan-measurement-configuration.mjs",
@@ -64928,7 +64958,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/plan-import-store.mjs",
-            "sha256": "5868bb1dc53c062552fb0b5efdb1a6f74ae4f5c560d861b0c7f09ef755a24687"
+            "sha256": "286a9188e82499b6263eac31888a896db5383a66811697fa6cacdf760c8fdfd3"
           },
           {
             "path": "src/lib/plan-measurement-policy.mjs",

@@ -13,7 +13,7 @@ const clone=value=>structuredClone(value);
 const fixedTime='2026-10-10T06:00:00.000Z';
 export const oldTask={id:'task-existing',title:'Existing synthetic task',status:'IN_PROGRESS',progress:73,startsOn:'2026-09-01',endsOn:'2026-09-30',revision:fixedTime};
 
-export function storeHarness({role='ADMIN',actorId='actor-synthetic',tasks=[oldTask]}={}) {
+export function storeHarness({role='ADMIN',actorId='actor-synthetic',tasks=[oldTask],analyzerOverride=null}={}) {
  let currentRole=role,logs=new Map(),taskRows=new Map(tasks.map(row=>[row.id,clone(row)]));
  const blobs=new Map(),calls={put:0,get:0,analyze:0,mutations:0,taskBatches:0,operations:0,sql:[]};
  let onGet=null,failReceipt=false;
@@ -82,10 +82,10 @@ export function storeHarness({role='ADMIN',actorId='actor-synthetic',tasks=[oldT
   environment:()=>({BLOB_READ_WRITE_TOKEN:'vercel_blob_rw_synthetic',PRIVATE_MEDIA_PROVIDER:'vercel-blob'}),
   async put(path,bytes,options){calls.put++;assert.equal(options.access,'private');assert.equal(options.allowOverwrite,false);blobs.set(path,{bytes:Buffer.from(bytes),contentType:options.contentType});},
   async get(path,options){calls.get++;assert.equal(options.access,'private');const value=blobs.get(path);if(!value)throw new Error('Synthetic Blob not found');if(onGet)await onGet();return {statusCode:200,blob:{url:'https://synthetic.private.blob.vercel-storage.com/'+path,pathname:path,size:value.bytes.length,contentType:value.contentType},stream:new Response(value.bytes).body};},
-  analyzer:{async analyze(...args){calls.analyze++;return analyzer.analyze(...args);}}
+  analyzer:{async analyze(...args){calls.analyze++;return (analyzerOverride||analyzer).analyze(...args);}}
  });
  return {imports,calls,changeDraft:(id,change)=>change(logs.get(id).metadata),setRole:value=>{currentRole=value;},setOnGet:value=>{onGet=value;},setFailReceipt:value=>{failReceipt=value;},
-  logs:()=>clone([...logs.values()]),tasks:()=>clone([...taskRows.values()]),setTaskProgress:(id,progress)=>{taskRows.get(id).progress=progress;},
+  logs:()=>clone([...logs.values()]),tasks:()=>clone([...taskRows.values()]),changeTask:(id,fn)=>fn(taskRows.get(id)),setTaskProgress:(id,progress)=>{taskRows.get(id).progress=progress;},
   addDraft(extraction,source,{id='draft-monthly-synthetic',consent=PLAN_IMPORT_MONTHLY_CURVE_CONSENT,status='READY',revision=3}={}){
    const pathname='obrasaas/plan-import/v1/'+source.sha256+'/cronograma.xlsx';blobs.set(pathname,{bytes:Buffer.from(source.bytes),contentType:source.contentType});
    const metadata={version:1,projectId,status,revision,createdAt:fixedTime,updatedAt:fixedTime,existingTaskCount:taskRows.size,baseline:digest([...taskRows.values()].sort((a,b)=>a.id.localeCompare(b.id)).map(taskPublic)),source:{contentType:source.contentType,bytes:source.bytes.length,sha256:source.sha256,pathname},sourceConfirmed:true,consent:{version:consent,actorId,recordedAt:fixedTime},rows:clone(extraction.rows),extractedRows:clone(extraction.rows),warnings:clone(extraction.warnings||[]),analysis:{provider:'local-ooxml',reviewed:false,spreadsheet:clone(extraction.spreadsheet)}};
