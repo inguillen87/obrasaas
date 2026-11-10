@@ -10,6 +10,7 @@ import {prepareMetaKycChallenge,metaKycOperationId,metaKycChallengeDigest} from 
 import {participantReceiptId} from './participant-policy.mjs';
 import {customerOutboundId,assertCustomerReplyWindow} from './meta-customer-outbound.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
+import {participantIdentityUrl} from './participant-kyc-chat-copy.mjs';
 
 const fail=(code='EMPLOYEE_INTAKE_CONTEXT_REQUIRED')=>{throw new WorkspaceError(code,409);};
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -148,12 +149,15 @@ const legacyReactiveKycStatusReplies={
  REJECTED:'La revisión de esta presentación no fue aprobada. Consultá Mi cuenta y al responsable para revisar el próximo paso. Este chat no inicia otra presentación.',
  APPROVED:'La revisión de tu identidad fue aprobada. Este mensaje no concede permisos ni vincula WhatsApp. Consultá Mi cuenta para comprobar tus permisos y completar la vinculación propia cuando corresponda.',
 };
-// Presentation only: exact old text remains recoverable on its original sealed
-// result; neither text variant supplies account, identity or channel authority.
-export function reactiveParticipantStatusReply(status,recordedReply=null){
+// Keep both earlier text variants recoverable on their original sealed result.
+export function reactiveParticipantStatusReply(status,recordedReply=null,projectId=null){
  if(!Object.hasOwn(reactiveKycStatusReplies,status))fail();
  const legacy={type:'text',body:legacyReactiveKycStatusReplies[status]};
- return recordedReply&&digest(recordedReply)===digest(legacy)?legacy:{type:'text',body:reactiveKycStatusReplies[status]};
+ const recordedDigest=recordedReply?digest(recordedReply):null;
+ if(recordedDigest===digest(legacy))return legacy;
+ const generic={type:'text',body:reactiveKycStatusReplies[status]};
+ if(status!=='PENDING_REVIEW'||!workspaceId(projectId)||recordedDigest===digest(generic))return generic;
+ return {type:'text',body:'Tu presentación está completa y pendiente de revisión independiente. Consultá el estado de tu obra:\n'+participantIdentityUrl(projectId)+'\n\nTodavía no habilita actividad por WhatsApp.'};
 }
 const reactiveStatusFences=new WeakMap();
 const currentMemberProjection=m=>m?{actorId:m.actorId,membershipId:m.membershipId,clerkUserId:m.clerkUserId,role:m.role,clerkRole:m.clerkRole,revision:m.revision,userRevision:m.userRevision}:null;
@@ -181,7 +185,7 @@ export async function reactiveParticipantStatusAuthority(client,r,pref,{environm
 }
 export async function assertReactiveParticipantStatusResult(client,r,pref,result,{environment=process.env}={}){
  const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment,proof:result?.reactiveKycStatus});
- if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply)))fail();
+ if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply,a.project.id)))fail();
  reactiveStatusFences.set(r,{client,pref,worker:currentWorkerProjection(a.worker),organization:currentOrganizationProjection(a.organization),project:currentProjectProjection(a.project),member:currentMemberProjection(a.member),own:currentMemberProjection(a.own),proofDigest:digest(result.reactiveKycStatus),replyDigest:digest(result.reply)});
  return a;
 }
@@ -226,7 +230,7 @@ async function planReactiveParticipantStatus(client,r,pref,{environment}){
  if(!reactiveStatusPrelocks.has(pref))return null;
  const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment});
  const proof={version:1,kind:'KYC_NEXT_STEP',eventId:r.event.id,applicationId:r.anchor.id,status:a.status,authorityDigest:a.authorityDigest,expiresAt:new Date(a.reactiveExpiresAt).toISOString()};
- return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status)};
+ return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status,null,a.project.id)};
 }
 
 function accountAcceptancePlan(r){return {state:r.state,reply:{type:'text',body:'Antes de presentar tu identidad, aceptá la invitación recibida por correo e ingresá con esa misma cuenta en https://obrasaas.com/cuenta. Después volvé a escribir HOLA. No envíes fotos ni documentos desde este paso.'}};}

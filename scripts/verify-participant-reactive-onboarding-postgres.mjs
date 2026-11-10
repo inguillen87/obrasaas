@@ -73,7 +73,27 @@ try{
  const command=(action,payload)=>({...context,operationId:randomUUID(),action,payload});
  const current=await customerJobTransaction(connect,c=>readEmployeeIntake(c,{organizationId:'org-a',role:'ADMIN'},'project-c',environment));await store.save(owner,command('CONFIGURE_EMPLOYEE_INTAKE',{connectionId:'channel-a',expectedRevision:current.revision,enabled:true,confirmed:true}));
  let initialMemberships=digest((await query(`SELECT * FROM public."TenantMembership" ORDER BY id`)).rows),initialProjects=digest((await query(`SELECT * FROM public."ProjectMembership" ORDER BY id`)).rows);
- async function admitted(sender,email){let last=await execute('HOLA',{sender}),app=last.eventId;last=await execute('Persona Sintética',{sender,reply:last.messageId});let s=await state(app);last=await execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{sender,reply:last.messageId});last=await execute(email,{sender,reply:last.messageId});s=await state(app);last=await execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{sender,reply:last.messageId});s=await state(app);assert.equal(s.status,'WAITING_RESPONSIBLE');const admitted=await store.save(owner,command('ADMIT_EMPLOYEE_INTAKE',{connectionId:'channel-a',applicationId:app,expectedRevision:s.revision,job:'WORKER',permissions:{attendance:true,report:false},confirmed:true}));assert.equal(admitted.permissionsGranted,false);const id=admitted.workerId,w=await worker(id);await store.save(owner,command('INVITE',{workerId:id,revision:w.revision,email,whatsAppConsent:{confirmed:true,noticeVersion:PARTICIPANT_ONBOARDING_NOTICE_VERSION,noticeSha256:PARTICIPANT_ONBOARDING_NOTICE_SHA256}}));const delivery=(await worker(id)).metadata.participant.onboardingDelivery;assert.equal(delivery.state,'WAITING_CONFIGURATION');assert.equal(delivery.deliveryVersion,2);assert.equal(delivery.phase,'ACCOUNT_INVITATION');assert.equal(participantOnboardingPhaseState(delivery,'IDENTITY_START').state,'WAITING_ACCOUNT_ACCEPTANCE');return {app,id,sender,email};}
+ async function admitted(sender,email){
+  let last=await execute('HOLA',{sender});
+  const app=last.eventId;
+  last=await execute(choice(last,'Sumarme a una obra'),{sender,reply:last.messageId});
+  last=await execute('Persona Sintética',{sender,reply:last.messageId});
+  last=await execute(choice(last,'Operario'),{sender,reply:last.messageId});
+  last=await execute(email,{sender,reply:last.messageId});
+  await execute(choice(last,'Enviar solicitud'),{sender,reply:last.messageId});
+  const s=await state(app);
+  assert.equal(s.status,'WAITING_RESPONSIBLE');
+  const admitted=await store.save(owner,command('ADMIT_EMPLOYEE_INTAKE',{connectionId:'channel-a',applicationId:app,expectedRevision:s.revision,job:'WORKER',permissions:{attendance:true,report:false},confirmed:true}));
+  assert.equal(admitted.permissionsGranted,false);
+  const id=admitted.workerId,w=await worker(id);
+  await store.save(owner,command('INVITE',{workerId:id,revision:w.revision,email,whatsAppConsent:{confirmed:true,noticeVersion:PARTICIPANT_ONBOARDING_NOTICE_VERSION,noticeSha256:PARTICIPANT_ONBOARDING_NOTICE_SHA256}}));
+  const delivery=(await worker(id)).metadata.participant.onboardingDelivery;
+  assert.equal(delivery.state,'WAITING_CONFIGURATION');
+  assert.equal(delivery.deliveryVersion,2);
+  assert.equal(delivery.phase,'ACCOUNT_INVITATION');
+  assert.equal(participantOnboardingPhaseState(delivery,'IDENTITY_START').state,'WAITING_ACCOUNT_ACCEPTANCE');
+  return {app,id,sender,email};
+ }
  const snapshot=async id=>digest({worker:await worker(id),audit:(await query(`SELECT id,metadata FROM public."AuditLog" WHERE "entityId"=$1 ORDER BY id`,[id])).rows}),failSame=async(person,message,options={},mutate=null,restore=null)=>{await mutate?.();const {expectThrow,...sendOptions}=options,before=await snapshot(person.id),beforeSends=sends,beforePuts=blob.puts(),beforeDownloads=downloads;let out;try{if(expectThrow)await assert.rejects(execute(message,{sender:person.sender,...sendOptions}),{code:expectThrow});else{out=await execute(message,{sender:person.sender,...sendOptions});assert.equal(out.result.businessApplied,false);assert.equal(out.result.replySent,false);}assert.equal(sends,beforeSends);assert.equal(blob.puts(),beforePuts);assert.equal(downloads,beforeDownloads);assert.equal(await snapshot(person.id),before);}finally{await restore?.();}return out;};
 
  async function acceptForCurrent(person,userId){
@@ -162,6 +182,15 @@ try{
  checks.push('accepted-account-after-invitation-expiry-signed-private-KYC-completes-PENDING_REVIEW-once-without-changing-account-permissions-or-operational-records');
  const pendingSnapshot=await snapshot(p3.id),pendingMetadata=structuredClone((await worker(p3.id)).metadata),pendingPuts=blob.puts(),pendingDownloads=downloads,providerMembershipReads=membershipChecks;
  const pendingStatus=await execute('ESTADO',{sender:p3.sender});assert.equal(pendingStatus.result.replySent,true);assert.equal((await recordedIntake(pendingStatus.eventId)).reactiveKycStatus.status,'PENDING_REVIEW');assert.match(pendingStatus.message.body,/pendiente de revisión independiente/);assert.equal(await snapshot(p3.id),pendingSnapshot);assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);assert.equal(membershipChecks,providerMembershipReads);
+ assert.equal(pendingStatus.message.type,'text');
+ assert.deepEqual(pendingStatus.message.body.split('\n').filter(line=>line.startsWith('https:')),[
+  'https://obrasaas.com/cuenta?seccion=identidad&obra=project-c#participant-title',
+ ]);
+ assert.doesNotMatch(pendingStatus.message.body,/project-a|Jornada|Vincular mi número/);
+ const pendingStatusSends=sends;
+ assert.equal((await processor.process(pendingStatus.eventId)).done,true);
+ assert.equal(sends,pendingStatusSends);
+ assert.equal(await snapshot(p3.id),pendingSnapshot);
  await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."TenantMembership" SET status='DISABLED' WHERE id=$1`,[ownMembership]),()=>query(`UPDATE public."TenantMembership" SET status='ACTIVE' WHERE id=$1`,[ownMembership]));
  await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."ProjectMembership" SET status='DISABLED' WHERE "tenantMembershipId"=$1 AND "projectId"='project-c'`,[ownMembership]),()=>query(`UPDATE public."ProjectMembership" SET status='ACTIVE' WHERE "tenantMembershipId"=$1 AND "projectId"='project-c'`,[ownMembership]));
  const missingAdoption=structuredClone(pendingMetadata);missingAdoption.participant.kyc.channelCapture.receiptId='participant_'+'0'.repeat(64);await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."Worker" SET metadata=$2::jsonb WHERE id=$1`,[p3.id,JSON.stringify(missingAdoption)]),()=>query(`UPDATE public."Worker" SET metadata=$2::jsonb WHERE id=$1`,[p3.id,JSON.stringify(pendingMetadata)]));
