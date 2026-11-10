@@ -44,7 +44,7 @@ export function createWorksiteLiveRefreshController({contextKey,getCurrent,onSta
     accessClosed=true;checkAfterAbort=null;stopTimer();
     publish({state:'ACCESS',message:'Tu acceso cambió. Volvé a consultar la obra antes de continuar.'});
    }else if(captured.isCurrent?.(authorityStamp)!==false){
-    if(error?.code==='WORKSITE_LIVE_READ_INCOMPLETE'){limited=true;publish({state:'LIMITED',message:error.message});}
+    if(error?.code==='WORKSITE_LIVE_READ_INCOMPLETE'&&!error.retryable){limited=true;publish({state:'LIMITED',message:error.message});}
     else if(error?.name==='AbortError'){if(eligible())publish({state:'STALE',message:'La consulta venció. Podés comprobar otra vez; los datos y los borradores siguen conservados.'});}
     else{failures=Math.min(3,failures+1);publish({state:'STALE',message:'No pudimos actualizar esta consulta. Conservamos los datos; podés comprobar otra vez o usar su actualización manual.'});}
    }

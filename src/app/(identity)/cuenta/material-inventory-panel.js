@@ -152,7 +152,7 @@ function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,in
    if(!current()||signal.aborted)throw new DOMException('Consulta cancelada.','AbortError');
    const finalBase=await consultCurrent({});
    if(finalBase.reviewAccessStamp!==base.reviewAccessStamp||finalBase.inventory.canManage!==prior.canManage)throw liveContextChanged();
-   if(finalBase.projectRevision!==base.projectRevision||liveReadSignature(finalBase.inventory)!==liveReadSignature(base.inventory))throw Object.assign(new Error('Los saldos o la fuente cambiaron durante la consulta. Conservamos las páginas abiertas; volvé a comprobarlos.'),{code:'WORKSITE_LIVE_READ_INCOMPLETE'});
+   if(finalBase.projectRevision!==base.projectRevision||liveReadSignature(finalBase.inventory)!==liveReadSignature(base.inventory))throw Object.assign(new Error('Los saldos o la fuente cambiaron durante la consulta. Conservamos las páginas abiertas; volvé a comprobarlos.'),{code:'WORKSITE_LIVE_READ_INCOMPLETE',retryable:true});
    return {captured,base:finalBase,head,kind,...result};
   },
   apply:value=>{

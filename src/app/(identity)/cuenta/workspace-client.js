@@ -294,7 +294,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
    const current=()=>{const value=scheduleLiveContext.current;return mounted.current&&generation.current===captured.generation&&value.account===captured.account&&value.view===captured.view&&!value.blocked;};
    const result=await collectRetainedPages({ids:captured.view.tasks.map(task=>task.id),signal,isCurrent:current,readPage:async cursor=>{
     const page=confirmedWorksiteTaskPage(await request(query({projectId:project.id,scope,...(cursor?{afterTask:cursor}:{})}),{signal,requestTimeoutMs:15000}),{scope,projectId:project.id,cursor});
-    if(total!==null&&page.totalTasks!==total)throw Object.assign(new Error('La lista cambió mientras se consultaba. Volvé a comprobarla.'),{code:'WORKSITE_LIVE_READ_INCOMPLETE'});
+    if(total!==null&&page.totalTasks!==total)throw Object.assign(new Error('La lista cambió mientras se consultaba. Volvé a comprobarla.'),{code:'WORKSITE_LIVE_READ_INCOMPLETE',retryable:true});
     total=page.totalTasks;return {rows:page.tasks,cursor:page.nextCursor,data:page};
    }});
    return {captured,...result};

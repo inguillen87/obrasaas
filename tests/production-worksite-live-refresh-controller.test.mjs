@@ -209,3 +209,26 @@ test('accepted403 closes queued and scheduled polls before an asynchronous React
 test('a superseded authority denial or rejected owner callback never latches ACCESS for the current context',async()=>{
  for(const mode of ['stale-authority','owner-rejected']){const pending=deferred();let reads=0;const f=fixture({read:()=>{reads++;return pending.promise;},isAuthorityCurrent:()=>mode!=='stale-authority',onAccessRejected:()=>false});const first=f.controller.check();pending.reject(Object.assign(new Error('Not a current accepted denial'),{status:403}));await first;assert.ok(f.states.every(state=>state.state!=='ACCESS'));f.spec.isAuthorityCurrent=()=>true;f.spec.read=async()=>{reads++;return{taskProgress:30};};f.setTime(6000);assert.equal(await f.controller.check({manual:true}),true,mode);assert.equal(reads,2);assert.equal(f.counts.apply,1);f.controller.dispose();}
 });
+
+test('a concurrent change discards the torn read and the next scheduled check applies fresh data',async()=>{
+ let reads=0,visibleProgress=0;
+ const f=fixture({
+  read:async()=>{
+   if(++reads===1)throw Object.assign(new Error('Source changed during read'),{code:'WORKSITE_LIVE_READ_INCOMPLETE',retryable:true});
+   return {progress:25};
+  },
+  apply:value=>{visibleProgress=value.progress;return {updates:true};}
+ });
+ f.controller.start();
+ await f.fireNext();
+ assert.equal(visibleProgress,0);
+ assert.equal(f.states.at(-1).state,'STALE');
+ assert.equal(f.states.at(-1).checkedAt,null);
+ assert.deepEqual(f.delays(),[90000]);
+ await f.fireNext();
+ assert.equal(visibleProgress,25);
+ assert.equal(f.states.at(-1).state,'CURRENT');
+ assert.equal(f.states.at(-1).updates,true);
+ assert.deepEqual(f.delays(),[45000]);
+ f.controller.dispose();
+});
