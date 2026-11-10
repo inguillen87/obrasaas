@@ -14,21 +14,27 @@ import identityStyles from '../identity.module.css';
 import {IdentityLoadingNotice} from '../identity-load-guard';
 export function WorkspaceIdentityPanel(){
  const params=useSearchParams(),returnPath=identityAccountReturnPath(params),initialProjectId=identityWorkspaceProjectHint(params),initialPlanId=identityWorkspacePlanHint(params);
+ const mayEnterFirstProject=!initialProjectId&&!params.has('participar')&&!params.has('oficina');
  const {isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,getToken}=useAuth();
  const {organization}=useOrganization();
  const sessionToken=useCallback(()=>getToken({skipCache:true}),[getToken]);
  const profileToken=useCallback(()=>getToken({template:'obrasaas-bootstrap-v1',skipCache:true}),[getToken]);
  const contextKey=JSON.stringify([isLoaded,isSignedIn,userId,orgId,sessionId,orgRole]);
- return <WorkspaceIdentityContext key={contextKey} contextKey={contextKey} returnPath={returnPath} signInPath={identitySignInPath(params)} initialProjectId={initialProjectId} initialPlanId={initialPlanId} isLoaded={isLoaded} isSignedIn={isSignedIn} userId={userId} sessionId={sessionId} orgId={orgId} orgRole={orgRole} organization={organization} sessionToken={sessionToken} profileToken={profileToken}/>;
+ return <WorkspaceIdentityContext key={contextKey} contextKey={contextKey} returnPath={returnPath} signInPath={identitySignInPath(params)} initialProjectId={initialProjectId} initialPlanId={initialPlanId} mayEnterFirstProject={mayEnterFirstProject} isLoaded={isLoaded} isSignedIn={isSignedIn} userId={userId} sessionId={sessionId} orgId={orgId} orgRole={orgRole} organization={organization} sessionToken={sessionToken} profileToken={profileToken}/>;
 }
 // A separate instance owns each context: an older callback cannot unlock a new
 // draft, including when the user returns to the same organization and session.
-function WorkspaceIdentityContext({contextKey,returnPath,signInPath,initialProjectId,initialPlanId,isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,organization,sessionToken,profileToken}){
+function WorkspaceIdentityContext({contextKey,returnPath,signInPath,initialProjectId,initialPlanId,mayEnterFirstProject,isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,organization,sessionToken,profileToken}){
  const currentContext=useRef(contextKey),[guideObservation,setGuideObservation]=useState(null),[companyContext,setCompanyContext]=useState(null),[pendingSources,setPendingSources]=useState({workspace:false,bootstrap:false});
+ const [firstProjectRequest,setFirstProjectRequest]=useState(null);
  useLayoutEffect(()=>{currentContext.current=contextKey;return()=>{currentContext.current=null;};},[contextKey]);
  const observePending=useCallback(value=>{if(currentContext.current===contextKey&&typeof value==='boolean')setPendingSources(previous=>previous.workspace===value?previous:{...previous,workspace:value});},[contextKey]);
  const observeBootstrapPending=useCallback(value=>{if(currentContext.current===contextKey&&typeof value==='boolean')setPendingSources(previous=>previous.bootstrap===value?previous:{...previous,bootstrap:value});},[contextKey]);
  const workspacePending=pendingSources.workspace||pendingSources.bootstrap;
+ const enterFirstProject=useCallback(projectId=>{
+  if(currentContext.current!==contextKey||workspacePending||!mayEnterFirstProject)return false;
+  setFirstProjectRequest({projectId});return true;
+ },[contextKey,workspacePending,mayEnterFirstProject]);
  const observeGuide=useCallback(value=>{if(currentContext.current===contextKey)setGuideObservation({contextKey,value});},[contextKey]);
  const observeCompany=useCallback(value=>{
   if(currentContext.current!==contextKey)return;
@@ -43,7 +49,7 @@ function WorkspaceIdentityContext({contextKey,returnPath,signInPath,initialProje
   <OfficeJoinPanel key={`office:${contextKey}:${returnPath}`} getSessionToken={sessionToken}/>
   <div id="organization-context" tabIndex={-1} className={styles.organizationBar}><div><span>{companyContext?.contextKey===contextKey&&companyContext.value?'Empresa activa':'Espacio de trabajo'}</span>{companyContext?.contextKey===contextKey&&companyContext.value?<strong data-workspace-company-name>{companyContext.value.name}</strong>:<strong>{organization?.id===orgId?organization.name:'Elegí el espacio de tu empresa'}</strong>}</div>{workspacePending?<p id="organization-context-lock" role="status">Completá la acción pendiente antes de cambiar de empresa.</p>:<OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/>}</div>
   {!orgId?<section><h2>Elegí o creá el espacio de tu empresa</h2><p>Este espacio reúne a tu equipo. Después completás los datos de la empresa y su primera obra.</p></section>:
-   orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken} onPending={observeBootstrapPending}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId} initialPlanId={initialPlanId}/></CompanyBootstrapPanel>:
+   orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken} onPending={observeBootstrapPending} onEnterFirstProject={mayEnterFirstProject?enterFirstProject:undefined} firstProjectNavigationBlocked={workspacePending}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId} initialPlanId={initialPlanId} firstProjectRequest={mayEnterFirstProject?firstProjectRequest:null}/></CompanyBootstrapPanel>:
    <AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId} initialPlanId={initialPlanId}/>}
  </>;
 }

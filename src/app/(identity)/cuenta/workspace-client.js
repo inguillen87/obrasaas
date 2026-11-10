@@ -101,13 +101,14 @@ function workspaceIdentityOnlyProject(error,account,projectId){
  if(candidates.length!==1||typeof candidates[0].name!=='string')return null;
  return {scope:account.scope,projectId:candidates[0].id,name:candidates[0].name};
 }
-export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyContext,onContextPending,initialProjectId='',initialPlanId=''}={}){
+export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyContext,onContextPending,initialProjectId='',initialPlanId='',firstProjectRequest=null}={}){
  const transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true),identityNavigation=useRef(null),identityNavigationEpoch=useRef(0);
  // Capture once per Clerk context. A query parameter can only suggest a read.
  const initialProjectHint=useRef({projectId:initialProjectId,consumed:false,listGeneration:null});
+ const handledFirstProject=useRef(null);
  const [guideUnavailable,setGuideUnavailable]=useState(false),[guideReadFailed,setGuideReadFailed]=useState(false),[guideAccessReason,setGuideAccessReason]=useState(null);
  const [identityProject,setIdentityProject]=useState(null);
  const [officeProject,setOfficeProject]=useState(null);
@@ -382,6 +383,25 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
   // The ordinary GET still decides current access and private-only KYC state.
   void open(hint.projectId);
  },[account,contextLocked,loading,open]);
+ useEffect(()=>{
+  if(!firstProjectRequest||initialProjectId||loading)return;
+  const current=generation.current,previous=handledFirstProject.current;
+  if(previous?.request===firstProjectRequest&&(previous.handled||previous.generation!==current))return;
+  const ticket={request:firstProjectRequest,generation:current,handled:false};
+  handledFirstProject.current=ticket;
+  const frame=requestAnimationFrame(()=>{
+   if(!mounted.current||handledFirstProject.current!==ticket||generation.current!==current)return;
+   ticket.handled=true;
+   if(!account)return;
+   if(contextLocked){setNotice('Completá la acción pendiente antes de abrir la primera obra.');return;}
+   const {projectId}=firstProjectRequest;
+   if(account.role!=='ADMIN'||account.officeReviewOnly===true||account.projects.filter(project=>project.id===projectId).length!==1){setNotice('La primera obra del recibo no figura entre tus obras disponibles. Elegí una obra para continuar.');return;}
+   const heading=document.getElementById('workspace-title');
+   heading?.focus({preventScroll:true});heading?.scrollIntoView({block:'start',behavior:'auto'});
+   void open(projectId);
+  });
+  return()=>cancelAnimationFrame(frame);
+ },[firstProjectRequest,initialProjectId,account,contextLocked,loading,open]);
  async function readRecordedSchedule(target){
   identityNavigation.current=null;identityNavigationEpoch.current++;
   if(!mounted.current||target.scope!==account?.scope||target.projectId!==view?.project.id)return;
@@ -454,7 +474,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
   }catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))restrictProject(error,attempt.projectId);setNotice(error.message);}}finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  return <section className={styles.workspace} aria-labelledby="workspace-title" aria-busy={loading}>
-  <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Panel de obra</h2></div><button id="workspace-refresh" type="button" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden="true"/>Actualizar</button></div>
+   <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title" tabIndex={-1}>Panel de obra</h2></div><button id="workspace-refresh" type="button" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden="true"/>Actualizar</button></div>
   <div role="status" aria-live="polite" className={notice?styles.notice:styles.silent}>{notice}</div>
   {planReadbackMatches&&planReadback.status==='failed'&&<button type="button" disabled={loading||contextLocked} onClick={()=>readRecordedSchedule(planReadback)}>Volver a consultar el cronograma</button>}
   {loading&&<p className={styles.loading}><LoaderCircle size={18} className={styles.spinner} aria-hidden="true"/>Consultando registros autorizados…</p>}

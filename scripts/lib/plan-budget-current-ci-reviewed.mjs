@@ -1118,7 +1118,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/company-bootstrap-panel.js",
-          "sha256": "7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e"
+          "sha256": "b567caa997b84d8e11371bafbe8f5b0a6be5335bfbd468b1c2a719ab71bc0eb5"
         },
         {
           "path": "src/app/(identity)/cuenta/company-bootstrap-panel.module.css",
@@ -1662,7 +1662,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-client.js",
-          "sha256": "a652397c69bd2ff5fb9b3dbe8323b3d758d64e909abc5c03f0da3f5ef40cd0aa"
+          "sha256": "b0a77bcb4ee01f864b3fc4fc898b4fa7f8005ea1f143341411a4a83917d1cc77"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-read.mjs",
@@ -2237,7 +2237,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-client.js",
-          "sha256": "a652397c69bd2ff5fb9b3dbe8323b3d758d64e909abc5c03f0da3f5ef40cd0aa"
+          "sha256": "b0a77bcb4ee01f864b3fc4fc898b4fa7f8005ea1f143341411a4a83917d1cc77"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-read.mjs",
@@ -3615,7 +3615,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/company-bootstrap-panel.js",
-          "sha256": "7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e"
+          "sha256": "b567caa997b84d8e11371bafbe8f5b0a6be5335bfbd468b1c2a719ab71bc0eb5"
         },
         {
           "path": "src/app/(identity)/cuenta/company-bootstrap-panel.module.css",
@@ -4179,11 +4179,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-client.js",
-          "sha256": "a652397c69bd2ff5fb9b3dbe8323b3d758d64e909abc5c03f0da3f5ef40cd0aa"
+          "sha256": "b0a77bcb4ee01f864b3fc4fc898b4fa7f8005ea1f143341411a4a83917d1cc77"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-identity.js",
-          "sha256": "30374e3436ce0606003c9dae2b63e16fa88379c75af5233c9d8b01183c271443"
+          "sha256": "f970b254cfcc77a81517d4d471c894c8a56f6cb4be9099ce9913bacec009adc0"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-read.mjs",
@@ -4391,7 +4391,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "tests/production-company-bootstrap-receipt.test.mjs",
-          "sha256": "08b38bcced2c5e8700e193ac4f45223073c97b829c46a9ca61e4f5d0198c3d78"
+          "sha256": "6e1fe3789ba8e19a61d5f8e6ecbddb22b65c7dfbdf1f7694252889862408dd3d"
         },
         {
           "path": "tests/production-focused-workspace-ci.test.mjs",
@@ -37931,29 +37931,39 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/app/(identity)/cuenta/company-bootstrap-panel.js",
         "status": "MODIFIED",
         "previousSha256": "f8fabe5917469d3303328ebdfc447fc4c6f3bd2e1f407abbd97c4ba7b8e713d3",
-        "currentSha256": "7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e",
+        "currentSha256": "b567caa997b84d8e11371bafbe8f5b0a6be5335bfbd468b1c2a719ab71bc0eb5",
         "previousBytes": 31410,
-        "currentBytes": 31587,
+        "currentBytes": 32065,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 5680,
+            "currentOffsetCharacters": 1861,
+            "currentText": "export function CompanyBootstrapPanel({organizationId,organizationName,getSessionToken,getProfileToken,onPending,onEnterFirstProject,firstProjectNavigationBlocked=false,children}){\n",
+            "previousText": "export function CompanyBootstrapPanel({organizationId,organizationName,getSessionToken,getProfileToken,onPending,children}){\n"
+          },
+          {
+            "currentOffsetCharacters": 5736,
             "currentText": "   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setNotice('');setStage('ready');}else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');\n",
             "previousText": "   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setStage('ready');}else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');\n"
           },
           {
-            "currentOffsetCharacters": 6393,
+            "currentOffsetCharacters": 6449,
             "currentText": "   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setNotice('');setStage('ready');}else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');\n",
             "previousText": "   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setStage('ready');}else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');\n"
           },
           {
-            "currentOffsetCharacters": 9110,
+            "currentOffsetCharacters": 9166,
             "currentText": "   if(value.state==='CREATED')accept(value);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);setNotice('');retainedProfileProof.current=null;setAttempt(null);setStage('ready');}else if(['NOT_OBSERVED','NOT_CREATED'].includes(value.state)&&value.canCreate===true){setCanRetry(true);setNotice('Todavía no se observa el alta. Podés reenviar este mismo intento con su identificador y sus datos originales. Actualizaremos la verificación de tu cuenta. No se reenvía automáticamente.');}else throw new Error('No se pudo comprobar el alta de la empresa.');\n",
             "previousText": "   if(value.state==='CREATED')accept(value);else if(value.state==='ALREADY_CONFIGURED'){setCurrentCompany(value.currentCompany||null);retainedProfileProof.current=null;setAttempt(null);setStage('ready');}else if(['NOT_OBSERVED','NOT_CREATED'].includes(value.state)&&value.canCreate===true){setCanRetry(true);setNotice('Todavía no se observa el alta. Podés reenviar este mismo intento con su identificador y sus datos originales. Actualizaremos la verificación de tu cuenta. No se reenvía automáticamente.');}else throw new Error('No se pudo comprobar el alta de la empresa.');\n"
           },
           {
-            "currentOffsetCharacters": 10431,
-            "currentText": " if(stage==='ready')return <><CompanyTrialExpiry company={currentCompany}/>{receipt&&typeof notice==='string'&&notice.trim().length>0&&<p role=\"status\" aria-live=\"polite\" className={styles.notice}>{notice}</p>}{receipt&&<details className={styles.created}><summary>Ver recibo original del alta</summary><section aria-labelledby=\"company-receipt-heading\"><h2 id=\"company-receipt-heading\">Alta confirmada</h2><p>Este recibo confirma el alta original. Tu espacio de trabajo muestra el estado vigente.</p><h3>Datos del alta</h3><dl><dt>Empresa declarada al crear el espacio</dt><dd>{receipt.companyName}</dd><dt>Primera obra registrada</dt><dd>{receipt.projectName}</dd><dt>Tareas cargadas en el plan inicial</dt><dd>{receipt.initialTaskCount}</dd></dl><p className={styles.caption}>La confirmación del alta no acredita una conexión de WhatsApp ni la aprobación de identidades.</p><small>Recibo: {receipt.receiptId}</small></section></details>}{children}</>;\n",
+            "currentOffsetCharacters": 10487,
+            "currentText": " function enterFirstProject(){\n  if(!receipt||locked||firstProjectNavigationBlocked)return;\n  if(onEnterFirstProject&&!onEnterFirstProject(receipt.projectId))return;\n  setStage('ready');\n }\n if(stage==='ready')return <><CompanyTrialExpiry company={currentCompany}/>{receipt&&typeof notice==='string'&&notice.trim().length>0&&<p role=\"status\" aria-live=\"polite\" className={styles.notice}>{notice}</p>}{receipt&&<details className={styles.created}><summary>Ver recibo original del alta</summary><section aria-labelledby=\"company-receipt-heading\"><h2 id=\"company-receipt-heading\">Alta confirmada</h2><p>Este recibo confirma el alta original. Tu espacio de trabajo muestra el estado vigente.</p><h3>Datos del alta</h3><dl><dt>Empresa declarada al crear el espacio</dt><dd>{receipt.companyName}</dd><dt>Primera obra registrada</dt><dd>{receipt.projectName}</dd><dt>Tareas cargadas en el plan inicial</dt><dd>{receipt.initialTaskCount}</dd></dl><p className={styles.caption}>La confirmación del alta no acredita una conexión de WhatsApp ni la aprobación de identidades.</p><small>Recibo: {receipt.receiptId}</small>{onEnterFirstProject&&<div className={styles.actions}><button type=\"button\" disabled={locked||firstProjectNavigationBlocked} onClick={enterFirstProject}>Abrir primera obra</button></div>}</section></details>}{children}</>;\n",
             "previousText": " if(stage==='ready')return <><CompanyTrialExpiry company={currentCompany}/>{receipt&&<details className={styles.created}><summary>Ver recibo original del alta</summary><section aria-labelledby=\"company-receipt-heading\"><h2 id=\"company-receipt-heading\">Alta confirmada</h2><p>Este recibo confirma el alta original. Tu espacio de trabajo muestra el estado vigente.</p><h3>Datos del alta</h3><dl><dt>Empresa declarada al crear el espacio</dt><dd>{receipt.companyName}</dd><dt>Primera obra registrada</dt><dd>{receipt.projectName}</dd><dt>Tareas cargadas en el plan inicial</dt><dd>{receipt.initialTaskCount}</dd></dl><p className={styles.caption}>La confirmación del alta no acredita una conexión de WhatsApp ni la aprobación de identidades.</p><small>Recibo: {receipt.receiptId}</small></section></details>}{children}</>;\n"
+          },
+          {
+            "currentOffsetCharacters": 16594,
+            "currentText": "  {stage==='created'&&receipt&&<><CompanyTrialExpiry company={currentCompany}/><div className={styles.created}><h3>El espacio está creado</h3><dl><dt>Empresa</dt><dd>{receipt.companyName}</dd><dt>Primera obra</dt><dd>{receipt.projectName}</dd><dt>Tareas iniciales</dt><dd>{receipt.initialTaskCount}</dd></dl><p>Sin empleados, movimientos económicos ni mensajes de ejemplo. El número y la autorización de Meta se completan por separado.</p><small>Recibo: {receipt.receiptId}</small><button type=\"button\" className={styles.primary} disabled={locked||firstProjectNavigationBlocked} onClick={enterFirstProject}>Entrar a mi obra</button></div></>}\n",
+            "previousText": "  {stage==='created'&&receipt&&<><CompanyTrialExpiry company={currentCompany}/><div className={styles.created}><h3>El espacio está creado</h3><dl><dt>Empresa</dt><dd>{receipt.companyName}</dd><dt>Primera obra</dt><dd>{receipt.projectName}</dd><dt>Tareas iniciales</dt><dd>{receipt.initialTaskCount}</dd></dl><p>Sin empleados, movimientos económicos ni mensajes de ejemplo. El número y la autorización de Meta se completan por separado.</p><small>Recibo: {receipt.receiptId}</small><button type=\"button\" className={styles.primary} onClick={()=>setStage('ready')}>Entrar a mi obra</button></div></>}\n"
           }
         ]
       },
@@ -38981,9 +38991,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/app/(identity)/cuenta/workspace-client.js",
         "status": "MODIFIED",
         "previousSha256": "e6e3dd6a8a2b4e4e1fb1fd638dcb286c9d5c3844179b6a8a697511556ceb06c2",
-        "currentSha256": "a652397c69bd2ff5fb9b3dbe8323b3d758d64e909abc5c03f0da3f5ef40cd0aa",
+        "currentSha256": "b0a77bcb4ee01f864b3fc4fc898b4fa7f8005ea1f143341411a4a83917d1cc77",
         "previousBytes": 75704,
-        "currentBytes": 80576,
+        "currentBytes": 81927,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 940,
@@ -39001,72 +39011,92 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 13517,
+            "currentOffsetCharacters": 11317,
+            "currentText": "export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyContext,onContextPending,initialProjectId='',initialPlanId='',firstProjectRequest=null}={}){\n",
+            "previousText": "export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyContext,onContextPending,initialProjectId='',initialPlanId=''}={}){\n"
+          },
+          {
+            "currentOffsetCharacters": 12295,
+            "currentText": " const handledFirstProject=useRef(null);\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 13583,
             "currentText": " const requestedSection=useWorkspaceRequestedSection(),identityProjectChoice=Boolean(account)&&workspacePendingProjectSection(requestedSection,{projectAvailable:Boolean(view),privatePresentationAvailable:Boolean(identitySelection),officeReviewOnly:account?.officeReviewOnly===true||Boolean(officeSelection),projectCount:account?.projects.length||0,loading})==='identidad';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 15236,
+            "currentOffsetCharacters": 15302,
             "currentText": " const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({}),[moduleReported,setModuleReported]=useState({});\n",
             "previousText": " const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});\n"
           },
           {
-            "currentOffsetCharacters": 16961,
+            "currentOffsetCharacters": 17027,
             "currentText": " // These panels start with their own read and report it from an effect, one render after they mount.\n // Until the mounted panel has reported, it counts as pending: otherwise a live read starts in that\n // render and the lock cancels it in the next one, which costs a second GET once it unlocks.\n const preparationPanelKey=view&&['ADMIN','DIRECTOR'].includes(account?.role)?`project-preparation:${account.scope}:${view.project.id}:${observationEpoch}`:'';\n const creationPanelKey=view&&account?.role==='ADMIN'?`project-creation:${account.scope}:${view.project.id}:${observationEpoch}`:'';\n const modulesUnreported=Boolean(preparationPanelKey&&moduleReported.projectPreparation!==preparationPanelKey||creationPanelKey&&moduleReported.projectCreation!==creationPanelKey);\n const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending||taskPageRead.loading||modulesUnreported;\n",
             "previousText": " const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending||taskPageRead.loading;\n"
           },
           {
-            "currentOffsetCharacters": 22121,
+            "currentOffsetCharacters": 22187,
             "currentText": " const officeChatPending=useCallback(value=>setModulePending(old=>old.officeChat===value?old:{...old,officeChat:value}),[]);\n const companyNumberTransferPending=useCallback(value=>setModulePending(old=>old.companyNumberTransfer===value?old:{...old,companyNumberTransfer:value}),[]);\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 24237,
+            "currentOffsetCharacters": 24303,
             "currentText": " const projectPreparationPending=useCallback(value=>{setModuleReported(old=>old.projectPreparation===preparationPanelKey?old:{...old,projectPreparation:preparationPanelKey});setModulePending(old=>old.projectPreparation===value?old:{...old,projectPreparation:value});},[preparationPanelKey]);\n",
             "previousText": " const projectPreparationPending=useCallback(value=>setModulePending(old=>old.projectPreparation===value?old:{...old,projectPreparation:value}),[]);\n"
           },
           {
-            "currentOffsetCharacters": 24642,
+            "currentOffsetCharacters": 24708,
             "currentText": " const projectCreationPending=useCallback(value=>{setModuleReported(old=>old.projectCreation===creationPanelKey?old:{...old,projectCreation:creationPanelKey});setModulePending(old=>old.projectCreation===value?old:{...old,projectCreation:value});},[creationPanelKey]);\n",
             "previousText": " const projectCreationPending=useCallback(value=>setModulePending(old=>old.projectCreation===value?old:{...old,projectCreation:value}),[]);\n"
           },
           {
-            "currentOffsetCharacters": 32151,
+            "currentOffsetCharacters": 32217,
             "currentText": "  // Keep initial live spacing after this canonical context first becomes eligible, including slow readback.\n  canonicalRead:true,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 33328,
+            "currentOffsetCharacters": 33394,
             "currentText": "{code:'WORKSITE_LIVE_READ_INCOMPLETE',retryable:true}",
             "previousText": "{code:'WORKSITE_LIVE_READ_INCOMPLETE'}"
           },
           {
-            "currentOffsetCharacters": 56069,
+            "currentOffsetCharacters": 44332,
+            "currentText": " useEffect(()=>{\n  if(!firstProjectRequest||initialProjectId||loading)return;\n  const current=generation.current,previous=handledFirstProject.current;\n  if(previous?.request===firstProjectRequest&&(previous.handled||previous.generation!==current))return;\n  const ticket={request:firstProjectRequest,generation:current,handled:false};\n  handledFirstProject.current=ticket;\n  const frame=requestAnimationFrame(()=>{\n   if(!mounted.current||handledFirstProject.current!==ticket||generation.current!==current)return;\n   ticket.handled=true;\n   if(!account)return;\n   if(contextLocked){setNotice('Completá la acción pendiente antes de abrir la primera obra.');return;}\n   const {projectId}=firstProjectRequest;\n   if(account.role!=='ADMIN'||account.officeReviewOnly===true||account.projects.filter(project=>project.id===projectId).length!==1){setNotice('La primera obra del recibo no figura entre tus obras disponibles. Elegí una obra para continuar.');return;}\n   const heading=document.getElementById('workspace-title');\n   heading?.focus({preventScroll:true});heading?.scrollIntoView({block:'start',behavior:'auto'});\n   void open(projectId);\n  });\n  return()=>cancelAnimationFrame(frame);\n },[firstProjectRequest,initialProjectId,account,contextLocked,loading,open]);\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 54297,
+            "currentText": "   <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id=\"workspace-title\" tabIndex={-1}>Panel de obra</h2></div><button id=\"workspace-refresh\" type=\"button\" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden=\"true\"/>Actualizar</button></div>\n",
+            "previousText": "  <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id=\"workspace-title\">Panel de obra</h2></div><button id=\"workspace-refresh\" type=\"button\" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden=\"true\"/>Actualizar</button></div>\n"
+          },
+          {
+            "currentOffsetCharacters": 57417,
             "currentText": "   {identityProjectChoice&&<div className={styles.startState} data-identity-project-choice><strong>Elegí la obra para continuar con tu identidad</strong><p>Abrila desde «Obras disponibles». No se elige ninguna obra automáticamente.</p></div>}\n   {account.projects.length>0&&!view&&!identitySelection&&!officeSelection&&!loading&&!identityProjectChoice&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>{account.officeReviewOnly===true?'Consultá sólo los eventos de lectura que el administrador seleccionó.':'Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.'}</p></div>}\n",
             "previousText": "   {account.projects.length>0&&!view&&!identitySelection&&!officeSelection&&!loading&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>{account.officeReviewOnly===true?'Consultá sólo los eventos de lectura que el administrador seleccionó.':'Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.'}</p></div>}\n"
           },
           {
-            "currentOffsetCharacters": 56726,
+            "currentOffsetCharacters": 58074,
             "currentText": "  {identitySelection&&<><section className={styles.startState} aria-labelledby=\"identity-access-title\"><h3 id=\"identity-access-title\">Mi participación en esta obra</h3><p>Presentá tu identidad y consultá tu WhatsApp. El acceso al trabajo depende de la revisión y los permisos asignados.</p><button type=\"button\" disabled={contextLocked||loading} onClick={()=>open(identitySelection.projectId)}>Comprobar habilitación de obra</button></section><nav className={styles.moduleNav} aria-label=\"Mi participación en la obra\"><a href=\"#participant-title\" className={privateSection==='identidad'?styles.primary:undefined} aria-current={privateSection==='identidad'?'page':undefined} onClick={event=>navigatePrivate(event,'participant-title')}>Mi identidad</a><a href=\"#worker-channel-title\" className={privateSection==='mi-whatsapp'?styles.primary:undefined} aria-current={privateSection==='mi-whatsapp'?'page':undefined} onClick={event=>navigatePrivate(event,'worker-channel-title')}>Mi WhatsApp</a></nav><WorkspaceScreen name=\"identidad\" active={privateSection}><ParticipantPanel active={privateSection==='identidad'} key={`identity-only:${identitySelection.scope}:${identitySelection.projectId}`} presentation=\"own-identity\" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={participantPending} onNavigate={value=>{if(mounted.current&&generation.current===observationEpoch&&participantOnboardingNavigationTarget(value,{scope:identitySelection.scope,projectId:identitySelection.projectId,canManageIntegrations:false})==='worker-channel-title')void open(identitySelection.projectId,false,value);}}/></WorkspaceScreen><WorkspaceScreen name=\"mi-whatsapp\" active={privateSection}><OfficeChatSlot active={privateSection==='mi-whatsapp'} role={account.role} key={`office-chat-private:${account.scope}:${identitySelection.projectId}`} projectId={identitySelection.projectId} scope={account.scope} getSessionToken={getSessionToken} onPending={officeChatPending} canManageCompanyChannel={account.role==='ADMIN'||account.canManageIntegrations===true} disabled={loading||saving||identitySelection.scope!==account.scope}/><WorkerChannelPanel key={`identity-channel:${identitySelection.scope}:${identitySelection.projectId}`} presentation=\"own-privacy\" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch}/></WorkspaceScreen></>}\n",
             "previousText": "  {identitySelection&&<><section className={styles.startState} aria-labelledby=\"identity-access-title\"><h3 id=\"identity-access-title\">Mi participación en esta obra</h3><p>Presentá tu identidad y consultá tu WhatsApp. El acceso al trabajo depende de la revisión y los permisos asignados.</p><button type=\"button\" disabled={contextLocked||loading} onClick={()=>open(identitySelection.projectId)}>Comprobar habilitación de obra</button></section><nav className={styles.moduleNav} aria-label=\"Mi participación en la obra\"><a href=\"#participant-title\" className={privateSection==='identidad'?styles.primary:undefined} aria-current={privateSection==='identidad'?'page':undefined} onClick={event=>navigatePrivate(event,'participant-title')}>Mi identidad</a><a href=\"#worker-channel-title\" className={privateSection==='mi-whatsapp'?styles.primary:undefined} aria-current={privateSection==='mi-whatsapp'?'page':undefined} onClick={event=>navigatePrivate(event,'worker-channel-title')}>Mi WhatsApp</a></nav><WorkspaceScreen name=\"identidad\" active={privateSection}><ParticipantPanel active={privateSection==='identidad'} key={`identity-only:${identitySelection.scope}:${identitySelection.projectId}`} presentation=\"own-identity\" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={participantPending} onNavigate={value=>{if(mounted.current&&generation.current===observationEpoch&&participantOnboardingNavigationTarget(value,{scope:identitySelection.scope,projectId:identitySelection.projectId,canManageIntegrations:false})==='worker-channel-title')void open(identitySelection.projectId,false,value);}}/></WorkspaceScreen><WorkspaceScreen name=\"mi-whatsapp\" active={privateSection}><WorkerChannelPanel key={`identity-channel:${identitySelection.scope}:${identitySelection.projectId}`} presentation=\"own-privacy\" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch}/></WorkspaceScreen></>}\n"
           },
           {
-            "currentOffsetCharacters": 61595,
+            "currentOffsetCharacters": 62943,
             "currentText": "  <WorkspaceScreen name=\"inicio\" active={activeSection}>{view?<WorkspaceOverview project={view.project} tasks={view.tasks} totalTasks={view.totalTasks} nextCursor={view.nextCursor} roleLabel={account.roleLabel} canPlan={view.canPlanSchedule} scope={account.scope} active={activeSection==='inicio'} blocked={contextLocked||loading} observationKey={observationEpoch} onAccessRejected={error=>{const current=scheduleLiveContext.current;if(!mounted.current||generation.current!==observationEpoch||current.account!==account||current.view?.project.id!==view.project.id)return false;restrictProject(error,view.project.id);}} canManageDecisions={account.canManageIntegrations===true&&['ADMIN','DIRECTOR'].includes(account.role)} getSessionToken={getSessionToken}/>:identityProjectChoice?null:<h3 id=\"workspace-home-title\" className={styles.screenTitle}>Espacio de tu empresa</h3>}{!identitySelection&&account.officeReviewOnly!==true&&!identityProjectChoice&&<PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={(projectId,selection)=>open(projectId,false,null,selection)} onAccessRejected={portfolioAccessRejected}/>}</WorkspaceScreen>\n",
             "previousText": "  <WorkspaceScreen name=\"inicio\" active={activeSection}>{view?<WorkspaceOverview project={view.project} tasks={view.tasks} totalTasks={view.totalTasks} nextCursor={view.nextCursor} roleLabel={account.roleLabel} canPlan={view.canPlanSchedule} scope={account.scope} active={activeSection==='inicio'} canManageDecisions={account.canManageIntegrations===true&&['ADMIN','DIRECTOR'].includes(account.role)} getSessionToken={getSessionToken}/>:<h3 id=\"workspace-home-title\" className={styles.screenTitle}>Espacio de tu empresa</h3>}{!identitySelection&&account.officeReviewOnly!==true&&<PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={(projectId,selection)=>open(projectId,false,null,selection)} onAccessRejected={portfolioAccessRejected}/>}</WorkspaceScreen>\n"
           },
           {
-            "currentOffsetCharacters": 66635,
+            "currentOffsetCharacters": 67983,
             "currentText": "   {['ADMIN','DIRECTOR','SITE_MANAGER'].includes(account?.role)&&<ApprovedProgressCurvePanel key={`approved-progress:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} generation={observationEpoch} tasks={view.tasks} getSessionToken={getSessionToken} active={activeSection==='cronograma'} canonicalAccess={!loading&&account.officeReviewOnly!==true&&view.scope===account.scope&&account.projects.some(project=>project.id===view.project.id)} disabled={contextLocked||loading} onAccessDenied={error=>{const current=scheduleLiveContext.current;if(mounted.current&&generation.current===observationEpoch&&current.account===account&&current.view?.project.id===view.project.id)restrictProject(error,view.project.id);}}/>}\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 73458,
+            "currentOffsetCharacters": 74806,
             "currentText": "  <WorkspaceScreen name=\"mi-whatsapp\" active={activeSection}>{view&&<OfficeChatSlot active={activeSection==='mi-whatsapp'} role={account.role} key={`office-chat:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={officeChatPending} canManageCompanyChannel={account.role==='ADMIN'||account.canManageIntegrations===true} disabled={loading||saving||view.scope!==account.scope}/>} {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch} onSnapshot={channelObserved}/> }</WorkspaceScreen>\n",
             "previousText": "  <WorkspaceScreen name=\"mi-whatsapp\" active={activeSection}>{view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch} onSnapshot={channelObserved}/> }</WorkspaceScreen>\n"
           },
           {
-            "currentOffsetCharacters": 75179,
+            "currentOffsetCharacters": 76527,
             "currentText": "  <WorkspaceScreen name=\"canal\" active={activeSection}>{view&&(account?.role==='ADMIN'||account?.canManageIntegrations)&&<>{account?.role==='ADMIN'&&<CompanyNumberTransferPanel key={`company-number-transfer:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={companyNumberTransferPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='companyNumberTransfer'&&value)}/>}<CompanyChannelPanel key={`company-channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={companyChannelPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='companyChannel'&&value)}/></> }</WorkspaceScreen>\n",
             "previousText": "  <WorkspaceScreen name=\"canal\" active={activeSection}>{view&&(account?.role==='ADMIN'||account?.canManageIntegrations)&&<CompanyChannelPanel key={`company-channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={companyChannelPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='companyChannel'&&value)}/> }</WorkspaceScreen>\n"
           }
@@ -39076,14 +39106,39 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/app/(identity)/cuenta/workspace-identity.js",
         "status": "MODIFIED",
         "previousSha256": "c3867723ef4ef76a38dd52d19be76f2d78752e49110c8c36648130452879c8c2",
-        "currentSha256": "30374e3436ce0606003c9dae2b63e16fa88379c75af5233c9d8b01183c271443",
+        "currentSha256": "f970b254cfcc77a81517d4d471c894c8a56f6cb4be9099ce9913bacec009adc0",
         "previousBytes": 6315,
-        "currentBytes": 6299,
+        "currentBytes": 6971,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 4599,
-            "currentText": "  <div id=\"organization-context\" tabIndex={-1} className={styles.organizationBar}><div><span>{companyContext?.contextKey===contextKey&&companyContext.value?'Empresa activa':'Espacio de trabajo'}</span>{companyContext?.contextKey===contextKey&&companyContext.value?<strong data-workspace-company-name>{companyContext.value.name}</strong>:<strong>{organization?.id===orgId?organization.name:'Elegí el espacio de tu empresa'}</strong>}</div>{workspacePending?<p id=\"organization-context-lock\" role=\"status\">Completá la acción pendiente antes de cambiar de empresa.</p>:<OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/>}</div>\n  {!orgId?<section><h2>Elegí o creá el espacio de tu empresa</h2><p>Este espacio reúne a tu equipo. Después completás los datos de la empresa y su primera obra.</p></section>:\n",
-            "previousText": "  <div id=\"organization-context\" tabIndex={-1} className={styles.organizationBar}><div><span>{companyContext?.contextKey===contextKey&&companyContext.value?'Empresa activa':'Espacio de trabajo'}</span>{companyContext?.contextKey===contextKey&&companyContext.value?<strong data-workspace-company-name>{companyContext.value.name}</strong>:<strong>{organization?.id===orgId?organization.name:'Seleccioná tu organización'}</strong>}</div>{workspacePending?<p id=\"organization-context-lock\" role=\"status\">Completá la acción pendiente antes de cambiar de empresa.</p>:<OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/>}</div>\n  {!orgId?<section><h2>Seleccioná o creá tu organización</h2><p>Usá el selector para crear el espacio de tu constructora. Después podrás dar de alta la empresa y su primera obra.</p></section>:\n"
+            "currentOffsetCharacters": 1063,
+            "currentText": " const mayEnterFirstProject=!initialProjectId&&!params.has('participar')&&!params.has('oficina');\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 1555,
+            "currentText": " return <WorkspaceIdentityContext key={contextKey} contextKey={contextKey} returnPath={returnPath} signInPath={identitySignInPath(params)} initialProjectId={initialProjectId} initialPlanId={initialPlanId} mayEnterFirstProject={mayEnterFirstProject} isLoaded={isLoaded} isSignedIn={isSignedIn} userId={userId} sessionId={sessionId} orgId={orgId} orgRole={orgRole} organization={organization} sessionToken={sessionToken} profileToken={profileToken}/>;\n",
+            "previousText": " return <WorkspaceIdentityContext key={contextKey} contextKey={contextKey} returnPath={returnPath} signInPath={identitySignInPath(params)} initialProjectId={initialProjectId} initialPlanId={initialPlanId} isLoaded={isLoaded} isSignedIn={isSignedIn} userId={userId} sessionId={sessionId} orgId={orgId} orgRole={orgRole} organization={organization} sessionToken={sessionToken} profileToken={profileToken}/>;\n"
+          },
+          {
+            "currentOffsetCharacters": 2167,
+            "currentText": "function WorkspaceIdentityContext({contextKey,returnPath,signInPath,initialProjectId,initialPlanId,mayEnterFirstProject,isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,organization,sessionToken,profileToken}){\n",
+            "previousText": "function WorkspaceIdentityContext({contextKey,returnPath,signInPath,initialProjectId,initialPlanId,isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,organization,sessionToken,profileToken}){\n"
+          },
+          {
+            "currentOffsetCharacters": 2605,
+            "currentText": " const [firstProjectRequest,setFirstProjectRequest]=useState(null);\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 3310,
+            "currentText": " const enterFirstProject=useCallback(projectId=>{\n  if(currentContext.current!==contextKey||workspacePending||!mayEnterFirstProject)return false;\n  setFirstProjectRequest({projectId});return true;\n },[contextKey,workspacePending,mayEnterFirstProject]);\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 5083,
+            "currentText": "  <div id=\"organization-context\" tabIndex={-1} className={styles.organizationBar}><div><span>{companyContext?.contextKey===contextKey&&companyContext.value?'Empresa activa':'Espacio de trabajo'}</span>{companyContext?.contextKey===contextKey&&companyContext.value?<strong data-workspace-company-name>{companyContext.value.name}</strong>:<strong>{organization?.id===orgId?organization.name:'Elegí el espacio de tu empresa'}</strong>}</div>{workspacePending?<p id=\"organization-context-lock\" role=\"status\">Completá la acción pendiente antes de cambiar de empresa.</p>:<OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/>}</div>\n  {!orgId?<section><h2>Elegí o creá el espacio de tu empresa</h2><p>Este espacio reúne a tu equipo. Después completás los datos de la empresa y su primera obra.</p></section>:\n   orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken} onPending={observeBootstrapPending} onEnterFirstProject={mayEnterFirstProject?enterFirstProject:undefined} firstProjectNavigationBlocked={workspacePending}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId} initialPlanId={initialPlanId} firstProjectRequest={mayEnterFirstProject?firstProjectRequest:null}/></CompanyBootstrapPanel>:\n",
+            "previousText": "  <div id=\"organization-context\" tabIndex={-1} className={styles.organizationBar}><div><span>{companyContext?.contextKey===contextKey&&companyContext.value?'Empresa activa':'Espacio de trabajo'}</span>{companyContext?.contextKey===contextKey&&companyContext.value?<strong data-workspace-company-name>{companyContext.value.name}</strong>:<strong>{organization?.id===orgId?organization.name:'Seleccioná tu organización'}</strong>}</div>{workspacePending?<p id=\"organization-context-lock\" role=\"status\">Completá la acción pendiente antes de cambiar de empresa.</p>:<OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/>}</div>\n  {!orgId?<section><h2>Seleccioná o creá tu organización</h2><p>Usá el selector para crear el espacio de tu constructora. Después podrás dar de alta la empresa y su primera obra.</p></section>:\n   orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken} onPending={observeBootstrapPending}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId} initialPlanId={initialPlanId}/></CompanyBootstrapPanel>:\n"
           }
         ]
       },
@@ -41096,42 +41151,47 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-company-bootstrap-receipt.test.mjs",
         "status": "MODIFIED",
         "previousSha256": "44676be514b092d8146f6f8ade5c4b0867f8bceb1b9f5c7ab204bb5f90e503af",
-        "currentSha256": "08b38bcced2c5e8700e193ac4f45223073c97b829c46a9ca61e4f5d0198c3d78",
+        "currentSha256": "6e1fe3789ba8e19a61d5f8e6ecbddb22b65c7dfbdf1f7694252889862408dd3d",
         "previousBytes": 6217,
-        "currentBytes": 12549,
+        "currentBytes": 13726,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 977,
-            "currentText": "const acceptNode=component.body.body.find(node=>node.type==='FunctionDeclaration'&&node.id.name==='accept');\nassert.ok(acceptNode);\nconst acceptSource=source.slice(acceptNode.start,acceptNode.end);\nconst alreadyConfiguredBodies=[];\nfunction collectConfigured(node){\n if(!node||typeof node!=='object')return;\n if(node.type==='IfStatement'&&node.test.type==='BinaryExpression'&&node.test.operator==='==='&&node.test.left.type==='MemberExpression'&&node.test.left.object.name==='value'&&node.test.left.property.name==='state'&&node.test.right.value==='ALREADY_CONFIGURED')alreadyConfiguredBodies.push(source.slice(node.consequent.start,node.consequent.end));\n for(const value of Object.values(node))if(Array.isArray(value))value.forEach(collectConfigured);else if(value&&typeof value==='object')collectConfigured(value);\n}\ncollectConfigured(component.body);assert.equal(alreadyConfiguredBodies.length,3);\n// Render the exact ready JSX with real React and the actual trial component.\n// The exact accept function and ALREADY_CONFIGURED blocks are also extracted\n// from the production AST and invoked with recording setters. No hooks are\n// replaced and no transport is run. This does not test browser/effect scheduling.\n",
+            "currentText": "const acceptNode=component.body.body.find(node=>node.type==='FunctionDeclaration'&&node.id.name==='accept');\nassert.ok(acceptNode);\nconst acceptSource=source.slice(acceptNode.start,acceptNode.end);\nconst enterNode=component.body.body.find(node=>node.type==='FunctionDeclaration'&&node.id.name==='enterFirstProject');\nassert.ok(enterNode);\nconst enterSource=source.slice(enterNode.start,enterNode.end);\nconst alreadyConfiguredBodies=[];\nfunction collectConfigured(node){\n if(!node||typeof node!=='object')return;\n if(node.type==='IfStatement'&&node.test.type==='BinaryExpression'&&node.test.operator==='==='&&node.test.left.type==='MemberExpression'&&node.test.left.object.name==='value'&&node.test.left.property.name==='state'&&node.test.right.value==='ALREADY_CONFIGURED')alreadyConfiguredBodies.push(source.slice(node.consequent.start,node.consequent.end));\n for(const value of Object.values(node))if(Array.isArray(value))value.forEach(collectConfigured);else if(value&&typeof value==='object')collectConfigured(value);\n}\ncollectConfigured(component.body);assert.equal(alreadyConfiguredBodies.length,3);\n// Render the exact ready JSX with real React and the actual trial component.\n// The exact accept function and ALREADY_CONFIGURED blocks are also extracted\n// from the production AST and invoked with recording setters. No hooks are\n// replaced and no transport is run. This does not test browser/effect scheduling.\n",
             "previousText": "// Render the exact ready-branch JSX with real React, including the actual trial\n// component. No hooks are replaced and the onboarding transport is never run.\n// SSR verifies native disclosure markup, not browser layout or keyboard behavior.\n"
           },
           {
-            "currentOffsetCharacters": 2355,
+            "currentOffsetCharacters": 2559,
             "currentText": "const styles={created:'created',caption:'caption',notice:'notice'};\n",
             "previousText": "const styles={created:'created',caption:'caption'};\n"
           },
           {
-            "currentOffsetCharacters": 2466,
-            "currentText": "export const renderReady=({receipt,currentCompany,children,notice=''})=>${readyJsx};\nexport function acceptTransition(value,openWorkspace,bindings){\n const {version,retainedProfileProof,setCurrentCompany,setBusy,setReceipt,setAttempt,setCanRetry,setStage,setNotice}=bindings;\n ${acceptSource}\n return accept(value,openWorkspace);\n}\nexport const alreadyConfiguredTransitions=[${alreadyConfiguredBodies.map(body=>`(value,bindings)=>{const {setCurrentCompany,setNotice,retainedProfileProof,setAttempt,setStage}=bindings;${body}}`).join(',')}];`,{filename:'actual-company-ready-receipt.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\nconst {renderReady,CompanyTrialExpiry,acceptTransition,alreadyConfiguredTransitions}=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));\nconst receipt=Object.freeze({state:'CREATED',created:true,organizationId:'company-synthetic',projectId:'project-synthetic',companyName:'Empresa sintética',projectName:'Obra sintética',initialTaskCount:3,receiptId:'company_bootstrap_'+'a'.repeat(64)});\n",
+            "currentOffsetCharacters": 2670,
+            "currentText": "export const renderReady=({receipt,currentCompany,children,notice='',onEnterFirstProject,firstProjectNavigationBlocked=false,locked=false,setStage=()=>{}})=>{\n ${enterSource}\n return ${readyJsx};\n};\nexport function acceptTransition(value,openWorkspace,bindings){\n const {version,retainedProfileProof,setCurrentCompany,setBusy,setReceipt,setAttempt,setCanRetry,setStage,setNotice}=bindings;\n ${acceptSource}\n return accept(value,openWorkspace);\n}\nexport const alreadyConfiguredTransitions=[${alreadyConfiguredBodies.map(body=>`(value,bindings)=>{const {setCurrentCompany,setNotice,retainedProfileProof,setAttempt,setStage}=bindings;${body}}`).join(',')}];`,{filename:'actual-company-ready-receipt.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\nconst {renderReady,CompanyTrialExpiry,acceptTransition,alreadyConfiguredTransitions}=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));\nconst receipt=Object.freeze({state:'CREATED',created:true,organizationId:'company-synthetic',projectId:'project-synthetic',companyName:'Empresa sintética',projectName:'Obra sintética',initialTaskCount:3,receiptId:'company_bootstrap_'+'a'.repeat(64)});\n",
             "previousText": "export const renderReady=({receipt,currentCompany,children})=>${readyJsx};`,{filename:'actual-company-ready-receipt.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\nconst {renderReady,CompanyTrialExpiry}=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));\nconst receipt=Object.freeze({companyName:'Empresa sintética',projectName:'Obra sintética',initialTaskCount:3,receiptId:'company_bootstrap_'+'a'.repeat(64)});\n"
           },
           {
-            "currentOffsetCharacters": 3792,
+            "currentOffsetCharacters": 4110,
             "currentText": "const readyNotice='Alta confirmada. Podés consultar el recibo original y continuar en tu espacio.';\nconst render=(value=receipt,company=currentCompany,notice=readyNotice)=>renderReady({receipt:value,currentCompany:company,children:daily,notice});\n",
             "previousText": "const render=(value=receipt,company=currentCompany)=>renderReady({receipt:value,currentCompany:company,children:daily});\n"
           },
           {
-            "currentOffsetCharacters": 6702,
+            "currentOffsetCharacters": 6908,
+            "currentText": "test('the recovered receipt offers explicit opening of its exact project only while navigation is unlocked',()=>{\n const opened=[],stages=[],onEnterFirstProject=id=>{opened.push(id);return true;},setStage=stage=>stages.push(stage);\n const renderAction=firstProjectNavigationBlocked=>descendants(renderReady({receipt,currentCompany,children:daily,onEnterFirstProject,firstProjectNavigationBlocked,setStage}),node=>node.type==='button')[0];\n const blocked=renderAction(true);assert.equal(blocked.props.disabled,true);blocked.props.onClick();assert.deepEqual(opened,[]);assert.deepEqual(stages,[]);\n const active=renderAction(false);assert.equal(active.props.disabled,false);assert.equal(text(active),'Abrir primera obra');assert.deepEqual(opened,[]);\n active.props.onClick();assert.deepEqual(opened,[receipt.projectId]);assert.deepEqual(stages,['ready']);\n});\n\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 7879,
             "currentText": " const fragment=render(),parts=children(fragment);assert.equal(parts.length,4);assert.equal(parts[0].type,CompanyTrialExpiry);assert.equal(parts[0].props.company,currentCompany);assert.equal(parts[1].type,'p');assert.equal(parts[1].props.role,'status');assert.equal(parts[2].type,'details');assert.equal(parts[3].type,'main');assert.equal(parts[3].props.id,'daily-workspace');\n",
             "previousText": " const fragment=render(),parts=children(fragment);assert.equal(parts.length,3);assert.equal(parts[0].type,CompanyTrialExpiry);assert.equal(parts[0].props.company,currentCompany);assert.equal(parts[1].type,'details');assert.equal(parts[2].type,'main');assert.equal(parts[2].props.id,'daily-workspace');\n"
           },
           {
-            "currentOffsetCharacters": 7501,
+            "currentOffsetCharacters": 8678,
             "currentText": " const fragment=render(null),parts=children(fragment);assert.equal(parts.length,2);assert.equal(parts[0].type,CompanyTrialExpiry);assert.equal(parts[1].type,'main');assert.equal(descendants(fragment,node=>node.type==='details').length,0);assert.equal(descendants(fragment,node=>node.props?.role==='status').length,0);\n",
             "previousText": " const fragment=render(null),parts=children(fragment);assert.equal(parts.length,2);assert.equal(parts[0].type,CompanyTrialExpiry);assert.equal(parts[1].type,'main');assert.equal(descendants(fragment,node=>node.type==='details').length,0);\n"
           },
           {
-            "currentOffsetCharacters": 8086,
+            "currentOffsetCharacters": 9263,
             "currentText": "\ntest('the confirmed nonempty notice is one polite status outside the still-collapsed original receipt',()=>{\n const fragment=render(),statuses=descendants(fragment,node=>node.props?.role==='status'),disclosure=descendants(fragment,node=>node.type==='details')[0];\n assert.equal(statuses.length,1);assert.equal(text(statuses[0]),readyNotice);assert.equal(statuses[0].props['aria-live'],'polite');assert.equal(statuses[0].props.className,'notice');const directStatuses=children(fragment).filter(node=>node.props?.role==='status');assert.equal(directStatuses.length,1);assert.equal(text(directStatuses[0]),readyNotice);assert.equal(descendants(disclosure,node=>node.props?.role==='status').length,0);\n const html=renderToStaticMarkup(fragment);assert.equal(html.split(readyNotice).length-1,1);assert.equal(html.split('Recibo: '+receipt.receiptId).length-1,1);assert.ok(html.indexOf('role=\"status\"')<html.indexOf('<details'));assert.doesNotMatch(html,/<details[^>]*\\bopen(?:[\\s=>])/);\n});\n\ntest('an empty whitespace or non-string notice never creates an empty live region or removes the receipt',()=>{\n for(const notice of ['', '   ', '\\n\\t', null, undefined, 0, false, {}]){\n  const fragment=renderReady({receipt,currentCompany,children:daily,notice});assert.equal(descendants(fragment,node=>node.props?.role==='status').length,0);assert.equal(descendants(fragment,node=>node.type==='details').length,1);assert.equal(descendants(fragment,node=>node.type==='main').length,1);assert.match(renderToStaticMarkup(fragment),/Ver recibo original del alta/);\n }\n});\n\nfunction transitionFixture(seed={}){\n const state={currentCompany:null,busy:true,receipt:null,attempt:{operationId:'00000000-0000-4000-8000-000000000424'},canRetry:true,stage:'new',notice:'Aviso anterior sin confirmación',...seed};\n const bindings={version:{current:7},retainedProfileProof:{current:'synthetic-profile-proof'}};\n for(const name of ['currentCompany','busy','receipt','attempt','canRetry','stage','notice'])bindings['set'+name[0].toUpperCase()+name.slice(1)]=value=>{state[name]=value;};\n return {state,bindings};\n}\n\ntest('the exact accept function replaces prior notices only after a valid receipt on creation or reload',()=>{\n const value={...receipt,currentCompany};\n for(const openWorkspace of [false,true]){\n  const {state,bindings}=transitionFixture();acceptTransition(value,openWorkspace,bindings);\n  assert.equal(state.receipt,value);assert.equal(state.currentCompany,currentCompany);assert.equal(state.stage,openWorkspace?'ready':'created');assert.equal(state.notice,openWorkspace?readyNotice:'Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');assert.equal(state.attempt,null);assert.equal(state.busy,false);assert.equal(state.canRetry,false);assert.equal(bindings.version.current,8);assert.equal(bindings.retainedProfileProof.current,null);\n  const fragment=render(state.receipt,state.currentCompany,state.notice);assert.equal(descendants(fragment,node=>node.props?.role==='status').length,1);\n }\n});\n\ntest('the exact receipt acceptance guard rejects incomplete or unconfirmed responses without replacing any prior state',()=>{\n for(const change of [{created:false},{state:'ALREADY_CONFIGURED'},{receiptId:''},{projectId:''},{organizationId:''}]){\n  const {state,bindings}=transitionFixture(),prior={...state};\n  assert.throws(()=>acceptTransition({...receipt,...change},true,bindings),/Falta el recibo confirmado del alta/);assert.deepEqual(state,prior);assert.equal(bindings.version.current,7);assert.equal(bindings.retainedProfileProof.current,'synthetic-profile-proof');\n }\n});\n\ntest('all three exact ALREADY_CONFIGURED branches clear only the notice and retain the verified audit receipt',()=>{\n for(const transition of alreadyConfiguredTransitions)for(const retained of [null,receipt]){\n  const {state,bindings}=transitionFixture({receipt:retained,notice:readyNotice});transition({state:'ALREADY_CONFIGURED',currentCompany},bindings);\n  assert.equal(state.stage,'ready');assert.equal(state.currentCompany,currentCompany);assert.equal(state.notice,'');assert.equal(state.receipt,retained);assert.equal(bindings.version.current,7);\n  const fragment=render(state.receipt,state.currentCompany,state.notice);assert.equal(descendants(fragment,node=>node.props?.role==='status').length,0);assert.equal(descendants(fragment,node=>node.type==='details').length,retained?1:0);assert.equal(descendants(fragment,node=>node.type==='main').length,1);\n }\n});\n",
             "previousText": ""
           }
@@ -50740,7 +50800,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/company-bootstrap-panel.js",
-            "sha256": "7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e"
+            "sha256": "b567caa997b84d8e11371bafbe8f5b0a6be5335bfbd468b1c2a719ab71bc0eb5"
           },
           {
             "path": "src/app/(identity)/cuenta/company-bootstrap-panel.module.css",
@@ -51284,7 +51344,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-client.js",
-            "sha256": "a652397c69bd2ff5fb9b3dbe8323b3d758d64e909abc5c03f0da3f5ef40cd0aa"
+            "sha256": "b0a77bcb4ee01f864b3fc4fc898b4fa7f8005ea1f143341411a4a83917d1cc77"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-read.mjs",
@@ -52071,7 +52131,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-client.js",
-            "sha256": "a652397c69bd2ff5fb9b3dbe8323b3d758d64e909abc5c03f0da3f5ef40cd0aa"
+            "sha256": "b0a77bcb4ee01f864b3fc4fc898b4fa7f8005ea1f143341411a4a83917d1cc77"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-read.mjs",
@@ -60546,7 +60606,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/company-bootstrap-panel.js",
-            "sha256": "7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e"
+            "sha256": "b567caa997b84d8e11371bafbe8f5b0a6be5335bfbd468b1c2a719ab71bc0eb5"
           },
           {
             "path": "src/app/(identity)/cuenta/company-bootstrap-panel.module.css",
@@ -61110,11 +61170,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-client.js",
-            "sha256": "a652397c69bd2ff5fb9b3dbe8323b3d758d64e909abc5c03f0da3f5ef40cd0aa"
+            "sha256": "b0a77bcb4ee01f864b3fc4fc898b4fa7f8005ea1f143341411a4a83917d1cc77"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-identity.js",
-            "sha256": "30374e3436ce0606003c9dae2b63e16fa88379c75af5233c9d8b01183c271443"
+            "sha256": "f970b254cfcc77a81517d4d471c894c8a56f6cb4be9099ce9913bacec009adc0"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-read.mjs",
@@ -61322,7 +61382,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "tests/production-company-bootstrap-receipt.test.mjs",
-            "sha256": "08b38bcced2c5e8700e193ac4f45223073c97b829c46a9ca61e4f5d0198c3d78"
+            "sha256": "6e1fe3789ba8e19a61d5f8e6ecbddb22b65c7dfbdf1f7694252889862408dd3d"
           },
           {
             "path": "tests/production-focused-workspace-ci.test.mjs",

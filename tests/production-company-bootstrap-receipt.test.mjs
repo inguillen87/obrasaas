@@ -15,6 +15,9 @@ const readyJsx=source.slice(ready.consequent.argument.start,ready.consequent.arg
 const acceptNode=component.body.body.find(node=>node.type==='FunctionDeclaration'&&node.id.name==='accept');
 assert.ok(acceptNode);
 const acceptSource=source.slice(acceptNode.start,acceptNode.end);
+const enterNode=component.body.body.find(node=>node.type==='FunctionDeclaration'&&node.id.name==='enterFirstProject');
+assert.ok(enterNode);
+const enterSource=source.slice(enterNode.start,enterNode.end);
 const alreadyConfiguredBodies=[];
 function collectConfigured(node){
  if(!node||typeof node!=='object')return;
@@ -30,7 +33,10 @@ await loadBindings();
 const compiled=await transform(`import React,{useCallback,useEffect,useRef,useState} from ${JSON.stringify(import.meta.resolve('react'))};
 const styles={created:'created',caption:'caption',notice:'notice'};
 ${source.replace(/^import .*;\r?\n/gm,'')}
-export const renderReady=({receipt,currentCompany,children,notice=''})=>${readyJsx};
+export const renderReady=({receipt,currentCompany,children,notice='',onEnterFirstProject,firstProjectNavigationBlocked=false,locked=false,setStage=()=>{}})=>{
+ ${enterSource}
+ return ${readyJsx};
+};
 export function acceptTransition(value,openWorkspace,bindings){
  const {version,retainedProfileProof,setCurrentCompany,setBusy,setReceipt,setAttempt,setCanRetry,setStage,setNotice}=bindings;
  ${acceptSource}
@@ -58,6 +64,14 @@ test('all original headings source values warnings and receipt identifier remain
  const heading=descendants(disclosure,node=>node.type==='h2')[0];assert.equal(heading.props.id,'company-receipt-heading');assert.equal(text(heading),'Alta confirmada');assert.equal(text(descendants(disclosure,node=>node.type==='h3')[0]),'Datos del alta');
  const body=text(disclosure);for(const value of ['Este recibo confirma el alta original. Tu espacio de trabajo muestra el estado vigente.','Empresa declarada al crear el espacio',receipt.companyName,'Primera obra registrada',receipt.projectName,'Tareas cargadas en el plan inicial','3','La confirmación del alta no acredita una conexión de WhatsApp ni la aprobación de identidades.','Recibo: '+receipt.receiptId])assert.ok(body.includes(value),value);
  assert.deepEqual(descendants(disclosure,node=>node.type==='dd').map(text),[receipt.companyName,receipt.projectName,'3']);assert.equal(descendants(disclosure,node=>node.type==='small').length,1);assert.equal(descendants(disclosure,node=>node.type==='button'||node.type==='form'||node.type==='input').length,0);
+});
+
+test('the recovered receipt offers explicit opening of its exact project only while navigation is unlocked',()=>{
+ const opened=[],stages=[],onEnterFirstProject=id=>{opened.push(id);return true;},setStage=stage=>stages.push(stage);
+ const renderAction=firstProjectNavigationBlocked=>descendants(renderReady({receipt,currentCompany,children:daily,onEnterFirstProject,firstProjectNavigationBlocked,setStage}),node=>node.type==='button')[0];
+ const blocked=renderAction(true);assert.equal(blocked.props.disabled,true);blocked.props.onClick();assert.deepEqual(opened,[]);assert.deepEqual(stages,[]);
+ const active=renderAction(false);assert.equal(active.props.disabled,false);assert.equal(text(active),'Abrir primera obra');assert.deepEqual(opened,[]);
+ active.props.onClick();assert.deepEqual(opened,[receipt.projectId]);assert.deepEqual(stages,['ready']);
 });
 
 test('trial information and the daily workspace stay outside the receipt and retain their existing order',()=>{

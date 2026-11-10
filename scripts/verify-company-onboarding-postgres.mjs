@@ -13,8 +13,13 @@ import {createParticipantStore} from '../src/lib/participant-store.mjs';
 import {IDENTITY_ISSUER,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {executeCompanyContactAdoption} from './lib/company-contact-migration.mjs';
+const args=process.argv.slice(2);assert.ok(args.length===0||args.length===1&&args[0]==='--connect-whatsapp');
+const connectWhatsApp=args.length===1;
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'https://not-configured.invalid');
 assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);assert.ok(['localhost','127.0.0.1'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');
+if(connectWhatsApp){
+ assert.ok(['postgres:','postgresql:'].includes(url.protocol));assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'6549');assert.equal(url.username,'cutover_test');assert.equal(url.password,'');assert.equal(url.hash,'');
+}
 const db='obrasaas_bootstrap_'+randomUUID().replaceAll('-','');assert.match(db,/^obrasaas_bootstrap_[a-f0-9]{32}$/);
 const admin=new Client({connectionString:url.toString()}),checks=[];let pool,created=false;
 const identity=(suffix='A')=>({authenticated:true,verification:'clerk-production-jwt',userId:'user_Bootstrap'+suffix,organizationId:'org_Bootstrap'+suffix,organizationRole:'org:admin'});
@@ -187,6 +192,9 @@ try{
  // DTOs must describe the stored value, including historical fourteen-day trials.
  const nonUtcPool=trackDisposablePool(new Pool({connectionString:url.toString(),max:2,options:'-c timezone=Pacific/Auckland'}));
  const originalTimezone=process.env.TZ;
+ // On Windows removing TZ can leave Node's last explicit runtime zone active.
+ // The opt-in signed inbox fixture needs the original runtime zone explicitly.
+ const originalRuntimeTimezone=connectWhatsApp?Intl.DateTimeFormat().resolvedOptions().timeZone:null;
  try{
   process.env.TZ='Pacific/Honolulu';
   assert.equal(new Date('2026-10-21T01:57:51.718Z').getTimezoneOffset(),600);
@@ -216,7 +224,8 @@ try{
   assert.deepEqual(await trialWindow(companyB.organizationId),existingTrial);
   checks.push('null-historical-trial-remains-unconfirmed-in-both-dtos-and-does-not-grant-entitlement');
  }finally{
-  if(originalTimezone===undefined)delete process.env.TZ;else process.env.TZ=originalTimezone;
+  if(originalTimezone!==undefined||originalRuntimeTimezone)process.env.TZ=originalTimezone??originalRuntimeTimezone;
+  else delete process.env.TZ;
   await closeDisposablePool(nonUtcPool);
  }
  // Join the real bootstrap and office assignment stores in one new tenant.
@@ -296,6 +305,13 @@ try{
  ]);
  assert.equal((await pool.query(`SELECT count(*)::int AS count FROM "Worker" WHERE "projectId"=$1`,[bootstrap.projectId])).rows[0].count,0);
  checks.push('local-signed-profile-bootstrap-and-distinct-verified-DIRECTOR-compose-in-the-new-tenant-with-replay-isolation-and-shared-Gantt');
- const report={status:'PASS',environment:'disposable-local-postgresql',databaseServerVersion:(await pool.query('SHOW server_version')).rows[0].server_version,checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false};
- mkdirSync('.vercel/company-onboarding-evidence',{recursive:true});writeFileSync('.vercel/company-onboarding-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ let bootstrappedWhatsApp=null;
+ if(connectWhatsApp){
+  const databaseClock=(await pool.query("SELECT EXTRACT(timezone FROM clock_timestamp())::int AS offset")).rows[0];
+  assert.equal(databaseClock.offset,-new Date().getTimezoneOffset()*60,'Synthetic Node and PostgreSQL clocks must use matching zones');
+  const {verifyBootstrappedWhatsApp}=await import('./lib/verify-bootstrapped-whatsapp-composition.mjs');
+  bootstrappedWhatsApp=await verifyBootstrappedWhatsApp({pool,workspace,store,identity,command,checks});
+ }
+ const report={status:'PASS',environment:'disposable-local-postgresql',databaseServerVersion:(await pool.query('SHOW server_version')).rows[0].server_version,checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false,...(connectWhatsApp?{bootstrappedWhatsApp}:{})};
+ mkdirSync('.vercel/company-onboarding-evidence',{recursive:true});writeFileSync('.vercel/company-onboarding-evidence/'+(connectWhatsApp?'bootstrap-whatsapp-postgres.json':'postgres.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${db}"`);}finally{await admin.end();}}
