@@ -40816,11 +40816,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
-            "sha256": "9b4b9bc5977ac798babceb9107d39519878902cd9f43ac19eeb9a66ccdda7ea6"
+            "sha256": "0d782ec16ca9157109e7b8dc9e3f6d480cbcea7b0caa11683cf20648ad169e5a"
           },
           {
             "path": "src/app/(identity)/cuenta/participant-panel.js",
-            "sha256": "1afd6b323183157fd8244beb3d63fec445f2c32324211d4ef58deb4e9738223c"
+            "sha256": "2753a8347fbc77deb635e85088cfc915fcc663ed1ae812f29762e9c631aba65a"
           },
           {
             "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -43329,11 +43329,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
-            "sha256": "9b4b9bc5977ac798babceb9107d39519878902cd9f43ac19eeb9a66ccdda7ea6"
+            "sha256": "0d782ec16ca9157109e7b8dc9e3f6d480cbcea7b0caa11683cf20648ad169e5a"
           },
           {
             "path": "src/app/(identity)/cuenta/participant-panel.js",
-            "sha256": "1afd6b323183157fd8244beb3d63fec445f2c32324211d4ef58deb4e9738223c"
+            "sha256": "2753a8347fbc77deb635e85088cfc915fcc663ed1ae812f29762e9c631aba65a"
           },
           {
             "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -45063,7 +45063,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+            "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -46210,7 +46210,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+            "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -47434,7 +47434,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+            "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -48320,7 +48320,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+            "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -49173,7 +49173,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+            "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -78158,9 +78158,9 @@
           "path": "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "status": "MODIFIED",
           "previousSha256": "5ecfb4286aae9b1b714ac615a34339258381721f17c69e962c30b9015cdfd731",
-          "currentSha256": "9b4b9bc5977ac798babceb9107d39519878902cd9f43ac19eeb9a66ccdda7ea6",
+          "currentSha256": "0d782ec16ca9157109e7b8dc9e3f6d480cbcea7b0caa11683cf20648ad169e5a",
           "previousBytes": 30240,
-          "currentBytes": 30808,
+          "currentBytes": 30870,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 2732,
@@ -78168,7 +78168,12 @@
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 16397,
+              "currentOffsetCharacters": 16199,
+              "currentText": "  ?next('OWN_IDENTITY','SUBMIT_KYC',row.kyc.status==='REJECTED'?'Volver a presentar mi identidad':'Presentar mi identidad')\n",
+              "previousText": "  ?next('OWN_IDENTITY','SUBMIT_KYC','Presentar mi identidad')\n"
+            },
+            {
+              "currentOffsetCharacters": 16459,
               "currentText": " if(row.kyc?.status==='PENDING_REVIEW')return canReviewIdentity(row,snapshot.canManage)\n",
               "previousText": " if(row.kyc?.status==='PENDING_REVIEW')return !row.self&&snapshot.canManage&&participantKycReviewImages(row.kyc)\n"
             }
@@ -78178,9 +78183,9 @@
           "path": "src/app/(identity)/cuenta/participant-panel.js",
           "status": "MODIFIED",
           "previousSha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496",
-          "currentSha256": "1afd6b323183157fd8244beb3d63fec445f2c32324211d4ef58deb4e9738223c",
+          "currentSha256": "2753a8347fbc77deb635e85088cfc915fcc663ed1ae812f29762e9c631aba65a",
           "previousBytes": 114569,
-          "currentBytes": 116313,
+          "currentBytes": 116623,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 112,
@@ -78253,17 +78258,22 @@
               "previousText": "  {data&&<><p>{data.canManage?'Invitaciones y participación de campo en esta obra. Los permisos de empresa se administran por separado.':'Tu participación en esta obra. Sólo podés presentar y consultar tu propia identidad.'}</p><label className={styles.personSelector}>Perfil de esta obra<select value={selectedRow?.id||''} disabled={busy||Boolean(attempt)||Boolean(draft)||hasBankPending||intakePending} onChange={event=>selectPerson(event.target.value)}>{data.records.map(row=><option key={row.id} value={row.id}>{row.name}{row.self?' · Mi perfil':''}</option>)}</select></label>\n"
             },
             {
-              "currentOffsetCharacters": 95900,
+              "currentOffsetCharacters": 83519,
+              "currentText": "  <div className={styles.list}>{data.records.filter(row=>row.id===selectedRow?.id).map(row=><article key={row.id} ref={profile} tabIndex={-1} data-participant-profile={row.id} className={styles.card}><div className={styles.heading}><strong>{row.name}</strong><span>{labels[row.status]||row.status}</span></div><p>Identidad: {labels[row.kyc.status]||row.kyc.status}</p><div className={styles.nextStep} data-onboarding-step={nextStep.state}><p className={styles.eyebrow}>PRÓXIMO PASO</p>{progressCopy[nextStep.state]&&<p>{progressCopy[nextStep.state]}</p>}\n    {nextStep.state==='OWN_IDENTITY'&&row.kyc.status==='REJECTED'&&<p>Revisá el motivo y cargá nuevas fotos del documento y de tu rostro. Otra persona responsable revisará la presentación.</p>}\n    {nextStep.primary?.action!=='REVIEW_KYC'&&primaryAction}{nextStep.optionalBank&&<p className={styles.optional}>Cuenta bancaria privada: opcional, disponible sólo desde tu propio perfil.</p>}</div>{row.invitation&&<p>{labels[row.invitation.state]||row.invitation.state}{row.invitation.email?' · '+row.invitation.email:''}</p>}\n    {row.kyc.review&&(row.kyc.status==='REJECTED'?<p><strong>Motivo de la corrección</strong><br/>{row.kyc.review.reason}</p>:<p>Decisión registrada: {row.kyc.review.reason}</p>)}\n",
+              "previousText": "  <div className={styles.list}>{data.records.filter(row=>row.id===selectedRow?.id).map(row=><article key={row.id} ref={profile} tabIndex={-1} data-participant-profile={row.id} className={styles.card}><div className={styles.heading}><strong>{row.name}</strong><span>{labels[row.status]||row.status}</span></div><p>Identidad: {labels[row.kyc.status]||row.kyc.status}</p><div className={styles.nextStep} data-onboarding-step={nextStep.state}><p className={styles.eyebrow}>PRÓXIMO PASO</p>{progressCopy[nextStep.state]&&<p>{progressCopy[nextStep.state]}</p>}{nextStep.primary?.action!=='REVIEW_KYC'&&primaryAction}{nextStep.optionalBank&&<p className={styles.optional}>Cuenta bancaria privada: opcional, disponible sólo desde tu propio perfil.</p>}</div>{row.invitation&&<p>{labels[row.invitation.state]||row.invitation.state}{row.invitation.email?' · '+row.invitation.email:''}</p>}\n    {row.kyc.review&&<p>Decisión registrada: {row.kyc.review.reason}</p>}\n"
+            },
+            {
+              "currentOffsetCharacters": 96205,
               "currentText": "  {data&&draft&&<form className={styles.form} onSubmit={event=>{if(draft.action==='SUBMIT_KYC'){event.preventDefault();setNotice('Elegí una de las dos opciones de envío para presentar las imágenes.');return;}save(event);}}><h4 ref={editor} tabIndex={-1}>{draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?'Incorporar cuenta de oficina':draft.action==='INVITE'?'Enviar invitación de acceso':draft.action==='SEND_ONBOARDING_WHATSAPP'?'Solicitar instrucciones por WhatsApp':draft.action==='REVOKE_ONBOARDING_CONTACT'?'Retirar autorización de contacto':draft.action==='REVOKE'?'Revocar participación':draft.action==='RESTORE_ACCESS'?'Reactivar participación existente':draft.action==='REVIEW_KYC'?'Decisión del responsable':draft.action==='PROCESS_KYC'?(reviewTarget?.kyc.ocrConsent?.allowed===true?'Leer texto del documento':'Comparar fotografías en privado'):draft.action==='PREPARE_KYC_CHAT'?'Preparar código privado de WhatsApp':draft.action==='CANCEL_KYC_CHAT'?'Cancelar presentación por WhatsApp':draft.action==='ASSIGN_EXISTING'?'Vincular cuenta existente':draft.action==='SET_OFFICE_ROLE'?'Cambiar rol de empresa':draft.action==='SET_FIELD_PERMISSIONS'?'Revisar permisos de campo':'Presentar identidad privada'}</h4>\n",
               "previousText": "  {data&&draft&&<form className={styles.form} onSubmit={event=>{if(draft.action==='SUBMIT_KYC'&&captureStep!==2){event.preventDefault();return;}save(event);}}><h4 ref={editor} tabIndex={-1}>{draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?'Incorporar cuenta de oficina':draft.action==='INVITE'?'Enviar invitación de acceso':draft.action==='SEND_ONBOARDING_WHATSAPP'?'Solicitar instrucciones por WhatsApp':draft.action==='REVOKE_ONBOARDING_CONTACT'?'Retirar autorización de contacto':draft.action==='REVOKE'?'Revocar participación':draft.action==='RESTORE_ACCESS'?'Reactivar participación existente':draft.action==='REVIEW_KYC'?'Decisión del responsable':draft.action==='PROCESS_KYC'?(reviewTarget?.kyc.ocrConsent?.allowed===true?'Leer texto del documento':'Comparar fotografías en privado'):draft.action==='PREPARE_KYC_CHAT'?'Preparar código privado de WhatsApp':draft.action==='CANCEL_KYC_CHAT'?'Cancelar presentación por WhatsApp':draft.action==='ASSIGN_EXISTING'?'Vincular cuenta existente':draft.action==='SET_OFFICE_ROLE'?'Cambiar rol de empresa':draft.action==='SET_FIELD_PERMISSIONS'?'Revisar permisos de campo':'Presentar identidad privada'}</h4>\n"
             },
             {
-              "currentOffsetCharacters": 105615,
+              "currentOffsetCharacters": 105920,
               "currentText": "   {draft.action==='SUBMIT_KYC'&&<ParticipantKycCapture active={active} step={captureStep} onStep={setCaptureStep} captureRetakes={draft.captureRetakes} value={p} notices={data} backAvailable={Boolean(participantDocumentBackNotice(data.documentBackNotice))} locked={locked} onFile={chooseFile} onBackConsent={chooseDocumentBack} onEdit={edit} onSubmitChoice={save} submitBlocked={Boolean(revisionReview)||accessBlocked}/>}\n",
               "previousText": "   {draft.action==='SUBMIT_KYC'&&<ParticipantKycCapture active={active} step={captureStep} onStep={setCaptureStep} captureRetakes={draft.captureRetakes} value={p} notices={data} backAvailable={Boolean(participantDocumentBackNotice(data.documentBackNotice))} locked={locked} onFile={chooseFile} onBackConsent={chooseDocumentBack} onBiometricMode={chooseBiometricMode} onEdit={edit}/>}\n"
             },
             {
-              "currentOffsetCharacters": 107922,
+              "currentOffsetCharacters": 108227,
               "currentText": "   <div className={styles.actions}><button hidden={draft.action==='SUBMIT_KYC'} disabled={locked||draft.action==='SUBMIT_KYC'||Boolean(revisionReview)||draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION&&(!officeSelection?.verified||!officeSelection.confirmed||!p.role||!p.confirmOfficePermissions)||['ASSIGN_EXISTING','SET_OFFICE_ROLE'].includes(draft.action)&&!accountSelection?.confirmed||(draft.action==='SUBMIT_KYC'&&(!p.front||!p.selfie||!p.consent||!participantFacialModeValid(p)||p.backConsent===true&&!p.back))||draft.action==='SEND_ONBOARDING_WHATSAPP'&&(!draft.sendWhatsApp||!onboardingContactNotice)} type=\"submit\">{draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?'Incorporar con estos permisos':draft.action==='INVITE'?'Enviar invitación':draft.action==='SEND_ONBOARDING_WHATSAPP'?'Guardar solicitud de envío':draft.action==='REVOKE_ONBOARDING_CONTACT'?'Confirmar retiro de autorización':draft.action==='SUBMIT_KYC'?'Presentar para revisión':draft.action==='PROCESS_KYC'?(reviewTarget?.kyc.ocrConsent?.allowed===true?'Leer texto del documento':'Comparar fotografías en privado'):draft.action==='PREPARE_KYC_CHAT'?'Crear código privado':draft.action==='CANCEL_KYC_CHAT'?'Confirmar cancelación':draft.action==='SET_OFFICE_ROLE'?'Guardar rol de empresa':draft.action==='SET_FIELD_PERMISSIONS'?'Guardar permisos de campo':'Guardar decisión'}</button><button type=\"button\" disabled={draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?networkBusy||Boolean(attempt)||Boolean(durableReference):locked} onClick={()=>{invalidateAccountSelection();fileSequence.current++;fileRead.current?.cancel(null);setDraft(null);setRevisionReview(null);}}>{draft.action==='CANCEL_KYC_CHAT'?'Volver al perfil':'Cancelar'}</button></div>\n",
               "previousText": "   <div className={styles.actions}><button hidden={draft.action==='SUBMIT_KYC'&&captureStep!==2} disabled={locked||draft.action==='SUBMIT_KYC'&&captureStep!==2||Boolean(revisionReview)||draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION&&(!officeSelection?.verified||!officeSelection.confirmed||!p.role||!p.confirmOfficePermissions)||['ASSIGN_EXISTING','SET_OFFICE_ROLE'].includes(draft.action)&&!accountSelection?.confirmed||(draft.action==='SUBMIT_KYC'&&(!p.front||!p.selfie||!p.consent||!participantFacialModeValid(p)||p.backConsent===true&&!p.back))||draft.action==='SEND_ONBOARDING_WHATSAPP'&&(!draft.sendWhatsApp||!onboardingContactNotice)} type=\"submit\">{draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?'Incorporar con estos permisos':draft.action==='INVITE'?'Enviar invitación':draft.action==='SEND_ONBOARDING_WHATSAPP'?'Guardar solicitud de envío':draft.action==='REVOKE_ONBOARDING_CONTACT'?'Confirmar retiro de autorización':draft.action==='SUBMIT_KYC'?'Presentar para revisión':draft.action==='PROCESS_KYC'?(reviewTarget?.kyc.ocrConsent?.allowed===true?'Leer texto del documento':'Comparar fotografías en privado'):draft.action==='PREPARE_KYC_CHAT'?'Crear código privado':draft.action==='CANCEL_KYC_CHAT'?'Confirmar cancelación':draft.action==='SET_OFFICE_ROLE'?'Guardar rol de empresa':draft.action==='SET_FIELD_PERMISSIONS'?'Guardar permisos de campo':'Guardar decisión'}</button><button type=\"button\" disabled={draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?networkBusy||Boolean(attempt)||Boolean(durableReference):locked} onClick={()=>{invalidateAccountSelection();fileSequence.current++;fileRead.current?.cancel(null);setDraft(null);setRevisionReview(null);}}>{draft.action==='CANCEL_KYC_CHAT'?'Volver al perfil':'Cancelar'}</button></div>\n"
             }
@@ -79878,9 +79888,9 @@
           "path": "src/lib/participant-onboarding-reactive.mjs",
           "status": "MODIFIED",
           "previousSha256": "bd549004da8c1a809f7bb337cbe03600b4edaf14a81107f6d085cce6b87aadf2",
-          "currentSha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091",
+          "currentSha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0",
           "previousBytes": 38202,
-          "currentBytes": 38863,
+          "currentBytes": 39176,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 1086,
@@ -79899,21 +79909,21 @@
             },
             {
               "currentOffsetCharacters": 16803,
-              "currentText": " const recordedDigest=recordedReply?digest(recordedReply):null;\n if(recordedDigest===digest(legacy))return legacy;\n const generic={type:'text',body:reactiveKycStatusReplies[status]};\n if(status!=='PENDING_REVIEW'||!workspaceId(projectId)||recordedDigest===digest(generic))return generic;\n return {type:'text',body:'Tu presentación está completa y pendiente de revisión independiente. Consultá el estado de tu obra:\\n'+participantIdentityUrl(projectId)+'\\n\\nTodavía no habilita actividad por WhatsApp.'};\n",
+              "currentText": " const recordedDigest=recordedReply?digest(recordedReply):null;\n if(recordedDigest===digest(legacy))return legacy;\n const generic={type:'text',body:reactiveKycStatusReplies[status]};\n if(!['PENDING_REVIEW','REJECTED'].includes(status)||!workspaceId(projectId)||recordedDigest===digest(generic))return generic;\n const link=participantIdentityUrl(projectId);\n if(status==='REJECTED')return {type:'text',body:'Te pidieron corregir tu presentación de identidad. Ingresá con tu cuenta para consultar el motivo y volver a presentar tus fotos:\\n'+link+'\\n\\nSi preferís hacerlo por WhatsApp, pedile un código nuevo al responsable.'};\n return {type:'text',body:'Tu presentación está completa y pendiente de revisión independiente. Consultá el estado de tu obra:\\n'+link+'\\n\\nTodavía no habilita actividad por WhatsApp.'};\n",
               "previousText": " return recordedReply&&digest(recordedReply)===digest(legacy)?legacy:{type:'text',body:reactiveKycStatusReplies[status]};\n"
             },
             {
-              "currentOffsetCharacters": 20569,
+              "currentOffsetCharacters": 20878,
               "currentText": " if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply,a.project.id)))fail();\n",
               "previousText": " if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply)))fail();\n"
             },
             {
-              "currentOffsetCharacters": 21998,
+              "currentOffsetCharacters": 22307,
               "currentText": " jsonb_build_object('id',o.id,'name',o.name,'metadata',o.metadata,'subscriptionPlan',o.\"subscriptionPlan\"::text,'subscriptionStatus',o.\"subscriptionStatus\"::text,'trialEndsAt',o.\"trialEndsAt\" AT TIME ZONE 'UTC') AS \"statusOrganization\",\n jsonb_build_object('id',p.id,'name',p.name,'organizationId',p.\"organizationId\",'metadata',p.metadata) AS \"statusProject\",\n",
               "previousText": " to_jsonb(o) AS \"statusOrganization\",jsonb_build_object('id',p.id,'name',p.name,'organizationId',p.\"organizationId\",'metadata',p.metadata) AS \"statusProject\",\n"
             },
             {
-              "currentOffsetCharacters": 25702,
+              "currentOffsetCharacters": 26011,
               "currentText": " return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status,null,a.project.id)};\n",
               "previousText": " return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status)};\n"
             }
@@ -82258,9 +82268,9 @@
           "path": "tests/production-participant-onboarding-next-step.test.mjs",
           "status": "MODIFIED",
           "previousSha256": "4db07d8b56186038192943d4d8faa76c87fdf27a1a8373ce8d8f0b5ad74ff6b6",
-          "currentSha256": "e7abf4eaf4e23a2dc9a79e99666bbe23a5da1b2901d37a5c8809ac6fb10104ed",
+          "currentSha256": "3ce4dc31861fd6d2a626de10a949611f5bf51d81cf8d6d89c6f22d12431b18ca",
           "previousBytes": 18233,
-          "currentBytes": 19710,
+          "currentBytes": 19863,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 71,
@@ -82268,7 +82278,12 @@
               "previousText": "import {participantOnboardingNextStep,participantKycChatCapabilities} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';\n"
             },
             {
-              "currentOffsetCharacters": 7492,
+              "currentOffsetCharacters": 6637,
+              "currentText": " for(const [status,label] of [['NOT_SUBMITTED','Presentar mi identidad'],['REJECTED','Volver a presentar mi identidad']]){\n  const input=fixture();input.snapshot.records[0].kyc.status=status;\n  const next=participantOnboardingNextStep(input);assert.equal(next.state,'OWN_IDENTITY');assert.deepEqual(next.primary,{action:'SUBMIT_KYC',label});assert.equal(next.optionalBank,null);\n }\n",
+              "previousText": " for(const status of ['NOT_SUBMITTED','REJECTED']){const input=fixture();input.snapshot.records[0].kyc.status=status;assert.equal(action(input),'SUBMIT_KYC');assert.equal(participantOnboardingNextStep(input).optionalBank,null);}\n"
+            },
+            {
+              "currentOffsetCharacters": 7645,
               "currentText": "test('the current worksite review queue points a Director to the eligible profile outside their own',()=>{\n const input=fixture();\n input.snapshot.canManage=true;\n const kyc={...participant().kyc,status:'PENDING_REVIEW'};\n const eligible={...participant(),id:'worker-pending',self:false,kyc};\n input.snapshot.records=[{...participant(),kyc},\n  {...eligible,id:'worker-empty',kyc:{status:'NOT_SUBMITTED'}},eligible,\n  {...eligible,id:'worker-unlinked',accountLinked:false},\n  {...eligible,id:'worker-inactive',active:false},\n  {...eligible,id:'worker-incomplete',kyc:{...kyc,images:[]}}];\n assert.deepEqual(participantPendingIdentityReviews(input.context,input.snapshot).map(row=>row.id),['worker-pending']);\n assert.equal(action(input),'CONSULT_PARTICIPANTS');\n assert.equal(action({...input,workerId:eligible.id}),'REVIEW_KYC');\n for(const value of [{...input.context,projectId:'project-b'},{...input.context,scope:'b'.repeat(64)},{...input.context,verified:false}]){\n  assert.deepEqual(participantPendingIdentityReviews(value,input.snapshot),[]);\n }\n assert.deepEqual(participantPendingIdentityReviews(input.context,{...input.snapshot,canManage:false}),[]);\n assert.deepEqual(participantPendingIdentityReviews(input.context,{...input.snapshot,participantFocus:{workerId:eligible.id}}),[]);\n assert.deepEqual(participantPendingIdentityReviews(input.context,{...input.snapshot,records:[{...eligible,kyc:{...kyc,status:'APPROVED'}}]}),[]);\n});\n",
               "previousText": ""
             }
@@ -90633,11 +90648,11 @@
             },
             {
               "path": "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
-              "sha256": "9b4b9bc5977ac798babceb9107d39519878902cd9f43ac19eeb9a66ccdda7ea6"
+              "sha256": "0d782ec16ca9157109e7b8dc9e3f6d480cbcea7b0caa11683cf20648ad169e5a"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.js",
-              "sha256": "1afd6b323183157fd8244beb3d63fec445f2c32324211d4ef58deb4e9738223c"
+              "sha256": "2753a8347fbc77deb635e85088cfc915fcc663ed1ae812f29762e9c631aba65a"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -93554,7 +93569,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+              "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -94992,7 +95007,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+              "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -96334,7 +96349,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+              "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -100455,11 +100470,11 @@
             },
             {
               "path": "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
-              "sha256": "9b4b9bc5977ac798babceb9107d39519878902cd9f43ac19eeb9a66ccdda7ea6"
+              "sha256": "0d782ec16ca9157109e7b8dc9e3f6d480cbcea7b0caa11683cf20648ad169e5a"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.js",
-              "sha256": "1afd6b323183157fd8244beb3d63fec445f2c32324211d4ef58deb4e9738223c"
+              "sha256": "2753a8347fbc77deb635e85088cfc915fcc663ed1ae812f29762e9c631aba65a"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -102992,7 +103007,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+              "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -104754,7 +104769,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
+              "sha256": "fdd9b95815b57148186f564aa7c5dfb2d20c6cad9db924dee3244b2efde4dbd0"
             },
             {
               "path": "src/lib/participant-policy.mjs",

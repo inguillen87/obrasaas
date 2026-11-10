@@ -156,8 +156,10 @@ export function reactiveParticipantStatusReply(status,recordedReply=null,project
  const recordedDigest=recordedReply?digest(recordedReply):null;
  if(recordedDigest===digest(legacy))return legacy;
  const generic={type:'text',body:reactiveKycStatusReplies[status]};
- if(status!=='PENDING_REVIEW'||!workspaceId(projectId)||recordedDigest===digest(generic))return generic;
- return {type:'text',body:'Tu presentación está completa y pendiente de revisión independiente. Consultá el estado de tu obra:\n'+participantIdentityUrl(projectId)+'\n\nTodavía no habilita actividad por WhatsApp.'};
+ if(!['PENDING_REVIEW','REJECTED'].includes(status)||!workspaceId(projectId)||recordedDigest===digest(generic))return generic;
+ const link=participantIdentityUrl(projectId);
+ if(status==='REJECTED')return {type:'text',body:'Te pidieron corregir tu presentación de identidad. Ingresá con tu cuenta para consultar el motivo y volver a presentar tus fotos:\n'+link+'\n\nSi preferís hacerlo por WhatsApp, pedile un código nuevo al responsable.'};
+ return {type:'text',body:'Tu presentación está completa y pendiente de revisión independiente. Consultá el estado de tu obra:\n'+link+'\n\nTodavía no habilita actividad por WhatsApp.'};
 }
 const reactiveStatusFences=new WeakMap();
 const currentMemberProjection=m=>m?{actorId:m.actorId,membershipId:m.membershipId,clerkUserId:m.clerkUserId,role:m.role,clerkRole:m.clerkRole,revision:m.revision,userRevision:m.userRevision}:null;

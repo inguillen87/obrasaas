@@ -168,7 +168,7 @@ export function participantOnboardingNextStep({context,snapshot,workerId=null,ap
  }
  if(row.status!=='ACTIVE'||row.accountLinked!==true)return next('PARTICIPATION_UNOBSERVED','CONSULT_PARTICIPANTS','Consultar participación');
  if(['NOT_SUBMITTED','REJECTED'].includes(row.kyc?.status))return row.self
-  ?next('OWN_IDENTITY','SUBMIT_KYC','Presentar mi identidad')
+  ?next('OWN_IDENTITY','SUBMIT_KYC',row.kyc.status==='REJECTED'?'Volver a presentar mi identidad':'Presentar mi identidad')
   :chatNext();
  if(row.kyc?.status==='PENDING_ACCOUNT_CLAIM')return next('WAIT_ACCOUNT','CONSULT_PARTICIPANTS','Consultar aceptación');
  if(row.kyc?.status==='PENDING_REVIEW')return canReviewIdentity(row,snapshot.canManage)

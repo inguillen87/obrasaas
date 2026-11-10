@@ -200,7 +200,18 @@ test('pending review directs the participant to the authorized worksite and pres
   assert.deepEqual(reactiveParticipantStatusReply(status,altered,project),current);
  }
  assert.deepEqual(reactiveParticipantStatusReply(status,null,'project-c&role=admin'),generic);
- for(const other of ['PENDING_ACCOUNT_CLAIM','REJECTED','APPROVED'])assert.deepEqual(reactiveParticipantStatusReply(other,null,project),reactiveParticipantStatusReply(other));
+ for(const other of ['PENDING_ACCOUNT_CLAIM','APPROVED'])assert.deepEqual(reactiveParticipantStatusReply(other,null,project),reactiveParticipantStatusReply(other));
+});
+test('a current correction directs the participant to the exact private worksite without including the reason',()=>{
+ const status='REJECTED',project='project-c',current=reactiveParticipantStatusReply(status,null,project);
+ const link='https://obrasaas.com/cuenta?seccion=identidad&obra=project-c#participant-title';
+ customerReplyMessage(current);
+ assert.deepEqual(current,{type:'text',body:'Te pidieron corregir tu presentación de identidad. Ingresá con tu cuenta para consultar el motivo y volver a presentar tus fotos:\n'+link+'\n\nSi preferís hacerlo por WhatsApp, pedile un código nuevo al responsable.'});
+ const generic={type:'text',body:'La revisión de esta presentación no fue aprobada. Consultá https://obrasaas.com/cuenta y contactá al responsable para revisar el próximo paso. Este chat no inicia otra presentación.'};
+ const legacy={type:'text',body:'La revisión de esta presentación no fue aprobada. Consultá Mi cuenta y al responsable para revisar el próximo paso. Este chat no inicia otra presentación.'};
+ for(const recorded of [legacy,generic,current])assert.deepEqual(reactiveParticipantStatusReply(status,recorded,project),recorded);
+ for(const forged of [{...current,body:current.body.replace(project,'project-a')},{...current,reason:'Private test reason'},{...legacy,body:legacy.body+' altered'}])assert.deepEqual(reactiveParticipantStatusReply(status,forged,project),current);
+ for(const invalid of [null,'project-c&role=admin'])assert.deepEqual(reactiveParticipantStatusReply(status,null,invalid),generic);
 });
 test('completed status discovery locks the own assignment and Worker before any channel or event',async()=>{
  const f=companyPresentDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'COMPLETED'};

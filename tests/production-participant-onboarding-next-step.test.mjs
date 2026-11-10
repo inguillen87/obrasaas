@@ -65,7 +65,10 @@ test('the unscoped Clerk join DTO cannot be used as a participants projection',(
  const input=fixture();input.snapshot={invitationId:'invite-a',state:'INVITED',canAccept:true,projectName:'Same display name'};assert.equal(action(input),'CONSULT_ACCESS');
 });
 test('own new or rejected identity uses the web submission, not reviewer authority',()=>{
- for(const status of ['NOT_SUBMITTED','REJECTED']){const input=fixture();input.snapshot.records[0].kyc.status=status;assert.equal(action(input),'SUBMIT_KYC');assert.equal(participantOnboardingNextStep(input).optionalBank,null);}
+ for(const [status,label] of [['NOT_SUBMITTED','Presentar mi identidad'],['REJECTED','Volver a presentar mi identidad']]){
+  const input=fixture();input.snapshot.records[0].kyc.status=status;
+  const next=participantOnboardingNextStep(input);assert.equal(next.state,'OWN_IDENTITY');assert.deepEqual(next.primary,{action:'SUBMIT_KYC',label});assert.equal(next.optionalBank,null);
+ }
 });
 test('only a different manager can prepare a human review with two images',()=>{
  const input=manager();input.snapshot.records[0].kyc.status='PENDING_REVIEW';assert.equal(action(input),'REVIEW_KYC');

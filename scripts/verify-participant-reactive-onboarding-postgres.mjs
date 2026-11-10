@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID,createHmac,createHash} from 'node:crypto';
 import {readFileSync,mkdirSync,writeFileSync,readdirSync} from 'node:fs';
+import {crc32,deflateSync} from 'node:zlib';
 import {Client,Pool} from 'pg';
 import {COMPANY_CHANNEL_DISPOSABLE_FIXTURE_SQL} from './lib/company-channel-disposable-fixture.mjs';
 import {executeCompanyChannelAdoption} from './lib/company-channel-migration.mjs';
@@ -20,6 +21,7 @@ import {readEmployeeIntake,EMPLOYEE_INTAKE_AUTHORIZATION_CODES} from '../src/lib
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
 import {resolveMetaKycAuthority,META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
+import {prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
 import {createParticipantChannelKycDeposit,createParticipantChannelKycUploader} from '../src/lib/participant-channel-kyc.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {createMetaCustomerOutbound,customerOutboundId,customerJobTransaction} from '../src/lib/meta-customer-outbound.mjs';
@@ -49,8 +51,8 @@ const schema='obrasaas_reactive_kyc_'+randomUUID().replaceAll('-','');assert.mat
 const rewrite=sql=>{let text=sql.replace(/\bpublic\./g,quoted+'.').replace(/'public'::regnamespace/g,"'"+schema+"'::regnamespace").replace(/table_schema='public'/g,"table_schema='"+schema+"'");if(text.includes('FROM pg_trigger WHERE tgname=ANY'))text=text.replace('AND NOT tgisinternal','AND NOT tgisinternal AND tgrelid IN (SELECT oid FROM pg_class WHERE relnamespace=\''+schema+'\'::regnamespace)');return text;};
 const environment={...lifecycleEnvironment},admin=new Client({connectionString:url.href}),checks=[],sqlFailures=[],messages=new Map(),blob=createControlledLifecycleBlob(),invitations=new Map();let pool,created=false,schemaRemoved=false,networkCalls=0,sends=0,downloads=0,invites=0,sequence=0,crossFinalClock=null,holdWorker=null,lastStatement=null,dispatchFailure=null;
 const args=process.argv.slice(2);
-assert.ok(args.length===0||args[0]==='--business-app'&&(args.length===1||args.length===2&&args[1]==='--plan-image'));
-const businessApp=args.length>0,planImage=args.length===2;
+assert.ok(args.length===0||args[0]==='--business-app'&&(args.length===1||args.length===2&&['--plan-image','--kyc-correction'].includes(args[1])));
+const businessApp=args.length>0,planImage=args[1]==='--plan-image',kycCorrection=args[1]==='--kyc-correction';
 const planFixture=planImage
  ?{name:'plan-import-synthetic-v1.png',contentType:'image/png',sha256:'e57146090c0436bb75b6c8c21ee958abffae777fb5ba151081dc50def4ba91db',label:'diagrama PNG'}
  :{name:'plan-import-synthetic-v1.pdf',contentType:'application/pdf',sha256:'88254bd24823b0d6d8da46d0f2dfe4494f92f3d92fe7fc92080519e554dc5f12',label:'PDF'};
@@ -67,15 +69,29 @@ const participantEndpoint='https://obrasaas.com/api/identity/participants';
 const post=(url,body)=>new Request(url,{method:'POST',headers:{Origin:'https://obrasaas.com','Content-Type':'application/json'},body:JSON.stringify(body)});
 const get=(url,params)=>new Request(url+'?'+new URLSearchParams(params));
 const jsonResponse=async(response,expected=200)=>{const result=await response.json();assert.equal(response.status,expected,result.code);return result;};
-const provider={async sendReply({message,correlationId}){sends++;const messageId='wamid.SyntheticReactiveReply_'+sends;messages.set(correlationId,{messageId,message:structuredClone(message)});return {messageId};},async downloadMedia({beforeExternal,mediaId}){assert.equal(mediaId,'150000001');await beforeExternal?.();downloads++;return {bytes:lifecyclePng,contentType:'image/png'};}};
+const identityMedia=new Map([['150000001',lifecyclePng]]);
+const provider={async sendReply({message,correlationId}){sends++;const messageId='wamid.SyntheticReactiveReply_'+sends;messages.set(correlationId,{messageId,message:structuredClone(message)});return {messageId};},async downloadMedia({beforeExternal,mediaId}){const bytes=identityMedia.get(mediaId);assert.ok(bytes,'Unknown synthetic identity media');await beforeExternal?.();downloads++;return {bytes,contentType:'image/png'};}};
+
+function correctionPng(rgb){
+ const chunk=(type,data)=>{
+  const body=Buffer.concat([Buffer.from(type),data]),result=Buffer.alloc(12+data.length);
+  result.writeUInt32BE(data.length);body.copy(result,4);result.writeUInt32BE(crc32(body),result.length-4);
+  return result;
+ };
+ const header=Buffer.alloc(13);header.writeUInt32BE(1);header.writeUInt32BE(1,4);header[8]=8;header[9]=2;
+ return Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',header),chunk('IDAT',deflateSync(Buffer.from([0,...rgb]))),chunk('IEND',Buffer.alloc(0))]);
+}
 
 // Closed synthetic quality only: these generated fixture pixels are never identity or liveness proof.
 const qualityCalls=[];
 const assessCaptureQuality=async input=>{
- assert.ok(['DOCUMENT_FRONT','SELFIE','DOCUMENT_BACK'].includes(input.kind));assert.equal(input.image.mimeType,'image/png');assert.equal(input.consentVersion,CAPTURE_QUALITY_NOTICE_VERSION);assert.deepEqual(input.image.buffer,lifecyclePng);
+ assert.ok(['DOCUMENT_FRONT','SELFIE','DOCUMENT_BACK'].includes(input.kind));assert.equal(input.image.mimeType,'image/png');assert.equal(input.consentVersion,CAPTURE_QUALITY_NOTICE_VERSION);
+ const expected=qualityCalls.length<6?lifecyclePng:correctionImages.get(input.kind);
+ assert.deepEqual(input.image.buffer,expected);
  assert.equal(blob.puts(),Math.floor(qualityCalls.length/3)*3,'The complete new set must pass quality before its first Blob');
- const result=await syntheticCaptureQuality(input);assert.equal(result.state,'QUALITY_PASS');assert.equal(result.imageSha256,sha(lifecyclePng));assert.equal(result.modelManifestSha256,CAPTURE_QUALITY_MODEL_MANIFEST_SHA256);assert.equal(result.identityCertified,false);assert.equal(result.livenessVerified,false);assert.equal(result.documentAuthenticityVerified,false);qualityCalls.push({kind:input.kind,sha256:result.imageSha256});return result;
+ const result=await syntheticCaptureQuality(input);assert.equal(result.state,'QUALITY_PASS');assert.equal(result.imageSha256,sha(expected));assert.equal(result.modelManifestSha256,CAPTURE_QUALITY_MODEL_MANIFEST_SHA256);assert.equal(result.identityCertified,false);assert.equal(result.livenessVerified,false);assert.equal(result.documentAuthenticityVerified,false);qualityCalls.push({kind:input.kind,sha256:result.imageSha256});return result;
 };
+const correctionImages=new Map(kycCorrection?[['DOCUMENT_FRONT',correctionPng([31,97,157])],['DOCUMENT_BACK',correctionPng([71,181,113])],['SELFIE',correctionPng([191,61,83])]]:[]);
 const assessBiometrics=async()=>assert.fail('CURRENT manual capture must not call biometric analysis');
 
 try{
@@ -129,7 +145,7 @@ try{
   assert.equal(organizationId,owner.organizationId);assert.equal(email,directorEmail);
   return {state:'READY',code:null,account:{clerkUserId:director.userId,name:'Directora sintética',email,primaryEmail:email,clerkRole:'org:member',providerMembershipId:'orgmem_ReactiveDirector',providerMembershipUpdatedAt:1791580000000,userUpdatedAt:1791580000000,emailAddressId:'email_ReactiveDirector',primaryEmailAddressId:'email_ReactiveDirector'}};
  };
- const store=createParticipantStore({workspace,connect,identity,get:blob.get,assessCaptureQuality,assessBiometrics,environment}),upload=createParticipantChannelKycUploader({get:blob.get,put:async(...args)=>{assert.equal(qualityCalls.length,Math.ceil((blob.puts()+1)/3)*3);return blob.put(...args);},environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,assessCaptureQuality,assessBiometrics,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment});
+ const store=createParticipantStore({workspace,connect,identity,get:blob.get,assessCaptureQuality,assessBiometrics,environment,...(kycCorrection?{prepareKycChat:prepareMetaKycChallenge}:{})}),upload=createParticipantChannelKycUploader({get:blob.get,put:async(...args)=>{assert.equal(qualityCalls.length,Math.ceil((blob.puts()+1)/3)*3);return blob.put(...args);},environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,assessCaptureQuality,assessBiometrics,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment});
  const processor=createMetaCustomerProcessor({connect,environment,authorizationCodes:[...EMPLOYEE_INTAKE_AUTHORIZATION_CODES,...META_KYC_AUTHORIZATION_CODES],dispatch:async c=>{try{return (await bridge.executeIntake(c))||await bridge.execute(c);}catch(error){dispatchFailure={code:error.code,stack:error.stack,lastStatement};throw error;}},outbound:{send:(c,reply,{purpose})=>outbound.send(c,reply,{purpose})}}),callback=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect,environment}),environment,schedule:()=>{}});
  const push=async(message,{sender='15550001001',reply=null,timestamp=Math.floor(Date.now()/1000)}={})=>{sequence++;const value={id:'wamid.SyntheticReactiveMessage_'+sequence,from:sender,timestamp:String(timestamp),...(reply?{context:{id:reply}}:{}),...(typeof message==='string'?{type:'text',text:{body:message}}:message)},body={object:'whatsapp_business_account',entry:[{id:wabaId,changes:[{field:'messages',value:{metadata:{phone_number_id:phoneNumberId},messages:[value]}}]}]},bytes=Buffer.from(JSON.stringify(body)),signature='sha256='+createHmac('sha256',environment.META_APP_SECRET).update(bytes).digest('hex');assert.equal((await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':signature},body:bytes}))).status,200);return 'customer_webhook_'+splitMetaCustomerEvents(body)[0].externalId;};
  const execute=async(message,options)=>{const eventId=await push(message,options),result=await processor.process(eventId),sent=messages.get(customerOutboundId(eventId));return {eventId,result,...(sent||{})};};
@@ -141,6 +157,14 @@ try{
    'https://obrasaas.com/cuenta?seccion=identidad&obra=project-c#participant-title',
   ]);
   assert.doesNotMatch(message.body,/project-a|Jornada|Vincular mi número|identidad fue aprobada/);
+ };
+ const assertCorrectionWorksiteReply=message=>{
+  assert.equal(message.type,'text');
+  assert.match(message.body,/corregir tu presentación de identidad/);
+  assert.match(message.body,/pedile un código nuevo al responsable/);
+  assert.deepEqual(message.body.split('\n').filter(line=>line.startsWith('https:')),[
+   'https://obrasaas.com/cuenta?seccion=identidad&obra=project-c#participant-title',
+  ]);
  };
  const state=async id=>JSON.parse(decryptCustomerSecret((await query(`SELECT payload FROM public."WebhookEvent" WHERE id=$1`,[id])).rows[0].payload.employeeIntake.encryptedState,{organizationId:'org-a',projectId:'project-a',purpose:'employee-intake',resourceId:id},environment));
  const recordedIntake=async id=>{const row=(await query(`SELECT payload FROM public."WebhookEvent" WHERE id=$1`,[id])).rows[0];assert.ok(row?.payload?.employeeIntakeDispatch);return JSON.parse(decryptCustomerSecret(row.payload.employeeIntakeDispatch.encryptedResult,{organizationId:'org-a',projectId:'project-a',purpose:'employee-intake-dispatch',resourceId:id},environment));};
@@ -332,7 +356,8 @@ try{
  for(const table of ['AttendanceEntry','Incident','OperationalProposal'])assert.equal((await query(`SELECT count(*)::int AS n FROM public."${table}"`)).rows[0].n,0);
  assert.equal((await query(`SELECT count(*)::int AS n FROM public."AuditLog" WHERE metadata->>'kind' IN ('REVIEW_KYC','FIELD_PERMISSIONS_CHANGED')`)).rows[0].n,0);assert.equal(networkCalls,0);assert.deepEqual(sqlFailures,[]);
  checks.push('accepted-account-after-invitation-expiry-signed-private-KYC-completes-PENDING_REVIEW-once-without-changing-account-permissions-or-operational-records');
- const pendingSnapshot=await snapshot(p3.id),pendingMetadata=structuredClone((await worker(p3.id)).metadata),pendingPuts=blob.puts(),pendingDownloads=downloads,providerMembershipReads=membershipChecks;
+ const pendingSnapshot=await snapshot(p3.id),pendingMetadata=structuredClone((await worker(p3.id)).metadata),providerMembershipReads=membershipChecks;
+ let pendingPuts=blob.puts(),pendingDownloads=downloads;
  const pendingStatus=await execute('ESTADO',{sender:p3.sender});assert.equal(pendingStatus.result.replySent,true);assert.equal((await recordedIntake(pendingStatus.eventId)).reactiveKycStatus.status,'PENDING_REVIEW');assert.match(pendingStatus.message.body,/pendiente de revisión independiente/);assert.equal(await snapshot(p3.id),pendingSnapshot);assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);assert.equal(membershipChecks,providerMembershipReads);
  assertPendingWorksiteReply(pendingStatus.message);
  const pendingStatusSends=sends;
@@ -343,6 +368,69 @@ try{
  await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."ProjectMembership" SET status='DISABLED' WHERE "tenantMembershipId"=$1 AND "projectId"='project-c'`,[ownMembership]),()=>query(`UPDATE public."ProjectMembership" SET status='ACTIVE' WHERE "tenantMembershipId"=$1 AND "projectId"='project-c'`,[ownMembership]));
  const missingAdoption=structuredClone(pendingMetadata);missingAdoption.participant.kyc.channelCapture.receiptId='participant_'+'0'.repeat(64);await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."Worker" SET metadata=$2::jsonb WHERE id=$1`,[p3.id,JSON.stringify(missingAdoption)]),()=>query(`UPDATE public."Worker" SET metadata=$2::jsonb WHERE id=$1`,[p3.id,JSON.stringify(pendingMetadata)]));
  checks.push('accepted-pending-review-status-requires-current-own-TM-PM-and-exact-capture-receipt-without-provider-lookups');
+ const currentReviews=async submissionId=>(await query(`SELECT id,"actorId",metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND metadata->>'projectId'=$3 AND metadata->>'kind'='REVIEW_KYC' AND metadata->>'submissionId'=$4`,['org-a',p3.id,context.projectId,submissionId])).rows;
+ let rejectedReviewRows=null,rejectedSubmissionId=null;
+ if(kycCorrection){
+  const original=await worker(p3.id),oldChallenge=original.metadata.participant.kycChatChallenge,oldKyc=original.metadata.participant.kyc;
+  rejectedSubmissionId=oldKyc.submissionId;
+  const privateReason='Synthetic reviewer asks for clearer photos';
+  const rejection={...directorContext,operationId:randomUUID(),action:'REVIEW_KYC',payload:{workerId:p3.id,revision:original.revision,submissionId:rejectedSubmissionId,decision:'REJECTED',reason:privateReason}};
+  const rejected=await jsonResponse(await directorHttp.POST(post(participantEndpoint,rejection)));
+  assert.equal(rejected.participant.kyc.status,'REJECTED');
+  rejectedReviewRows=await currentReviews(rejectedSubmissionId);
+  assert.equal(rejectedReviewRows.length,1);assert.equal(rejectedReviewRows[0].id,rejected.receiptId);
+  assert.equal(rejectedReviewRows[0].metadata.decision,'REJECTED');assert.notEqual(rejectedReviewRows[0].actorId,acceptedAudit.actorId);
+  const rejectedSnapshot=await snapshot(p3.id),rejectedStatus=await execute('ESTADO',{sender:p3.sender});
+  assert.equal((await recordedIntake(rejectedStatus.eventId)).reactiveKycStatus.status,'REJECTED');
+  assertCorrectionWorksiteReply(rejectedStatus.message);
+  assert.ok(!JSON.stringify(rejectedStatus).includes(privateReason));
+  assert.equal(await snapshot(p3.id),rejectedSnapshot);assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
+  const person={...director,userId:acceptedAccount.userId},personal={projectId:context.projectId,scope:(await workspace.list(person)).scope};
+  const channelStore=createWorkerChannelStore({workspace,environment});
+  const assertNotEligible=async()=>{const state=(await channelStore.read(person,personal)).records.find(row=>row.workerId===p3.id);assert.equal(state.eligible,false);assert.equal(state.binding,null);};
+  await assertNotEligible();
+  const rejectedWorker=await worker(p3.id);
+  assert.equal(rejectedWorker.metadata.participant.kycChatChallenge.status,'COMPLETED');
+  const prepare={...directorContext,operationId:randomUUID(),action:'PREPARE_KYC_CHAT',payload:{workerId:p3.id,revision:rejectedWorker.revision}};
+  const prepared=await jsonResponse(await directorHttp.POST(post(participantEndpoint,prepare)));
+  assert.match(prepared.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);
+  const replay=await jsonResponse(await directorHttp.POST(post(participantEndpoint,prepare)));
+  assert.equal(replay.receiptId,prepared.receiptId);assert.equal(replay.codeUnavailable,true);assert.equal(replay.code,undefined);
+  const fresh=(await worker(p3.id)).metadata.participant.kycChatChallenge;
+  assert.equal(fresh.status,'PENDING');assert.equal(fresh.analysisConsentVersion,3);assert.equal(fresh.captureImageSetVersion,2);
+  assert.notEqual(fresh.id,oldChallenge.id);assert.notEqual(fresh.codeDigest,oldChallenge.codeDigest);
+  assert.equal(fresh.projectId,context.projectId);assert.equal(fresh.connectionId,channelId);assert.equal(fresh.workerId,p3.id);
+  assert.equal(fresh.participantClerkUserId,acceptedAccount.userId);assert.equal(fresh.senderE164,'+'+p3.sender);
+  assert.equal(Date.parse(fresh.expiresAt)-Date.parse(fresh.createdAt),24*60*60*1000);
+  assert.equal(new Set([sha(lifecyclePng),...[...correctionImages.values()].map(sha)]).size,4);
+  let step=await execute(prepared.code,{sender:p3.sender});assert.equal(step.result.replySent,true);
+  for(const title of ['Autorizar imágenes','Autorizar dorso','Sin lectura asistida','Revisión manual'])step=await execute(choice(step,title),{sender:p3.sender,reply:step.messageId});
+  let index=0;
+  for(const bytes of correctionImages.values()){
+   const mediaId=String(150000701+index++);identityMedia.set(mediaId,bytes);
+   step=await execute({type:'image',image:{id:mediaId,mime_type:'image/png'}},{sender:p3.sender,reply:step.messageId});
+   assert.equal(step.result.replySent,true);assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
+  }
+  const corrected=await execute(choice(step,'Presentar identidad'),{sender:p3.sender,reply:step.messageId});
+  assert.equal(corrected.result.businessApplied,true);assert.equal(corrected.result.replySent,true);
+  pendingPuts+=3;pendingDownloads+=3;
+  const recaptured=(await worker(p3.id)).metadata.participant;
+  assert.equal(recaptured.kyc.status,'PENDING_REVIEW');assert.equal(recaptured.kycChatChallenge.status,'COMPLETED');assert.equal(recaptured.kycChatChallenge.id,fresh.id);
+  assert.equal(recaptured.kyc.channelCapture.challengeId,fresh.id);assert.notEqual(recaptured.kyc.submissionId,rejectedSubmissionId);
+  assert.notEqual(recaptured.kyc.contentHash,oldKyc.contentHash);assert.equal(recaptured.kyc.review,undefined);
+  assert.deepEqual(recaptured.permissions,accepted.participant.permissions);assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
+  const afterCorrection=await snapshot(p3.id),afterSends=sends;
+  assert.equal((await processor.process(corrected.eventId)).done,true);assert.equal(sends,afterSends);assert.equal(await snapshot(p3.id),afterCorrection);
+  assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
+  const stale=await jsonResponse(await directorHttp.POST(post(participantEndpoint,rejection)));
+  assert.equal(stale.receiptId,rejected.receiptId);assert.equal(stale.participant.kyc.submissionId,recaptured.kyc.submissionId);
+  assert.equal(stale.participant.kyc.status,'PENDING_REVIEW');assert.deepEqual(await currentReviews(rejectedSubmissionId),rejectedReviewRows);
+  const current=await worker(p3.id),wrongSubmission={...rejection,operationId:randomUUID(),payload:{...rejection.payload,revision:current.revision,decision:'APPROVED'}};
+  const denied=await jsonResponse(await directorHttp.POST(post(participantEndpoint,wrongSubmission)),409);
+  assert.equal(denied.code,'PARTICIPANT_KYC_NOT_PENDING');assert.equal(await snapshot(p3.id),afterCorrection);
+  await assertNotEligible();
+  checks.push('same-signed-CURRENT-v3-submission-DIRECTOR-rejection-fresh-v3-correction-three-new-private-images-and-original-review-retained');
+ }
  const currentForReview=await worker(p3.id),kycForReview=currentForReview.metadata.participant.kyc;
  assert.notEqual(acceptedAudit.actorId,'owner');
  const review=command('REVIEW_KYC',{workerId:p3.id,revision:currentForReview.revision,submissionId:kycForReview.submissionId,decision:'APPROVED',reason:'Synthetic independent reviewer in canonical store; not real identity acceptance'});
@@ -352,7 +440,8 @@ try{
   const pending=dashboard.records.find(row=>row.id===p3.id);assert.equal(pending?.kyc.status,'PENDING_REVIEW');assert.equal(pending.kyc.images.length,3);
   for(const image of pending.kyc.images){
    const preview=await directorHttp.GET(get(participantEndpoint,{...directorContext,workerId:p3.id,imageId:image.id}));
-   assert.equal(preview.status,200);assert.match(preview.headers.get('cache-control'),/private, no-store/);assert.deepEqual(Buffer.from(await preview.arrayBuffer()),lifecyclePng);
+   assert.equal(preview.status,200);assert.match(preview.headers.get('cache-control'),/private, no-store/);
+   assert.deepEqual(Buffer.from(await preview.arrayBuffer()),kycCorrection?correctionImages.get(image.kind):lifecyclePng);
   }
   const directorReview={...review,...directorContext};
   reviewed=await jsonResponse(await directorHttp.POST(post(participantEndpoint,directorReview)));
@@ -360,13 +449,25 @@ try{
   const receipts=(await query('SELECT a."actorId",m."tenantRole"::text AS role FROM public."AuditLog" a JOIN public."TenantMembership" m ON m."userId"=a."actorId" AND m."organizationId"=a."organizationId" WHERE a.id=$1 AND m.id=$2',[reviewed.receiptId,directorMembershipId])).rows;
   assert.equal(receipts.length,1);assert.equal(receipts[0].role,'DIRECTOR');assert.notEqual(receipts[0].actorId,'owner');assert.notEqual(receipts[0].actorId,acceptedAudit.actorId);
   assert.deepEqual((await worker(p3.id)).metadata.participant.permissions,accepted.participant.permissions);
+  if(kycCorrection){
+   const approvedRows=await currentReviews(kycForReview.submissionId);
+   assert.equal(approvedRows.length,1);assert.equal(approvedRows[0].id,reviewed.receiptId);assert.equal(approvedRows[0].metadata.decision,'APPROVED');
+   assert.equal(approvedRows[0].actorId,rejectedReviewRows[0].actorId);assert.deepEqual(await currentReviews(rejectedSubmissionId),rejectedReviewRows);
+   checks.push('DIRECTOR-approval-belongs-to-corrected-submission-and-leaves-original-rejection-receipt-unchanged');
+  }
   checks.push('same-destination-canonical-DIRECTOR-private-3-image-review-APPROVED-one-receipt-no-permission-change');
  }else reviewed=await store.save(owner,review);
  assert.equal(reviewed.saved,true);
- const reviewedMetadata=structuredClone((await worker(p3.id)).metadata),reviewedSnapshot=await snapshot(p3.id),approvedStatus=await execute('HOLA',{sender:p3.sender});assert.equal(approvedStatus.result.replySent,true);assert.equal((await recordedIntake(approvedStatus.eventId)).reactiveKycStatus.status,'APPROVED');assert.match(approvedStatus.message.body,/identidad fue aprobada/);assert.match(approvedStatus.message.body,/no concede permisos ni vincula/);assert.equal(await snapshot(p3.id),reviewedSnapshot);assert.equal((await worker(p3.id)).metadata.participant.channelIdentity?.binding,undefined);assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
- const beforeStatusReplay=sends;assert.equal((await processor.process(approvedStatus.eventId)).done,true);assert.equal(sends,beforeStatusReplay);assert.equal(await snapshot(p3.id),reviewedSnapshot);
- const reviewRow=(await query(`SELECT id,"actorId",metadata FROM public."AuditLog" WHERE "entityId"=$1 AND metadata->>'kind'='REVIEW_KYC' AND metadata->>'submissionId'=$2`,[p3.id,kycForReview.submissionId])).rows[0];assert.ok(reviewRow);await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1`,[reviewRow.id,acceptedAudit.actorId]),()=>query(`UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1`,[reviewRow.id,reviewRow.actorId]));
- checks.push('canonical-other-actor-review-approved-status-uses-real-review-receipt-and-never-grants-or-binds-or-replays-send');
+ if(kycCorrection){
+  await failSame(p3,'ESTADO');
+  assert.equal((await worker(p3.id)).metadata.participant.channelIdentity?.binding,undefined);
+  checks.push('original-reactive-status-cannot-claim-an-approval-from-the-manually-reissued-challenge');
+ }else{
+  const reviewedSnapshot=await snapshot(p3.id),approvedStatus=await execute('HOLA',{sender:p3.sender});assert.equal(approvedStatus.result.replySent,true);assert.equal((await recordedIntake(approvedStatus.eventId)).reactiveKycStatus.status,'APPROVED');assert.match(approvedStatus.message.body,/identidad fue aprobada/);assert.match(approvedStatus.message.body,/no concede permisos ni vincula/);assert.equal(await snapshot(p3.id),reviewedSnapshot);assert.equal((await worker(p3.id)).metadata.participant.channelIdentity?.binding,undefined);assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
+  const beforeStatusReplay=sends;assert.equal((await processor.process(approvedStatus.eventId)).done,true);assert.equal(sends,beforeStatusReplay);assert.equal(await snapshot(p3.id),reviewedSnapshot);
+  const reviewRow=(await currentReviews(kycForReview.submissionId))[0];assert.ok(reviewRow);await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1`,[reviewRow.id,acceptedAudit.actorId]),()=>query(`UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1`,[reviewRow.id,reviewRow.actorId]));
+  checks.push('canonical-other-actor-review-approved-status-uses-real-review-receipt-and-never-grants-or-binds-or-replays-send');
+ }
  if(businessApp){
   const person={...director,userId:acceptedAccount.userId},personal={projectId:context.projectId,scope:(await workspace.list(person)).scope};
   const endpoint='https://obrasaas.com/api/identity/worker-channel';
@@ -409,6 +510,8 @@ try{
   const routed=async(eventId)=> (await query('SELECT e.kind,e."projectId",e."workerId",e."connectionId",e."bindingId",e."routeId",e."routeEpoch",w."projectId" AS "sourceProjectId",w.payload FROM public."WhatsAppCompanyEventRoute" e JOIN public."WebhookEvent" w ON w.id=e."sourceEventId" WHERE e."sourceEventId"=$1',[eventId])).rows;
   const bound=await field(issued.code);assert.equal(bound.result.kind,'CHANNEL_BOUND');
   const identity=(await worker(p3.id)).metadata.participant.channelIdentity,verified=await ownChannel();
+  assert.equal(identity.binding.kycSubmissionId,kycForReview.submissionId);
+  if(kycCorrection)assert.notEqual(identity.binding.kycSubmissionId,rejectedSubmissionId);
   assert.equal(identity.challenge.status,'CONSUMED');assert.equal(identity.binding.status,'VERIFIED');
   assert.equal(identity.binding.proofEventId,bound.eventId);assert.equal(verified.state,'VERIFIED');assert.equal(verified.binding.id,identity.binding.id);
   const bindings=await routed(bound.eventId);assert.equal(bindings.length,1);
@@ -631,11 +734,11 @@ try{
  const captureReceiptId=adoptedMetadata.participant.kyc.channelCapture.receiptId,captureActor=(await query('SELECT "actorId" FROM public."AuditLog" WHERE id=$1',[captureReceiptId])).rows[0].actorId;await failSame(p,'ESTADO',{},()=>query('UPDATE public."AuditLog" SET "actorId"=\'foreign\' WHERE id=$1',[captureReceiptId]),()=>query('UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1',[captureReceiptId,captureActor]));
  checks.push('CURRENT-account-first-status-proves-original-account-and-capture-actor-without-a-late-adoption');
  const rejectionWorker=await worker(p.id),rejection=await store.save(owner,command('REVIEW_KYC',{workerId:p.id,revision:rejectionWorker.revision,submissionId:rejectionWorker.metadata.participant.kyc.submissionId,decision:'REJECTED',reason:'Synthetic private rejection reason must never appear in WhatsApp'}));assert.equal(rejection.saved,true);
- const rejectedSnapshot=await snapshot(p.id),rejectedStatus=await execute('ESTADO',{sender:p.sender});assert.equal((await recordedIntake(rejectedStatus.eventId)).reactiveKycStatus.status,'REJECTED');assert.match(rejectedStatus.message.body,/no fue aprobada/);assert.doesNotMatch(JSON.stringify(rejectedStatus.result),/Synthetic private rejection|https:\/\/.*blob|person@example|15550001001/);assert.equal(await snapshot(p.id),rejectedSnapshot);assert.equal((await worker(p.id)).metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
+ const rejectedSnapshot=await snapshot(p.id),rejectedStatus=await execute('ESTADO',{sender:p.sender});assert.equal((await recordedIntake(rejectedStatus.eventId)).reactiveKycStatus.status,'REJECTED');assertCorrectionWorksiteReply(rejectedStatus.message);assert.doesNotMatch(JSON.stringify(rejectedStatus.result),/Synthetic private rejection|https:\/\/.*blob|person@example|15550001001/);assert.equal(await snapshot(p.id),rejectedSnapshot);assert.equal((await worker(p.id)).metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
  assert.equal((await query(`SELECT count(*)::int AS n FROM public."AuditLog" WHERE "entityId"=$1 AND action='participant.kyc_chat.prepared'`,[p.id])).rows[0].n,1);assert.equal((await worker(p.id)).metadata.participant.channelIdentity?.binding,undefined);
  checks.push('current-rejection-status-hides-private-reason-and-does-not-reopen-capture-or-create-challenge-consent-or-binding');
- assert.deepEqual(qualityCalls.map(row=>row.kind),['DOCUMENT_FRONT','SELFIE','DOCUMENT_BACK','DOCUMENT_FRONT','SELFIE','DOCUMENT_BACK']);assert.equal(qualityCalls.length,6);
- void reviewedMetadata;void adoptedMetadata;
+ assert.deepEqual(qualityCalls.map(row=>row.kind),Array.from({length:kycCorrection?3:2},()=>['DOCUMENT_FRONT','SELFIE','DOCUMENT_BACK']).flat());
+ void adoptedMetadata;
  void pending;
 }finally{globalThis.fetch=originalFetch;try{await closeDisposablePool(pool);if(created){assert.match(schema,/^obrasaas_reactive_kyc_[a-f0-9]{32}$/);await admin.query('DROP SCHEMA '+quoted+' CASCADE');schemaRemoved=true;}}finally{await admin.end();}}
-const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,verifiedAttendanceSimulation:true,verifiedImportedTaskComposition:true,...(planImage?{planImageSource}:{}),realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(planImage?'business-app-plan-image-':businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
+const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,verifiedAttendanceSimulation:true,verifiedImportedTaskComposition:true,...(planImage?{planImageSource}:{}),...(kycCorrection?{verifiedKycCorrection:{sameAcceptedParticipant:true,previousReviewRetained:true,newPrivateImages:3,analysisConsentVersion:3,approvedSubmissionBound:true}}:{}),realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(kycCorrection?'business-app-kyc-correction-':planImage?'business-app-plan-image-':businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
