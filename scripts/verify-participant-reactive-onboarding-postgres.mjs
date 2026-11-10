@@ -22,7 +22,10 @@ import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
 import {resolveMetaKycAuthority,META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
 import {createParticipantChannelKycDeposit,createParticipantChannelKycUploader} from '../src/lib/participant-channel-kyc.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
-import {customerOutboundId,customerJobTransaction} from '../src/lib/meta-customer-outbound.mjs';
+import {createMetaCustomerOutbound,customerOutboundId,customerJobTransaction} from '../src/lib/meta-customer-outbound.mjs';
+import {createCompanyChannelBridge,resolveCompanyOutboundIdentity} from '../src/lib/company-channel-routing.mjs';
+import {createWorkerChannelStore} from '../src/lib/worker-channel-identity.mjs';
+import {createWorkerChannelHandlers} from '../src/lib/worker-channel-http.mjs';
 import {PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256,participantOnboardingIntent,participantOnboardingOutboundId,participantOnboardingPhaseOutboundId,participantOnboardingPhaseState} from '../src/lib/participant-onboarding-policy.mjs';
 import {resolveParticipantOnboardingAuthority} from '../src/lib/participant-onboarding-authority.mjs';
 import {digest} from '../src/lib/workspace-policy.mjs';
@@ -352,6 +355,67 @@ try{
  const beforeStatusReplay=sends;assert.equal((await processor.process(approvedStatus.eventId)).done,true);assert.equal(sends,beforeStatusReplay);assert.equal(await snapshot(p3.id),reviewedSnapshot);
  const reviewRow=(await query(`SELECT id,"actorId",metadata FROM public."AuditLog" WHERE "entityId"=$1 AND metadata->>'kind'='REVIEW_KYC' AND metadata->>'submissionId'=$2`,[p3.id,kycForReview.submissionId])).rows[0];assert.ok(reviewRow);await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1`,[reviewRow.id,acceptedAudit.actorId]),()=>query(`UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1`,[reviewRow.id,reviewRow.actorId]));
  checks.push('canonical-other-actor-review-approved-status-uses-real-review-receipt-and-never-grants-or-binds-or-replays-send');
+ if(businessApp){
+  const person={...director,userId:acceptedAccount.userId},personal={projectId:context.projectId,scope:(await workspace.list(person)).scope};
+  const endpoint='https://obrasaas.com/api/identity/worker-channel';
+  const channelHttp=createWorkerChannelHandlers({verify:async()=>person,store:createWorkerChannelStore({workspace,environment})});
+  const ownChannel=async()=>(await jsonResponse(await channelHttp.GET(get(endpoint,personal)))).records.find(row=>row.workerId===p3.id);
+  const eligible=await ownChannel();assert.equal(eligible.eligible,true);assert.equal(eligible.state,'NOT_LINKED');
+  const bindingRequest={...personal,operationId:randomUUID(),action:'REQUEST_CHALLENGE',payload:{workerId:p3.id,revision:eligible.revision}};
+  const issued=await jsonResponse(await channelHttp.POST(post(endpoint,bindingRequest)));assert.match(issued.code,/^VINCULAR [A-Za-z0-9_-]{43}$/);
+  const recovered=await jsonResponse(await channelHttp.POST(post(endpoint,bindingRequest)));
+  assert.equal(recovered.receiptId,issued.receiptId);assert.equal(recovered.codeUnavailable,true);assert.equal(recovered.code,undefined);
+
+  const noFieldMedia=async()=>assert.fail('The binding and menu must not download, write or analyze media');
+  let fieldSends=0;
+  const fieldProvider={downloadMedia:noFieldMedia,async sendReply(input){
+   assert.equal(input.phoneNumberId,phoneNumberId);assert.equal(input.to,p3.sender);assert.equal(typeof input.finalBeforeExternal,'function');
+   await input.finalBeforeExternal();
+   fieldSends++;
+   return provider.sendReply(input);
+  }};
+  const companyBridge=createCompanyChannelBridge({connect,environment,provider:fieldProvider,put:noFieldMedia,get:noFieldMedia,analyzer:{analyzePhoto:noFieldMedia,transcribeAudio:noFieldMedia},planAnalyzer:{analyze:noFieldMedia}});
+  const companyOutbound=createMetaCustomerOutbound({connect,environment,provider:fieldProvider,resolveIdentity:resolveCompanyOutboundIdentity,sourceContext:true});
+  const fieldProcessor=createMetaCustomerProcessor({connect,environment,
+   authorizationCodes:[...EMPLOYEE_INTAKE_AUTHORIZATION_CODES,...META_KYC_AUTHORIZATION_CODES,'COMPANY_CHANNEL_SOURCE_REQUIRED'],
+   dispatch:async c=>(await bridge.executeIntake(c))||(await bridge.execute(c))||companyBridge.execute(c),
+   outbound:{send:(c,reply,{purpose})=>purpose==='FIELD'?companyOutbound.send(c,reply):outbound.send(c,reply,{purpose})}
+  });
+  const field=async(message,reply=null)=>{
+   const eventId=await push(message,{sender:p3.sender,reply}),result=await fieldProcessor.process(eventId);
+   assert.equal(result.businessApplied,false,result.code);assert.equal(result.replySent,true,result.replyState||result.code);
+   return {eventId,result,...messages.get(customerOutboundId(eventId))};
+  };
+  const routed=async(eventId)=> (await query('SELECT e.kind,e."projectId",e."workerId",e."connectionId",e."bindingId",e."routeId",e."routeEpoch",w."projectId" AS "sourceProjectId",w.payload FROM public."WhatsAppCompanyEventRoute" e JOIN public."WebhookEvent" w ON w.id=e."sourceEventId" WHERE e."sourceEventId"=$1',[eventId])).rows;
+  const bound=await field(issued.code);assert.equal(bound.result.kind,'CHANNEL_BOUND');
+  const identity=(await worker(p3.id)).metadata.participant.channelIdentity,verified=await ownChannel();
+  assert.equal(identity.challenge.status,'CONSUMED');assert.equal(identity.binding.status,'VERIFIED');
+  assert.equal(identity.binding.proofEventId,bound.eventId);assert.equal(verified.state,'VERIFIED');assert.equal(verified.binding.id,identity.binding.id);
+  const bindings=await routed(bound.eventId);assert.equal(bindings.length,1);
+  const binding=bindings[0];assert.equal(binding.kind,'BINDING');assert.equal(binding.sourceProjectId,anchor.projectId);assert.equal(binding.projectId,personal.projectId);assert.equal(binding.workerId,p3.id);assert.equal(binding.connectionId,channelId);assert.equal(binding.bindingId,identity.challenge.id);
+  assert.equal(binding.payload.employeeIntakeDispatch,undefined);assert.ok(!JSON.stringify(binding.payload).includes(issued.code));
+  const afterBinding=await snapshot(p3.id);
+  assert.equal((await fieldProcessor.process(bound.eventId)).done,true);assert.equal(fieldSends,1);assert.equal(await snapshot(p3.id),afterBinding);assert.deepEqual(await routed(bound.eventId),bindings);
+  checks.push('same-approved-account-HTTP-VINCULAR-signed-binding-on-assigned-destination-one-use-and-no-replay');
+
+  const selection=await field('HOLA');assert.equal(selection.result.kind,'WORKSITE_SELECTION');
+  assert.deepEqual(selection.message.sections.flatMap(section=>section.rows.map(row=>row.title)),['Synthetic destination B']);
+  const confirmation=await field(choice(selection,'Synthetic destination B'),selection.messageId);assert.equal(confirmation.result.kind,'WORKSITE_CONFIRM');
+  const selected=await field(choice(confirmation,'Confirmar obra'),confirmation.messageId);assert.equal(selected.result.kind,'WORKSITE_SELECTED');
+  const greeting=await field('HOLA');assert.equal(greeting.result.kind,'CONVERSATION');assert.equal(greeting.message.type,'interactive');
+  assert.deepEqual(greeting.message.sections.flatMap(section=>section.rows.map(row=>row.title)),['Entrada','Cronograma y tareas','Consultar estado']);
+  assert.match(greeting.message.body,/Obra: Synthetic destination B/);
+  assert.deepEqual((await worker(p3.id)).metadata.participant.permissions,{attendance:true,report:false});
+  const fieldRoutes=await routed(greeting.eventId);assert.equal(fieldRoutes.length,1);
+  const route=fieldRoutes[0];assert.equal(route.kind,'FIELD');assert.equal(route.sourceProjectId,anchor.projectId);assert.equal(route.projectId,personal.projectId);assert.equal(route.workerId,p3.id);assert.equal(route.connectionId,channelId);assert.equal(route.bindingId,identity.binding.id);assert.equal(route.payload.employeeIntakeDispatch,undefined);
+  const selectedRoute=(await query('SELECT epoch,"projectId","workerId","bindingId" FROM public."WhatsAppCompanyRoute" WHERE id=$1',[route.routeId])).rows;
+  assert.deepEqual(selectedRoute,[{epoch:route.routeEpoch,projectId:personal.projectId,workerId:p3.id,bindingId:identity.binding.id}]);
+  const afterMenu=await snapshot(p3.id);
+  assert.equal((await fieldProcessor.process(greeting.eventId)).done,true);assert.equal(fieldSends,5);assert.equal(await snapshot(p3.id),afterMenu);assert.deepEqual(await routed(greeting.eventId),fieldRoutes);
+  for(const table of ['AttendanceEntry','Incident','OperationalProposal'])assert.equal((await query('SELECT count(*)::int AS n FROM public."'+table+'"')).rows[0].n,0);
+  assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
+  checks.push('same-bound-account-confirms-destination-signed-HOLA-shows-jornada-and-read-actions-no-reports-and-no-replay');
+ }
  const beforeRevokeWorker=await worker(p3.id),beforeRevokeChallenge=structuredClone(beforeRevokeWorker.metadata.participant.kycChatChallenge),beforeRevokeKyc=structuredClone(beforeRevokeWorker.metadata.participant.kyc);
  const revoked=await store.save(owner,command('REVOKE',{workerId:p3.id,revision:beforeRevokeWorker.revision,reason:'Synthetic canonical revocation for reactive generation fence'}));assert.equal(revoked.saved,true);await failSame(p3,'ESTADO');
  const revokedWorker=await worker(p3.id),restored=await store.save(owner,command('RESTORE_ACCESS',{workerId:p3.id,revision:revokedWorker.revision,reason:'Synthetic canonical restoration does not renew original reactive handoff'}));assert.equal(restored.saved,true);
@@ -370,4 +434,4 @@ try{
  void reviewedMetadata;void adoptedMetadata;
  void pending;
 }finally{globalThis.fetch=originalFetch;try{await closeDisposablePool(pool);if(created){assert.match(schema,/^obrasaas_reactive_kyc_[a-f0-9]{32}$/);await admin.query('DROP SCHEMA '+quoted+' CASCADE');schemaRemoved=true;}}finally{await admin.end();}}
-const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
+const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
