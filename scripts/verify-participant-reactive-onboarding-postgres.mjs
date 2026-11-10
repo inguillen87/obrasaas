@@ -26,6 +26,9 @@ import {createMetaCustomerOutbound,customerOutboundId,customerJobTransaction} fr
 import {createCompanyChannelBridge,resolveCompanyOutboundIdentity} from '../src/lib/company-channel-routing.mjs';
 import {createWorkerChannelStore} from '../src/lib/worker-channel-identity.mjs';
 import {createWorkerChannelHandlers} from '../src/lib/worker-channel-http.mjs';
+import {createFieldHandlers} from '../src/lib/field-operations-http.mjs';
+import {createFieldOperations} from '../src/lib/field-operations-store.mjs';
+import {FIELD_NOTICE} from '../src/lib/field-operations-policy.mjs';
 import {PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256,participantOnboardingIntent,participantOnboardingOutboundId,participantOnboardingPhaseOutboundId,participantOnboardingPhaseState} from '../src/lib/participant-onboarding-policy.mjs';
 import {resolveParticipantOnboardingAuthority} from '../src/lib/participant-onboarding-authority.mjs';
 import {digest} from '../src/lib/workspace-policy.mjs';
@@ -381,9 +384,9 @@ try{
    dispatch:async c=>(await bridge.executeIntake(c))||(await bridge.execute(c))||companyBridge.execute(c),
    outbound:{send:(c,reply,{purpose})=>purpose==='FIELD'?companyOutbound.send(c,reply):outbound.send(c,reply,{purpose})}
   });
-  const field=async(message,reply=null)=>{
+  const field=async(message,reply=null,applied=false)=>{
    const eventId=await push(message,{sender:p3.sender,reply}),result=await fieldProcessor.process(eventId);
-   assert.equal(result.businessApplied,false,result.code);assert.equal(result.replySent,true,result.replyState||result.code);
+   assert.equal(result.businessApplied,applied,result.code);assert.equal(result.replySent,true,result.replyState||result.code);
    return {eventId,result,...messages.get(customerOutboundId(eventId))};
   };
   const routed=async(eventId)=> (await query('SELECT e.kind,e."projectId",e."workerId",e."connectionId",e."bindingId",e."routeId",e."routeEpoch",w."projectId" AS "sourceProjectId",w.payload FROM public."WhatsAppCompanyEventRoute" e JOIN public."WebhookEvent" w ON w.id=e."sourceEventId" WHERE e."sourceEventId"=$1',[eventId])).rows;
@@ -415,6 +418,85 @@ try{
   for(const table of ['AttendanceEntry','Incident','OperationalProposal'])assert.equal((await query('SELECT count(*)::int AS n FROM public."'+table+'"')).rows[0].n,0);
   assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
   checks.push('same-bound-account-confirms-destination-signed-HOLA-shows-jornada-and-read-actions-no-reports-and-no-replay');
+  const operations=createFieldOperations({workspace}),fieldEndpoint='https://obrasaas.com/api/identity/field-operations';
+  const ownerField=createFieldHandlers({verify:async()=>owner,operations}),personField=createFieldHandlers({verify:async()=>person,operations}),directorField=createFieldHandlers({verify:async()=>director,operations});
+  const ownerSite=await jsonResponse(await ownerField.GET(get(fieldEndpoint,context)));
+  const sector={id:'sector-pilot',name:'Sector sintético',latitude:0,longitude:0,radius:100};
+  const configured=await jsonResponse(await ownerField.POST(post(fieldEndpoint,command('CONFIGURE_SITE',{revision:ownerSite.projectRevision,sectors:[sector]}))));
+  assert.equal(configured.kind,'CONFIGURATION');assert.equal(configured.qrTokens.length,1);assert.equal(configured.qrTokens[0].sectorId,sector.id);
+  const qrToken=configured.qrTokens[0].token;assert.match(qrToken,/^[a-f0-9]{64}$/);
+  const ownSite=await jsonResponse(await personField.GET(get(fieldEndpoint,personal)));
+  assert.equal(ownSite.sectors.find(row=>row.id===sector.id)?.radius,sector.radius);
+  assert.ok(!JSON.stringify(ownSite).includes(qrToken),'Ordinary operator read must not disclose the QR secret');
+
+  const readEvents=async()=>(await jsonResponse(await personField.GET(get(fieldEndpoint,personal)))).attendance.sort((left,right)=>left.sequence-right.sequence);
+  const chooseField=(previous,title,applied=false)=>field(choice(previous,title),previous.messageId,applied);
+  async function whatsappPunch(menu,action,position){
+   let step=await chooseField(menu,action);step=await chooseField(step,sector.name);
+   if(position){
+    assert.match(step.message.body,/WhatsApp no informa precisión GPS/);
+    step=await chooseField(step,'Continuar');
+    if(action==='Entrada'){
+     const denied=await field({type:'location',location:position});
+     assert.equal(denied.result.kind,'WORKSITE_INPUT_CONTEXT_REQUIRED');assert.deepEqual(await readEvents(),[]);
+    }
+    step=await field({type:'location',location:position},step.messageId);
+    assert.match(step.message.body,/revisión humana/);
+   }
+   const applied=await chooseField(step,'Guardar',true);assert.equal(applied.result.kind,'ATTENDANCE');
+   const records=await readEvents(),event=records.at(-1),projections=await routed(applied.eventId);
+   assert.equal(event.source,'meta-customer');assert.equal(event.workerId,p3.id);assert.equal(event.sectorId,sector.id);assert.equal(projections.length,1);
+   assert.equal(projections[0].kind,'FIELD');assert.equal(projections[0].projectId,personal.projectId);assert.equal(projections[0].sourceProjectId,anchor.projectId);
+   const sendCount=fieldSends;
+   assert.equal((await fieldProcessor.process(applied.eventId)).done,true);assert.equal(fieldSends,sendCount);assert.deepEqual(await readEvents(),records);
+   return {event,receiptId:applied.result.receiptId};
+  }
+  const waEntry=await whatsappPunch(greeting,'Entrada',{latitude:1,longitude:1});
+  assert.equal(waEntry.event.eventType,'CHECK_IN');assert.equal(waEntry.event.verificationStatus,'REVIEW_REQUIRED');
+  assert.equal(waEntry.event.qrStatus,'NOT_PROVIDED');assert.equal(waEntry.event.location.accuracyMeters,null);assert.ok(waEntry.event.location.distanceMeters>sector.radius);
+  const waExit=await whatsappPunch(await field('HOLA'),'Salida',{latitude:0,longitude:0});
+  assert.equal(waExit.event.eventType,'CHECK_OUT');assert.equal(waExit.event.shiftId,waEntry.event.shiftId);assert.equal(waExit.event.verificationStatus,'REVIEW_REQUIRED');
+  assert.equal(waExit.event.qrStatus,'NOT_PROVIDED');assert.equal(waExit.event.location.accuracyMeters,null);assert.equal(waExit.event.location.distanceMeters,0);
+  assert.equal((await readEvents()).length,2);
+  checks.push('signed-location-requires-quoted-prompt-and-outside-WhatsApp-punches-stay-review-required-without-duplicate');
+
+  const webPunch=(eventType,prior,token=qrToken)=>({...personal,operationId:randomUUID(),action:'ATTENDANCE',payload:{workerId:p3.id,eventType,expectedEventId:prior.id,sectorId:sector.id,qrToken:token,location:{latitude:0,longitude:0,accuracy:5,capturedAt:new Date().toISOString(),noticeVersion:FIELD_NOTICE}}});
+  const postField=(body,expected)=>personField.POST(post(fieldEndpoint,body)).then(response=>jsonResponse(response,expected));
+  const invalidToken=(qrToken[0]==='f'?'0':'f')+qrToken.slice(1);
+  const invalid=await postField(webPunch('CHECK_IN',waExit.event,invalidToken),422);assert.equal(invalid.code,'FIELD_QR_INVALID');assert.equal((await readEvents()).length,2);
+  const entryRequest=webPunch('CHECK_IN',waExit.event),entered=await postField(entryRequest),entryReplay=await postField(entryRequest);
+  assert.equal(entered.event.verificationStatus,'VERIFIED');assert.equal(entered.event.qrStatus,'MATCHED');assert.equal(entered.event.location.accuracyMeters,5);
+  assert.equal(entryReplay.replayed,true);assert.equal(entryReplay.receiptId,entered.receiptId);assert.equal(entryReplay.event.id,entered.event.id);
+  const pause=await whatsappPunch(await field('HOLA'),'Iniciar pausa');
+  assert.equal(pause.event.previousEventId,entered.event.id);assert.equal(pause.event.verificationStatus,'NOT_REQUIRED');
+  await new Promise(resolve=>setTimeout(resolve,15));
+  const resumed=await whatsappPunch(await field('HOLA'),'Volver de pausa');
+  assert.equal(resumed.event.previousEventId,pause.event.id);assert.equal(resumed.event.verificationStatus,'NOT_REQUIRED');
+  const exitRequest=webPunch('CHECK_OUT',resumed.event),exited=await postField(exitRequest),exitReplay=await postField(exitRequest);
+  assert.equal(exited.event.verificationStatus,'VERIFIED');assert.equal(exited.event.qrStatus,'MATCHED');assert.equal(exitReplay.replayed,true);assert.equal(exitReplay.receiptId,exited.receiptId);
+  const verifiedShift=[entered.event,pause.event,resumed.event,exited.event];
+  assert.deepEqual(verifiedShift.map(row=>row.eventType),['CHECK_IN','BREAK_START','BREAK_END','CHECK_OUT']);
+  assert.ok(verifiedShift.every(row=>row.shiftId===entered.event.shiftId&&row.recordedBy===acceptedAudit.actorId));
+  const ledger=(await query('SELECT "projectId","workerId" FROM public."AttendanceEntry"')).rows;
+  assert.equal(ledger.length,6);assert.ok(ledger.every(row=>row.projectId===personal.projectId&&row.workerId===p3.id));
+  checks.push('same-operator-web-GPS-QR-entry-exit-and-signed-WhatsApp-pause-resume-share-one-canonical-shift');
+
+  const hoursFrom=waEntry.event.recordedAt.slice(0,10),lastDate=exited.event.recordedAt.slice(0,10),hoursUntil=new Date(Date.parse(lastDate+'T00:00:00.000Z')+86400000).toISOString().slice(0,10);
+  const hoursParams={hoursFrom,hoursUntil,hoursTimeZone:'UTC',hoursFormat:'json'};
+  const report=await jsonResponse(await directorField.GET(get(fieldEndpoint,{...directorContext,...hoursParams})));
+  assert.equal(report.kind,'FIELD_HOURS_REPORT');assert.equal(report.complete,true);assert.equal(report.rows.length,2);
+  assert.equal(report.salaryCalculated,false);assert.equal(report.paymentEnabled,false);
+  const deniedHours=await jsonResponse(await personField.GET(get(fieldEndpoint,{...personal,...hoursParams})),403);assert.equal(deniedHours.code,'FIELD_HOURS_PERMISSION_REQUIRED');
+  const pendingShift=report.rows.find(row=>row.shiftId===waEntry.event.shiftId),readyShift=report.rows.find(row=>row.shiftId===entered.event.shiftId);
+  assert.equal(pendingShift.evidenceStatus,'PENDING_REVIEW');assert.equal(pendingShift.readyForOperationalReview,false);
+  assert.deepEqual(pendingShift.events.map(event=>event.recordingReceiptId),[waEntry.receiptId,waExit.receiptId]);
+  assert.equal(readyShift.status,'CLOSED');assert.equal(readyShift.auditStatus,'CONFIRMED');assert.equal(readyShift.readyForOperationalReview,true);
+  assert.deepEqual(readyShift.sourceEventIds,verifiedShift.map(event=>event.id));
+  assert.deepEqual(readyShift.events.map(event=>event.recordingReceiptId),[entered.receiptId,pause.receiptId,resumed.receiptId,exited.receiptId]);
+  const elapsedMs=Date.parse(exited.event.recordedAt)-Date.parse(entered.event.recordedAt),breakMs=Date.parse(resumed.event.recordedAt)-Date.parse(pause.event.recordedAt);
+  assert.ok(breakMs>0);assert.ok(elapsedMs>breakMs);assert.equal(readyShift.elapsedMs,elapsedMs);assert.equal(readyShift.breakMs,breakMs);assert.equal(readyShift.netMs,elapsedMs-breakMs);
+  assert.equal(report.totals.closedEvidenceReadyNetMs,readyShift.netMs);
+  checks.push('Director-hours-report-matches-six-audited-punches-excludes-registered-breaks-and-separates-pending-evidence');
  }
  const beforeRevokeWorker=await worker(p3.id),beforeRevokeChallenge=structuredClone(beforeRevokeWorker.metadata.participant.kycChatChallenge),beforeRevokeKyc=structuredClone(beforeRevokeWorker.metadata.participant.kyc);
  const revoked=await store.save(owner,command('REVOKE',{workerId:p3.id,revision:beforeRevokeWorker.revision,reason:'Synthetic canonical revocation for reactive generation fence'}));assert.equal(revoked.saved,true);await failSame(p3,'ESTADO');
@@ -434,4 +516,4 @@ try{
  void reviewedMetadata;void adoptedMetadata;
  void pending;
 }finally{globalThis.fetch=originalFetch;try{await closeDisposablePool(pool);if(created){assert.match(schema,/^obrasaas_reactive_kyc_[a-f0-9]{32}$/);await admin.query('DROP SCHEMA '+quoted+' CASCADE');schemaRemoved=true;}}finally{await admin.end();}}
-const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
+const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,verifiedAttendanceSimulation:true,realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
