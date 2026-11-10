@@ -5681,7 +5681,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-onboarding-reactive.mjs",
-          "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+          "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
         },
         {
           "path": "src/lib/participant-policy.mjs",
@@ -6828,7 +6828,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-onboarding-reactive.mjs",
-          "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+          "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
         },
         {
           "path": "src/lib/participant-policy.mjs",
@@ -8052,7 +8052,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-onboarding-reactive.mjs",
-          "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+          "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
         },
         {
           "path": "src/lib/participant-policy.mjs",
@@ -8938,7 +8938,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-onboarding-reactive.mjs",
-          "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+          "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
         },
         {
           "path": "src/lib/participant-policy.mjs",
@@ -9791,7 +9791,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-onboarding-reactive.mjs",
-          "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+          "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
         },
         {
           "path": "src/lib/participant-policy.mjs",
@@ -40181,9 +40181,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/lib/participant-onboarding-reactive.mjs",
         "status": "MODIFIED",
         "previousSha256": "bd549004da8c1a809f7bb337cbe03600b4edaf14a81107f6d085cce6b87aadf2",
-        "currentSha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f",
+        "currentSha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a",
         "previousBytes": 38202,
-        "currentBytes": 38626,
+        "currentBytes": 38827,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 1086,
@@ -40206,7 +40206,12 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": " if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply)))fail();\n"
           },
           {
-            "currentOffsetCharacters": 25465,
+            "currentOffsetCharacters": 21962,
+            "currentText": " jsonb_build_object('id',o.id,'name',o.name,'metadata',o.metadata,'subscriptionPlan',o.\"subscriptionPlan\"::text,'subscriptionStatus',o.\"subscriptionStatus\"::text,'trialEndsAt',o.\"trialEndsAt\" AT TIME ZONE 'UTC') AS \"statusOrganization\",\n jsonb_build_object('id',p.id,'name',p.name,'organizationId',p.\"organizationId\",'metadata',p.metadata) AS \"statusProject\",\n",
+            "previousText": " to_jsonb(o) AS \"statusOrganization\",jsonb_build_object('id',p.id,'name',p.name,'organizationId',p.\"organizationId\",'metadata',p.metadata) AS \"statusProject\",\n"
+          },
+          {
+            "currentOffsetCharacters": 25666,
             "currentText": " return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status,null,a.project.id)};\n",
             "previousText": " return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status)};\n"
           }
@@ -53737,7 +53742,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -55175,7 +55180,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -56517,7 +56522,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -63175,7 +63180,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -64937,7 +64942,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "3a8cbfd180bfdce28c6542193f5d158dd58b67394790d461070851083ddda98f"
+            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
           },
           {
             "path": "src/lib/participant-policy.mjs",

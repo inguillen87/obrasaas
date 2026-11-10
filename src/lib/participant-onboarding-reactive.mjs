@@ -202,7 +202,8 @@ function currentReactiveParticipantStatusFence(client,r,pref,result){
 export function reactiveParticipantStatusFenceRead(client,r,pref,result){
  const f=currentReactiveParticipantStatusFence(client,r,pref,result);
  return {sql:`SELECT w.id,w."projectId",w.name,w.phone,w.active,w.metadata,to_char(w."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,
- to_jsonb(o) AS "statusOrganization",jsonb_build_object('id',p.id,'name',p.name,'organizationId',p."organizationId",'metadata',p.metadata) AS "statusProject",
+ jsonb_build_object('id',o.id,'name',o.name,'metadata',o.metadata,'subscriptionPlan',o."subscriptionPlan"::text,'subscriptionStatus',o."subscriptionStatus"::text,'trialEndsAt',o."trialEndsAt" AT TIME ZONE 'UTC') AS "statusOrganization",
+ jsonb_build_object('id',p.id,'name',p.name,'organizationId',p."organizationId",'metadata',p.metadata) AS "statusProject",
  jsonb_build_object('actorId',u.id,'membershipId',tm.id,'clerkUserId',u."clerkUserId",'role',tm."tenantRole"::text,'clerkRole',tm."clerkRole",'revision',to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'userRevision',to_char(u."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) AS "statusMember",
  CASE WHEN own.id IS NULL THEN NULL ELSE jsonb_build_object('actorId',ou.id,'membershipId',own.id,'clerkUserId',ou."clerkUserId",'role',own."tenantRole"::text,'clerkRole',own."clerkRole",'revision',to_char(own."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'userRevision',to_char(ou."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) END AS "statusOwn",clock_timestamp() AS "reactiveStatusNow"
  FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" AND p."organizationId"=$3 AND p.status='ACTIVE'
