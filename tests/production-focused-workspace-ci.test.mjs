@@ -116,12 +116,12 @@ test('focused current bootstrap subtree external imports and original producer h
  const absent=fixture();absent.sourceOverrides.set('src/app/(identity)/cuenta/company-bootstrap-panel.js',null);assert.throws(absent.validate,{code:'FOCUSED_WORKSPACE_CI_REJECTED',message:'Worksite live/hours source revision rejected: Pilot completion source lineage rejected: PILOT_SOURCE_BYTES_src/app/(identity)/cuenta/company-bootstrap-panel.js'});assert.throws(()=>focusedCompanyBootstrapUiSourceClosure(absent.readSource),{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'});
  const unit='tests/production-company-bootstrap-receipt.test.mjs',original=fixture(),unitBytes=original.readSource(unit),imports=focusedWorkspaceCiLocalImports(unitBytes,unit,original.readSource);assert.ok(imports.includes('../src/app/(identity)/cuenta/company-bootstrap-panel.js'));assert.ok(imports.includes('next/dist/build/swc/index.js'));assert.ok(imports.includes('react'));assert.ok(imports.includes('react-dom/server'));
  denied(()=>focusedWorkspaceCiLocalImports(unitBytes,'tests/foreign-bootstrap-receipt.test.mjs',original.readSource));
- // This branch is proposed only with the exact 424 sources and a genuinely
- // composed authenticated metadata frame. No import, compiler or pin is mocked.
+ // The current first-worksite transform requires the authenticated metadata
+ // frame. The original unit source pin is unchanged.
  const lfUnit=Buffer.from(unitBytes.toString('utf8').replaceAll('\r\n','\n'));
- assert.equal(hash(lfUnit),'08b38bcced2c5e8700e193ac4f45223073c97b829c46a9ca61e4f5d0198c3d78');
+ assert.equal(hash(lfUnit),'6e1fe3789ba8e19a61d5f8e6ecbddb22b65c7dfbdf1f7694252889862408dd3d');
  const panel='src/app/(identity)/cuenta/company-bootstrap-panel.js',panelBytes=original.readSource(panel);
- assert.equal(hash(Buffer.from(panelBytes.toString('utf8').replaceAll('\r\n','\n'))),'7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e');
+ assert.equal(hash(Buffer.from(panelBytes.toString('utf8').replaceAll('\r\n','\n'))),'b567caa997b84d8e11371bafbe8f5b0a6be5335bfbd468b1c2a719ab71bc0eb5');
  assert.equal(WORKSPACE_CONTINUITY_FOCUSED_UI.controlledSourceTransforms[0].sourceLfSha256,'44676be514b092d8146f6f8ade5c4b0867f8bceb1b9f5c7ab204bb5f90e503af');
  const withoutMetadata=file=>file==='.github/workspace-acceptance-contract.json'?null:original.readSource(file);
  denied(()=>focusedWorkspaceCiLocalImports(unitBytes,unit,withoutMetadata));
@@ -132,7 +132,7 @@ test('focused current bootstrap subtree external imports and original producer h
  const alternateRaw=unitBytes.equals(lfUnit)?Buffer.from(lfUnit.toString('utf8').replaceAll('\n','\r\n')):lfUnit;
  assert.equal(hash(Buffer.from(alternateRaw.toString('utf8').replaceAll('\r\n','\n'))),hash(lfUnit));assert.equal(alternateRaw.equals(unitBytes),false);
  denied(()=>focusedWorkspaceCiLocalImports(alternateRaw,unit,original.readSource));
- for(const[before,after]of [["const acceptSource=source.slice(acceptNode.start,acceptNode.end);","const acceptSource=foreignBody;"],["return accept(value,openWorkspace);","return foreignAccept(value,openWorkspace);"],["alreadyConfiguredBodies.map(body=>","foreignBodies.map(body=>"]]){
+ for(const[before,after]of [["const acceptSource=source.slice(acceptNode.start,acceptNode.end);","const acceptSource=foreignBody;"],["return accept(value,openWorkspace);","return foreignAccept(value,openWorkspace);"],["alreadyConfiguredBodies.map(body=>","foreignBodies.map(body=>"],["node.id.name==='enterFirstProject'","node.id.name==='foreignEnter'"],["const enterSource=source.slice(enterNode.start,enterNode.end);","const enterSource=foreignBody;"]]){
   assert.ok(unitBytes.toString().includes(before));denied(()=>focusedWorkspaceCiLocalImports(Buffer.from(unitBytes.toString().replace(before,after)),unit,original.readSource));
  }
  for(const[before,after]of [["../src/app/(identity)/cuenta/company-bootstrap-panel.js","../src/app/(identity)/cuenta/foreign-panel.js"],["const source=readFileSync(new URL(","const source=foreignRead(new URL("],["next/dist/build/swc/index.js","next/dist/build/swc/foreign.js"],["const compiled=await transform(","const compiled=await foreignTransform("],["import.meta.resolve('react')","import.meta.resolve('foreign-react')"],["Buffer.from(compiled.code)","Buffer.from(source)"],[".toString('base64')",".toString('hex')"],["data:text/javascript;base64,","https://example.invalid/module/"]]){assert.ok(unitBytes.toString().includes(before));denied(()=>focusedWorkspaceCiLocalImports(Buffer.from(unitBytes.toString().replace(before,after)),unit,original.readSource));}

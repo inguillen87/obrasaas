@@ -110,6 +110,26 @@ const controlledBootstrapTransformPrefix="import assert from 'node:assert/strict
 // Its current pins require authenticated metadata; the historical prefix above stays frozen.
 const controlledBootstrapReadyNoticeFrame=Object.freeze({unitLfSha256:'08b38bcced2c5e8700e193ac4f45223073c97b829c46a9ca61e4f5d0198c3d78',panelPreviousLfSha256:'f8fabe5917469d3303328ebdfc447fc4c6f3bd2e1f407abbd97c4ba7b8e713d3',panelLfSha256:'7c6ddcd8cd087b3d10c61aa64a78dc5f11c721b6f35793552bb4fe554debc85e'});
 const controlledBootstrapReadyNoticeTransformPrefix="import assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport test from 'node:test';\nimport React from 'react';\nimport {renderToStaticMarkup} from 'react-dom/server';\nimport {parse} from '@babel/parser';\nimport {loadBindings,transform} from 'next/dist/build/swc/index.js';\n\nconst source=readFileSync(new URL('../src/app/(identity)/cuenta/company-bootstrap-panel.js',import.meta.url),'utf8');\nconst tree=parse(source,{sourceType:'module',plugins:['jsx']});\nconst component=tree.program.body.find(node=>node.type==='ExportNamedDeclaration'&&node.declaration?.id?.name==='CompanyBootstrapPanel').declaration;\nconst ready=component.body.body.find(node=>node.type==='IfStatement'&&node.test.type==='BinaryExpression'&&node.test.operator==='==='&&node.test.left.name==='stage'&&node.test.right.value==='ready');\nassert.equal(ready.consequent.type,'ReturnStatement');\nconst readyJsx=source.slice(ready.consequent.argument.start,ready.consequent.argument.end);\nconst acceptNode=component.body.body.find(node=>node.type==='FunctionDeclaration'&&node.id.name==='accept');\nassert.ok(acceptNode);\nconst acceptSource=source.slice(acceptNode.start,acceptNode.end);\nconst alreadyConfiguredBodies=[];\nfunction collectConfigured(node){\n if(!node||typeof node!=='object')return;\n if(node.type==='IfStatement'&&node.test.type==='BinaryExpression'&&node.test.operator==='==='&&node.test.left.type==='MemberExpression'&&node.test.left.object.name==='value'&&node.test.left.property.name==='state'&&node.test.right.value==='ALREADY_CONFIGURED')alreadyConfiguredBodies.push(source.slice(node.consequent.start,node.consequent.end));\n for(const value of Object.values(node))if(Array.isArray(value))value.forEach(collectConfigured);else if(value&&typeof value==='object')collectConfigured(value);\n}\ncollectConfigured(component.body);assert.equal(alreadyConfiguredBodies.length,3);\n// Render the exact ready JSX with real React and the actual trial component.\n// The exact accept function and ALREADY_CONFIGURED blocks are also extracted\n// from the production AST and invoked with recording setters. No hooks are\n// replaced and no transport is run. This does not test browser/effect scheduling.\nawait loadBindings();\nconst compiled=await transform(`import React,{useCallback,useEffect,useRef,useState} from ${JSON.stringify(import.meta.resolve('react'))};\nconst styles={created:'created',caption:'caption',notice:'notice'};\n${source.replace(/^import .*;\\r?\\n/gm,'')}\nexport const renderReady=({receipt,currentCompany,children,notice=''})=>${readyJsx};\nexport function acceptTransition(value,openWorkspace,bindings){\n const {version,retainedProfileProof,setCurrentCompany,setBusy,setReceipt,setAttempt,setCanRetry,setStage,setNotice}=bindings;\n ${acceptSource}\n return accept(value,openWorkspace);\n}\nexport const alreadyConfiguredTransitions=[${alreadyConfiguredBodies.map(body=>`(value,bindings)=>{const {setCurrentCompany,setNotice,retainedProfileProof,setAttempt,setStage}=bindings;${body}}`).join(',')}];`,{filename:'actual-company-ready-receipt.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\nconst {renderReady,CompanyTrialExpiry,acceptTransition,alreadyConfiguredTransitions}=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));\n";
+// First-worksite opening extends the pinned ready transform with one local AST
+// extraction. The historic unit, compiler and panel roots are still required.
+const controlledBootstrapFirstProjectFrame=Object.freeze({
+ unitLfSha256:'6e1fe3789ba8e19a61d5f8e6ecbddb22b65c7dfbdf1f7694252889862408dd3d',
+ panelPreviousLfSha256:controlledBootstrapReadyNoticeFrame.panelPreviousLfSha256,
+ panelLfSha256:'b567caa997b84d8e11371bafbe8f5b0a6be5335bfbd468b1c2a719ab71bc0eb5',
+});
+const controlledBootstrapFirstProjectTransformPrefix=controlledBootstrapReadyNoticeTransformPrefix
+ .replace('const alreadyConfiguredBodies=[];',[
+  "const enterNode=component.body.body.find(node=>node.type==='FunctionDeclaration'&&node.id.name==='enterFirstProject');",
+  'assert.ok(enterNode);',
+  'const enterSource=source.slice(enterNode.start,enterNode.end);',
+  'const alreadyConfiguredBodies=[];',
+ ].join('\n'))
+ .replace("export const renderReady=({receipt,currentCompany,children,notice=''})=>${readyJsx};",[
+  "export const renderReady=({receipt,currentCompany,children,notice='',onEnterFirstProject,firstProjectNavigationBlocked=false,locked=false,setStage=()=>{}})=>{",
+  ' ${enterSource}',
+  ' return ${readyJsx};',
+  '};',
+ ].join('\n'));
 const syntaxShape=value=>Array.isArray(value)?value.map(syntaxShape):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>!['start','end','loc','extra','leadingComments','innerComments','trailingComments'].includes(key)).map(([key,item])=>[key,syntaxShape(item)])):value;
 function withCurrentCompilerLock(readSource,legacyPin,run){
  let suppliedMetadata;try{suppliedMetadata=readSource(contractPath);}catch{return run({bytes:bytes(readSource,'package-lock.json'),sha256:legacyPin});}
@@ -129,19 +149,20 @@ function controlledBootstrapDependency(value,file,tree,node,readSource){
  return withCurrentCompilerLock(readSource,declaration.packageLockSha256,lock=>{
  const canonicalHash=raw=>sha(Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n')));reject(canonicalHash(lock.bytes)===lock.sha256,'Compiler lock must equal its reviewed source bytes');
  let prefix=controlledBootstrapTransformPrefix,actualUnit=null,actualPanel=null;
- if(canonicalHash(value)!==declaration.sourceLfSha256){
-  const frame=controlledBootstrapReadyNoticeFrame;
-  reject(canonicalHash(value)===frame.unitLfSha256&&typeof lock.currentSourcePin==='function','Only the independently reviewed ready-notice unit may extend the original transform');
-  reject(lock.currentSourcePin({path:controlledBootstrapFixture,sha256:declaration.sourceLfSha256})===frame.unitLfSha256,'Authenticated current metadata must bind the exact ready-notice unit');
+ const unitSha256=canonicalHash(value);
+ if(unitSha256!==declaration.sourceLfSha256){
+  const frame=[controlledBootstrapReadyNoticeFrame,controlledBootstrapFirstProjectFrame].find(candidate=>candidate.unitLfSha256===unitSha256);
+  reject(frame&&typeof lock.currentSourcePin==='function','Only an independently reviewed bootstrap unit may extend the original transform');
+  reject(lock.currentSourcePin({path:controlledBootstrapFixture,sha256:declaration.sourceLfSha256})===frame.unitLfSha256,'Authenticated current metadata must bind the exact bootstrap unit');
   actualUnit=Buffer.from(bytes(readSource,controlledBootstrapFixture));actualPanel=Buffer.from(bytes(readSource,controlledBootstrapPanel));
-  reject(actualUnit.equals(value)&&canonicalHash(actualPanel)===frame.panelLfSha256&&lock.currentSourcePin({path:controlledBootstrapPanel,sha256:frame.panelPreviousLfSha256})===frame.panelLfSha256,'The actual ready-notice unit and panel must equal their authenticated reviewed bytes');
-  prefix=controlledBootstrapReadyNoticeTransformPrefix;
+  reject(actualUnit.equals(value)&&canonicalHash(actualPanel)===frame.panelLfSha256&&lock.currentSourcePin({path:controlledBootstrapPanel,sha256:frame.panelPreviousLfSha256})===frame.panelLfSha256,'The actual bootstrap unit and panel must equal their authenticated reviewed bytes');
+  prefix=frame===controlledBootstrapFirstProjectFrame?controlledBootstrapFirstProjectTransformPrefix:controlledBootstrapReadyNoticeTransformPrefix;
  }
  try{
   const expected=parse(prefix,{sourceType:'module',plugins:['jsx'],createImportExpressions:true}).program.body,actual=tree.program.body.slice(0,expected.length),last=actual.at(-1);
   reject(same(syntaxShape(actual),syntaxShape(expected))&&last?.type==='VariableDeclaration'&&last.kind==='const'&&last.declarations.length===1&&last.declarations[0].init?.type==='AwaitExpression'&&last.declarations[0].init.argument===node,'Only the exact local panel, resolved React, SWC JSX transform and compiled.code base64 module shape is permitted');
   bytes(readSource,controlledBootstrapPanel);return true;
- }finally{if(actualUnit)reject(bytes(readSource,controlledBootstrapFixture).equals(actualUnit)&&bytes(readSource,controlledBootstrapPanel).equals(actualPanel),'Ready-notice unit or panel RAW bytes changed during source inspection');}
+ }finally{if(actualUnit)reject(bytes(readSource,controlledBootstrapFixture).equals(actualUnit)&&bytes(readSource,controlledBootstrapPanel).equals(actualPanel),'Bootstrap unit or panel RAW bytes changed during source inspection');}
  });
 }
 export function focusedWorkspaceCiLocalImports(value,file,readSource){
