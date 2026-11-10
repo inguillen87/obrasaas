@@ -128,7 +128,7 @@ export async function reactiveOnboardingAuthority(client,r,pref,{environment=pro
  }else await unusedDelivery(client,r,worker,pref.intent);
  const authority=await canonicalAuthority(client,pref.intent,{environment,expected:proof?{authorityDigest:proof.authorityDigest,challengeId:proof.challengeId}:null});
  if(authority.connection.id!==r.connection.id||authority.connection.projectId!==r.project.id||authority.worker.id!==worker.id||authority.worker.phone!==r.sender||authority.connection.metadata?.developmentPilot)fail('EMPLOYEE_INTAKE_REVOKED');
- const org=(await client.query(`SELECT "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[pref.intent.organizationId])).rows;
+ const org=(await client.query(`SELECT "trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[pref.intent.organizationId])).rows;
  if(org.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');
  // Invitation expiry limits a pending acceptance. An already accepted account
  // retains the same short reply window, entitlement and challenge fences.

@@ -45063,7 +45063,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -46210,7 +46210,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -47434,7 +47434,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -48320,7 +48320,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -49173,7 +49173,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+            "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -76288,9 +76288,9 @@
           "path": "scripts/verify-own-company-number-postgres.mjs",
           "status": "MODIFIED",
           "previousSha256": "45190e6d53f637906132f07df742cf2ac281008a12fb4992c81f481e3c7ae690",
-          "currentSha256": "2d14b4149052e53a16df7ee2c9e3ea715e121e19ef8c66aee1b849ae1e83ab9c",
+          "currentSha256": "cf002d6372cae4956d09bd62578bc83428f0e860bcbab532dba9b99746164ba4",
           "previousBytes": 105635,
-          "currentBytes": 112795,
+          "currentBytes": 112802,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 26623,
@@ -76298,32 +76298,37 @@
               "previousText": "  let last=await execute('HOLA'),applicationId=last.eventId;last=await execute('Persona Sintética',{reply:last.messageId});let state=await readState(applicationId);last=await execute({type:'interactive',interactive:{list_reply:{id:'intake:'+state.nonce+':0'}}},{reply:last.messageId});last=await execute(email,{reply:last.messageId});state=await readState(applicationId);last=await execute({type:'interactive',interactive:{list_reply:{id:'intake:'+state.nonce+':0'}}},{reply:last.messageId});state=await readState(applicationId);assert.equal(state.status,'WAITING_RESPONSIBLE');\n"
             },
             {
-              "currentOffsetCharacters": 81800,
+              "currentOffsetCharacters": 38323,
+              "currentText": ".startsWith('SELECT \"trialEndsAt\"')&&q.sql.includes('FROM public.\"Organization\"')",
+              "previousText": "===`SELECT \"trialEndsAt\" FROM public.\"Organization\" WHERE id=$1 FOR SHARE`"
+            },
+            {
+              "currentOffsetCharacters": 81807,
               "currentText": " let processorNow=f.time,dispatchEffects=0,outboundAfterReserve=async()=>{},dispatchFailure=null,projectUpdateLocks=0,sourceLeaseProbe=null;\n",
               "previousText": " let processorNow=f.time,dispatchEffects=0,outboundAfterReserve=async()=>{},dispatchFailure=null,projectUpdateLocks=0;\n"
             },
             {
-              "currentOffsetCharacters": 82902,
+              "currentOffsetCharacters": 82909,
               "currentText": "  const event=(await client.query(`SELECT * FROM \"WebhookEvent\" WHERE id=$1 FOR UPDATE`,[eventId])).rows[0];if(sourceLeaseProbe)await sourceLeaseProbe(client,{eventId,event,connection});return {kind:'CHANNEL_VERIFIED',connection,event,project:{id:'project-a'},member:{organizationId:'org-a',actorId:'owner'},proof:decodeSignedCustomerEvent(event,connection,environment)};\n",
               "previousText": "  const event=(await client.query(`SELECT * FROM \"WebhookEvent\" WHERE id=$1 FOR UPDATE`,[eventId])).rows[0];return {kind:'CHANNEL_VERIFIED',connection,event,project:{id:'project-a'},member:{organizationId:'org-a',actorId:'owner'},proof:decodeSignedCustomerEvent(event,connection,environment)};\n"
             },
             {
-              "currentOffsetCharacters": 85438,
+              "currentOffsetCharacters": 85445,
               "currentText": " // Persisted expiry before ownership is independent of expiry during a GET.\n const expiredBeforeOwnership=await receive('PersistedExpiryBeforeOwnership'),expiredBeforeCalls=f.calls.length,expiredBeforePosts=f.calls.filter(call=>call.method==='POST').length;let expiredBeforeOriginal=null,expiredBeforeDeadline=null,expiredBeforeObserved=false;\n",
               "previousText": " // Expire the original event's short lease during a real ownership await,\n // while the opaque provider capability's separate sixty-second lease lives.\n const shortLeaseEvent=await receive('ShortLeaseDuringOwnership'),shortLeasePosts=f.calls.filter(call=>call.method==='POST').length,shortLeaseAppClock=processorNow;let shortLeaseObserved=false,shortLeaseOriginal=null,shortLeaseDeadline=null;\n"
             },
             {
-              "currentOffsetCharacters": 85816,
+              "currentOffsetCharacters": 85823,
               "currentText": "  expiredBeforeOriginal=(await pool.query(`SELECT id,\"projectId\",payload,status::text AS status,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now FROM \"WebhookEvent\" WHERE id=$1`,[expiredBeforeOwnership])).rows[0];\n  assert.equal(expiredBeforeOriginal.projectId,'project-a');assert.equal(expiredBeforeOriginal.payload.channelId,c.id);assert.equal(expiredBeforeOriginal.payload.organizationId,'org-a');assert.equal(expiredBeforeOriginal.status,'PENDING');assert.ok(expiredBeforeOriginal.leaseToken);assert.ok(expiredBeforeOriginal.leaseExpiresAt.getTime()>expiredBeforeOriginal.now.getTime());\n  const expired=(await pool.query(`UPDATE \"WebhookEvent\" SET \"leaseExpiresAt\"=LEAST(\"leaseExpiresAt\",clock_timestamp()-interval '1 millisecond') WHERE id=$1 AND \"projectId\"='project-a' AND status='PENDING' AND \"leaseToken\"=$2 RETURNING id,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now`,[expiredBeforeOwnership,expiredBeforeOriginal.leaseToken])).rows[0];\n  assert.equal(expired.id,expiredBeforeOwnership);assert.equal(expired.leaseToken,expiredBeforeOriginal.leaseToken);expiredBeforeDeadline=expired.leaseExpiresAt;assert.ok(expiredBeforeDeadline.getTime()<=expired.now.getTime());assert.ok(expiredBeforeDeadline.getTime()<expiredBeforeOriginal.leaseExpiresAt.getTime());\n  // pool.query commits this fixture change before the canonical OWN transaction.\n  const persisted=(await pool.query(`SELECT \"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now FROM \"WebhookEvent\" WHERE id=$1`,[expiredBeforeOwnership])).rows[0];assert.equal(persisted.leaseToken,expiredBeforeOriginal.leaseToken);assert.equal(persisted.leaseExpiresAt.getTime(),expiredBeforeDeadline.getTime());assert.ok(persisted.now.getTime()>=expiredBeforeDeadline.getTime());\n };\n f.state.afterRead=async path=>{if(path===f.policy.businessId+'/owned_apps')expiredBeforeObserved=true;};\n try{await assert.rejects(ownProcessor.process(expiredBeforeOwnership),e=>e.code==='META_CUSTOMER_INBOX_LEASE_CHANGED');}finally{f.state.afterRead=null;outboundAfterReserve=async()=>{};}\n assert.equal(expiredBeforeObserved,false);assert.equal(f.calls.length,expiredBeforeCalls);assert.equal(f.calls.filter(call=>call.method==='POST').length,expiredBeforePosts);\n const expiredBeforeReservation=(await pool.query(`SELECT * FROM \"WebhookEvent\" WHERE id=$1`,[customerOutboundId(expiredBeforeOwnership)])).rows[0];assert.equal(expiredBeforeReservation.outcome.state,'SEND_STARTED');assert.equal(expiredBeforeReservation.status,'PENDING');assert.equal((await ownProcessor.process(expiredBeforeOwnership)).replyState,'SEND_STARTED');assert.deepEqual((await pool.query(`SELECT * FROM \"WebhookEvent\" WHERE id=$1`,[expiredBeforeReservation.id])).rows[0],expiredBeforeReservation);assert.equal(f.calls.length,expiredBeforeCalls);assert.equal(f.calls.filter(call=>call.method==='POST').length,expiredBeforePosts);await pool.query(`DELETE FROM \"WebhookEvent\" WHERE id=ANY($1::text[])`,[[expiredBeforeOwnership,expiredBeforeReservation.id]]);\n // Arm1000ms only after owned_apps begins, using its existing canonical client.\n // The UPDATE is transactional and rolls back with the rejected OWN transaction;\n // the outer processor then releases the source lease. No second-client UPDATE.\n const shortLeaseEvent=await receive('ShortLeaseDuringOwnership'),shortLeasePosts=f.calls.filter(call=>call.method==='POST').length,shortLeaseAppClock=processorNow;let shortLeaseObserved=false,shortLeaseOriginal=null,shortLeaseDeadline=null,shortLeaseClient=null,shortLeaseClientIdentity=null,shortLeaseContext=null;\n const shortLeaseSourceContext=row=>({id:row.id,projectId:row.projectId,channelId:row.payload.channelId,organizationId:row.payload.organizationId,payloadDigest:row.payload.payloadDigest,leaseToken:row.leaseToken});\n const assertShortLeaseTransaction=row=>{assert.equal(row.backendPid,shortLeaseClientIdentity.backendPid);assert.equal(row.transactionId,shortLeaseClientIdentity.transactionId);};\n outboundAfterReserve=async()=>{\n  shortLeaseOriginal=(await pool.query(`SELECT id,\"projectId\",payload,status::text AS status,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseEvent])).rows[0];\n  assert.equal(shortLeaseOriginal.id,shortLeaseEvent);assert.equal(shortLeaseOriginal.status,'PENDING');assert.equal(typeof shortLeaseOriginal.leaseToken,'string');assert.ok(shortLeaseOriginal.leaseToken);assert.ok(shortLeaseOriginal.leaseExpiresAt.getTime()>shortLeaseOriginal.now.getTime());assert.ok(shortLeaseOriginal.leaseExpiresAt.getTime()-shortLeaseOriginal.now.getTime()<=60000);assert.match(shortLeaseOriginal.payload.payloadDigest,/^[a-f0-9]{64}$/);\n  shortLeaseContext={id:shortLeaseEvent,projectId:'project-a',channelId:c.id,organizationId:'org-a',payloadDigest:shortLeaseOriginal.payload.payloadDigest,leaseToken:shortLeaseOriginal.leaseToken};assert.deepEqual(shortLeaseSourceContext(shortLeaseOriginal),shortLeaseContext);\n };\n sourceLeaseProbe=async(client,{eventId,event,connection})=>{\n  if(!shortLeaseOriginal)return;assert.equal(eventId,shortLeaseEvent);assert.deepEqual(shortLeaseSourceContext(event),shortLeaseContext);assert.equal(event.status,'PENDING');assert.equal(connection.id,c.id);assert.equal(connection.projectId,shortLeaseContext.projectId);assert.equal(connection.organizationId,shortLeaseContext.organizationId);\n  if(shortLeaseClient)assert.equal(client,shortLeaseClient);else shortLeaseClient=client;\n  const observed=(await client.query(`SELECT pg_backend_pid() AS \"backendPid\",txid_current()::text AS \"transactionId\",clock_timestamp() AS now`)).rows[0];\n  if(shortLeaseClientIdentity)assertShortLeaseTransaction(observed);else{assert.ok(Number.isInteger(observed.backendPid));assert.ok(typeof observed.transactionId==='string'&&observed.transactionId.length>0);shortLeaseClientIdentity=observed;}\n  assert.equal(event.leaseExpiresAt.getTime(),(shortLeaseDeadline||shortLeaseOriginal.leaseExpiresAt).getTime());\n",
               "previousText": "  shortLeaseOriginal=(await pool.query(`SELECT id,status::text AS status,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseEvent])).rows[0];\n  assert.equal(shortLeaseOriginal.id,shortLeaseEvent);assert.equal(shortLeaseOriginal.status,'PENDING');assert.equal(typeof shortLeaseOriginal.leaseToken,'string');assert.ok(shortLeaseOriginal.leaseToken);assert.ok(shortLeaseOriginal.leaseExpiresAt.getTime()>shortLeaseOriginal.now.getTime());assert.ok(shortLeaseOriginal.leaseExpiresAt.getTime()-shortLeaseOriginal.now.getTime()<=60000);\n  const shortened=(await pool.query(`UPDATE \"WebhookEvent\" SET \"leaseExpiresAt\"=LEAST(\"leaseExpiresAt\",clock_timestamp()+interval '1000 milliseconds') WHERE id=$1 AND status='PENDING' AND \"leaseToken\"=$2 RETURNING id,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now`,[shortLeaseEvent,shortLeaseOriginal.leaseToken])).rows[0];\n  assert.equal(shortened.id,shortLeaseEvent);assert.equal(shortened.leaseToken,shortLeaseOriginal.leaseToken);shortLeaseDeadline=shortened.leaseExpiresAt;assert.ok(shortLeaseDeadline.getTime()>shortened.now.getTime());assert.ok(shortLeaseDeadline.getTime()<=shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(shortLeaseDeadline.getTime()-shortened.now.getTime()<=1000);\n"
             },
             {
-              "currentOffsetCharacters": 91835,
+              "currentOffsetCharacters": 91842,
               "currentText": "  assert.equal(shortLeaseObserved,false);assert.ok(shortLeaseClient);assert.ok(shortLeaseClientIdentity);\n  const entered=(await shortLeaseClient.query(`SELECT id,\"projectId\",payload,status::text AS status,\"leaseToken\",\"leaseExpiresAt\",pg_backend_pid() AS \"backendPid\",txid_current()::text AS \"transactionId\",clock_timestamp() AS now FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseEvent])).rows[0];assertShortLeaseTransaction(entered);assert.deepEqual(shortLeaseSourceContext(entered),shortLeaseContext);assert.equal(entered.status,'PENDING');assert.equal(entered.leaseExpiresAt.getTime(),shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(entered.now.getTime()<shortLeaseOriginal.leaseExpiresAt.getTime(),'Ownership must start under the original live source lease');\n  const shortened=(await shortLeaseClient.query(`UPDATE \"WebhookEvent\" SET \"leaseExpiresAt\"=LEAST(\"leaseExpiresAt\",clock_timestamp()+interval '1000 milliseconds') WHERE id=$1 AND \"projectId\"=$3 AND status='PENDING' AND \"leaseToken\"=$2 AND payload->>'channelId'=$4 AND payload->>'organizationId'=$5 AND payload->>'payloadDigest'=$6 RETURNING id,\"projectId\",payload,status::text AS status,\"leaseToken\",\"leaseExpiresAt\",pg_backend_pid() AS \"backendPid\",txid_current()::text AS \"transactionId\",clock_timestamp() AS now`,[shortLeaseEvent,shortLeaseOriginal.leaseToken,shortLeaseContext.projectId,shortLeaseContext.channelId,shortLeaseContext.organizationId,shortLeaseContext.payloadDigest])).rows[0];\n  assertShortLeaseTransaction(shortened);assert.deepEqual(shortLeaseSourceContext(shortened),shortLeaseContext);assert.equal(shortened.status,'PENDING');shortLeaseDeadline=shortened.leaseExpiresAt;assert.ok(shortLeaseDeadline.getTime()>shortened.now.getTime());assert.ok(shortLeaseDeadline.getTime()<=shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(shortLeaseDeadline.getTime()-shortened.now.getTime()<=1000);shortLeaseObserved=true;\n  await shortLeaseClient.query(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.01)`,[shortLeaseDeadline]);\n  const observed=(await shortLeaseClient.query(`SELECT id,\"projectId\",payload,status::text AS status,\"leaseToken\",\"leaseExpiresAt\",pg_backend_pid() AS \"backendPid\",txid_current()::text AS \"transactionId\",clock_timestamp() AS now FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseEvent])).rows[0];assertShortLeaseTransaction(observed);assert.deepEqual(shortLeaseSourceContext(observed),shortLeaseContext);assert.equal(observed.status,'PENDING');assert.equal(observed.leaseExpiresAt.getTime(),shortLeaseDeadline.getTime());assert.ok(observed.now.getTime()>=shortLeaseDeadline.getTime());assert.equal(processorNow,shortLeaseAppClock,'Only the real PostgreSQL clock crosses this source deadline');\n",
               "previousText": "  assert.equal(shortLeaseObserved,false);const entered=(await pool.query('SELECT clock_timestamp() AS now')).rows[0].now;assert.ok(entered.getTime()<shortLeaseDeadline.getTime(),'The ownership GET must begin before the original shortened source deadline');shortLeaseObserved=true;\n  await pool.query(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.01)`,[shortLeaseDeadline]);\n  const observed=(await pool.query(`SELECT id,status::text AS status,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseEvent])).rows[0];\n  assert.equal(observed.id,shortLeaseEvent);assert.equal(observed.status,'PENDING');assert.equal(observed.leaseToken,shortLeaseOriginal.leaseToken);assert.equal(observed.leaseExpiresAt.getTime(),shortLeaseDeadline.getTime());assert.ok(observed.now.getTime()>=shortLeaseDeadline.getTime());assert.equal(processorNow,shortLeaseAppClock,'Only the real PostgreSQL clock crosses this source deadline');\n"
             },
             {
-              "currentOffsetCharacters": 94580,
+              "currentOffsetCharacters": 94587,
               "currentText": " try{await assert.rejects(ownProcessor.process(shortLeaseEvent),e=>e.code==='META_CUSTOMER_INBOX_LEASE_CHANGED');}finally{f.state.afterRead=null;sourceLeaseProbe=null;shortLeaseClient=null;processorNow=f.time;outboundAfterReserve=async()=>{};}\n assert.equal(shortLeaseObserved,true);\n // Do not report the transactional short deadline as persisted after rollback.\n const releasedSource=(await pool.query(`SELECT status::text AS status,\"leaseToken\",\"leaseExpiresAt\",\"lastError\" FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseEvent])).rows[0];assert.equal(releasedSource.status,'PENDING');assert.equal(releasedSource.leaseToken,null);assert.equal(releasedSource.leaseExpiresAt,null);assert.equal(releasedSource.lastError,'META_CUSTOMER_INBOX_LEASE_CHANGED');\n const shortLeaseReservation=(await pool.query(`SELECT * FROM \"WebhookEvent\" WHERE id=$1`,[customerOutboundId(shortLeaseEvent)])).rows[0];assert.equal(shortLeaseReservation.outcome.state,'SEND_STARTED');assert.equal(shortLeaseReservation.status,'PENDING');assert.equal(f.calls.filter(call=>call.method==='POST').length,shortLeasePosts);assert.equal((await ownProcessor.process(shortLeaseEvent)).replyState,'SEND_STARTED');assert.deepEqual((await pool.query(`SELECT * FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseReservation.id])).rows[0],shortLeaseReservation);assert.equal(f.calls.filter(call=>call.method==='POST').length,shortLeasePosts);await pool.query(`DELETE FROM \"WebhookEvent\" WHERE id=ANY($1::text[])`,[[shortLeaseEvent,shortLeaseReservation.id]]);checks.push('runtime-v2-outbox-real-Project-UPDATE-and-OWN-fence-same-transaction-SENT-once-no-self-lock');\n",
               "previousText": " try{await assert.rejects(ownProcessor.process(shortLeaseEvent),e=>e.code==='META_CUSTOMER_INBOX_LEASE_CHANGED');}finally{f.state.afterRead=null;processorNow=f.time;outboundAfterReserve=async()=>{};}\n assert.equal(shortLeaseObserved,true);const shortLeaseReservation=(await pool.query(`SELECT * FROM \"WebhookEvent\" WHERE id=$1`,[customerOutboundId(shortLeaseEvent)])).rows[0];assert.equal(shortLeaseReservation.outcome.state,'SEND_STARTED');assert.equal(shortLeaseReservation.status,'PENDING');assert.equal(f.calls.filter(call=>call.method==='POST').length,shortLeasePosts);assert.equal((await ownProcessor.process(shortLeaseEvent)).replyState,'SEND_STARTED');assert.deepEqual((await pool.query(`SELECT * FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseReservation.id])).rows[0],shortLeaseReservation);assert.equal(f.calls.filter(call=>call.method==='POST').length,shortLeasePosts);await pool.query(`DELETE FROM \"WebhookEvent\" WHERE id=ANY($1::text[])`,[[shortLeaseEvent,shortLeaseReservation.id]]);checks.push('runtime-v2-outbox-real-Project-UPDATE-and-OWN-fence-same-transaction-SENT-once-no-self-lock');\n"
             }
@@ -79563,9 +79568,9 @@
           "path": "src/lib/participant-onboarding-reactive.mjs",
           "status": "MODIFIED",
           "previousSha256": "bd549004da8c1a809f7bb337cbe03600b4edaf14a81107f6d085cce6b87aadf2",
-          "currentSha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a",
+          "currentSha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091",
           "previousBytes": 38202,
-          "currentBytes": 38827,
+          "currentBytes": 38863,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 1086,
@@ -79573,27 +79578,32 @@
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 16464,
+              "currentOffsetCharacters": 13978,
+              "currentText": "AT TIME ZONE 'UTC' AS \"trialEndsAt\" ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 16500,
               "currentText": "// Keep both earlier text variants recoverable on their original sealed result.\nexport function reactiveParticipantStatusReply(status,recordedReply=null,projectId=null){\n",
               "previousText": "// Presentation only: exact old text remains recoverable on its original sealed\n// result; neither text variant supplies account, identity or channel authority.\nexport function reactiveParticipantStatusReply(status,recordedReply=null){\n"
             },
             {
-              "currentOffsetCharacters": 16767,
+              "currentOffsetCharacters": 16803,
               "currentText": " const recordedDigest=recordedReply?digest(recordedReply):null;\n if(recordedDigest===digest(legacy))return legacy;\n const generic={type:'text',body:reactiveKycStatusReplies[status]};\n if(status!=='PENDING_REVIEW'||!workspaceId(projectId)||recordedDigest===digest(generic))return generic;\n return {type:'text',body:'Tu presentación está completa y pendiente de revisión independiente. Consultá el estado de tu obra:\\n'+participantIdentityUrl(projectId)+'\\n\\nTodavía no habilita actividad por WhatsApp.'};\n",
               "previousText": " return recordedReply&&digest(recordedReply)===digest(legacy)?legacy:{type:'text',body:reactiveKycStatusReplies[status]};\n"
             },
             {
-              "currentOffsetCharacters": 20533,
+              "currentOffsetCharacters": 20569,
               "currentText": " if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply,a.project.id)))fail();\n",
               "previousText": " if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply)))fail();\n"
             },
             {
-              "currentOffsetCharacters": 21962,
+              "currentOffsetCharacters": 21998,
               "currentText": " jsonb_build_object('id',o.id,'name',o.name,'metadata',o.metadata,'subscriptionPlan',o.\"subscriptionPlan\"::text,'subscriptionStatus',o.\"subscriptionStatus\"::text,'trialEndsAt',o.\"trialEndsAt\" AT TIME ZONE 'UTC') AS \"statusOrganization\",\n jsonb_build_object('id',p.id,'name',p.name,'organizationId',p.\"organizationId\",'metadata',p.metadata) AS \"statusProject\",\n",
               "previousText": " to_jsonb(o) AS \"statusOrganization\",jsonb_build_object('id',p.id,'name',p.name,'organizationId',p.\"organizationId\",'metadata',p.metadata) AS \"statusProject\",\n"
             },
             {
-              "currentOffsetCharacters": 25666,
+              "currentOffsetCharacters": 25702,
               "currentText": " return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status,null,a.project.id)};\n",
               "previousText": " return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status)};\n"
             }
@@ -93124,7 +93134,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -94562,7 +94572,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -95904,7 +95914,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -102562,7 +102572,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -104324,7 +104334,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "def11f25bb81cd17a1b938e66faf5cd482ef64332a102651db8b3199b7a2d58a"
+              "sha256": "44a6da2282133613a07cefebde03378b9519c1773f8b01146b149b53c3d75091"
             },
             {
               "path": "src/lib/participant-policy.mjs",
