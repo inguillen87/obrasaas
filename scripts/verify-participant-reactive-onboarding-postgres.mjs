@@ -26,7 +26,11 @@ import {createMetaCustomerOutbound,customerOutboundId,customerJobTransaction} fr
 import {createCompanyChannelBridge,resolveCompanyOutboundIdentity} from '../src/lib/company-channel-routing.mjs';
 import {createWorkerChannelStore} from '../src/lib/worker-channel-identity.mjs';
 import {createWorkerChannelHandlers} from '../src/lib/worker-channel-http.mjs';
-import {createFieldHandlers} from '../src/lib/field-operations-http.mjs';
+import {createFieldHandlers,createFieldMediaHandlers} from '../src/lib/field-operations-http.mjs';
+import {createFieldMedia} from '../src/lib/field-media.mjs';
+import {createPlanImport} from '../src/lib/plan-import-store.mjs';
+import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
+import {PLAN_IMPORT_CONSENT} from '../src/lib/plan-import-policy.mjs';
 import {createFieldOperations} from '../src/lib/field-operations-store.mjs';
 import {FIELD_NOTICE} from '../src/lib/field-operations-policy.mjs';
 import {PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256,participantOnboardingIntent,participantOnboardingOutboundId,participantOnboardingPhaseOutboundId,participantOnboardingPhaseState} from '../src/lib/participant-onboarding-policy.mjs';
@@ -49,7 +53,7 @@ const businessApp=args.length===1;
 if(businessApp)Object.assign(environment,{META_COEXISTENCE_CONFIG_ID:'1555555555555556',OBRASAAS_META_COEXISTENCE_RELEASE:'business-app-coexistence-v1'});
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{networkCalls++;throw Error('UNCONTROLLED_REACTIVE_NETWORK');};
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),walk=dir=>readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(e=>e.isDirectory()?walk(dir+'/'+e.name):[dir+'/'+e.name]);
-const sourceManifest=[...walk('src/lib'),'scripts/lib/synthetic-capture-quality.mjs',...(businessApp?['scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/company-channel-disposable-fixture.mjs','scripts/lib/company-channel-migration.mjs']:[])].sort().map(file=>({path:file,sha256:sha(readFileSync(file))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...walk('src/lib'),'scripts/lib/synthetic-capture-quality.mjs',...(businessApp?['scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/fixtures/plan-import-synthetic-v1.pdf','scripts/fixtures/plan-import-synthetic-v1.json','scripts/lib/company-channel-disposable-fixture.mjs','scripts/lib/company-channel-migration.mjs']:[])].sort().map(file=>({path:file,sha256:sha(readFileSync(file))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 const query=(sql,args)=>pool.query(rewrite(sql),args);
 const connect=async()=>{const c=await pool.connect();await c.query('SET search_path TO '+quoted);return {release:bad=>c.release(bad),query:async(sql,args)=>{try{if(!/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL)/.test(sql))lastStatement=sql;const result=await c.query(rewrite(sql),args);if(holdWorker&&sql.startsWith('UPDATE public."Worker" SET metadata=')&&args?.[0]===holdWorker.id){const gate=holdWorker;holdWorker=null;gate.entered();await gate.release;}if(crossFinalClock&&args?.[0]===crossFinalClock.eventId&&(crossFinalClock.kind==='intake'?sql.startsWith('SELECT id,clock_timestamp() AS now'):sql.startsWith('SELECT id,"projectId",payload,status::text AS status,"leaseToken"')&&sql.includes('clock_timestamp() AS now'))){result.rows[0].now=new Date(crossFinalClock.expiresAt);if(crossFinalClock.kind!=='intake')result.rows[0].leaseExpiresAt=new Date(Date.parse(crossFinalClock.expiresAt)+60000);crossFinalClock=null;}return result;}catch(error){if(error.code&&/^\d/.test(error.code))sqlFailures.push({code:error.code});throw error;}}};};
 const owner={authenticated:true,verification:'clerk-production-jwt',userId:'user_Owner',organizationId:'org_A',organizationRole:'org:admin'};
@@ -369,15 +373,23 @@ try{
   const recovered=await jsonResponse(await channelHttp.POST(post(endpoint,bindingRequest)));
   assert.equal(recovered.receiptId,issued.receiptId);assert.equal(recovered.codeUnavailable,true);assert.equal(recovered.code,undefined);
 
-  const noFieldMedia=async()=>assert.fail('The binding and menu must not download, write or analyze media');
+  const noFieldMedia=async()=>assert.fail('Synthetic evidence must not invoke an analyzer');
+  const worksiteBlob=createControlledLifecycleBlob(),evidenceMediaId='150000491';
+  let allowWorksitePhoto=false,fieldPhotoDownloads=0;
+  const manualMediaAnalyzer={analyzePhoto:noFieldMedia,transcribeAudio:noFieldMedia};
   let fieldSends=0;
-  const fieldProvider={downloadMedia:noFieldMedia,async sendReply(input){
+  const fieldProvider={async downloadMedia({mediaId,phoneNumberId:downloadPhone,beforeExternal}){
+   assert.equal(allowWorksitePhoto,true);assert.equal(mediaId,evidenceMediaId);assert.equal(downloadPhone,phoneNumberId);
+   assert.equal(typeof beforeExternal,'function');await beforeExternal();
+   fieldPhotoDownloads++;
+   return {bytes:lifecyclePng,contentType:'image/png'};
+  },async sendReply(input){
    assert.equal(input.phoneNumberId,phoneNumberId);assert.equal(input.to,p3.sender);assert.equal(typeof input.finalBeforeExternal,'function');
    await input.finalBeforeExternal();
    fieldSends++;
    return provider.sendReply(input);
   }};
-  const companyBridge=createCompanyChannelBridge({connect,environment,provider:fieldProvider,put:noFieldMedia,get:noFieldMedia,analyzer:{analyzePhoto:noFieldMedia,transcribeAudio:noFieldMedia},planAnalyzer:{analyze:noFieldMedia}});
+  const companyBridge=createCompanyChannelBridge({connect,environment,provider:fieldProvider,put:worksiteBlob.put,get:worksiteBlob.get,analyzer:manualMediaAnalyzer,planAnalyzer:{analyze:noFieldMedia}});
   const companyOutbound=createMetaCustomerOutbound({connect,environment,provider:fieldProvider,resolveIdentity:resolveCompanyOutboundIdentity,sourceContext:true});
   const fieldProcessor=createMetaCustomerProcessor({connect,environment,
    authorizationCodes:[...EMPLOYEE_INTAKE_AUTHORIZATION_CODES,...META_KYC_AUTHORIZATION_CODES,'COMPANY_CHANNEL_SOURCE_REQUIRED'],
@@ -497,6 +509,110 @@ try{
   assert.ok(breakMs>0);assert.ok(elapsedMs>breakMs);assert.equal(readyShift.elapsedMs,elapsedMs);assert.equal(readyShift.breakMs,breakMs);assert.equal(readyShift.netMs,elapsedMs-breakMs);
   assert.equal(report.totals.closedEvidenceReadyNetMs,readyShift.netMs);
   checks.push('Director-hours-report-matches-six-audited-punches-excludes-registered-breaks-and-separates-pending-evidence');
+  const pdf=readFileSync(new URL('./fixtures/plan-import-synthetic-v1.pdf',import.meta.url)),pdfSha=sha(pdf);
+  assert.equal(pdfSha,'88254bd24823b0d6d8da46d0f2dfe4494f92f3d92fe7fc92080519e554dc5f12');
+  const extractionRows=JSON.parse(readFileSync(new URL('./fixtures/plan-import-synthetic-v1.json',import.meta.url),'utf8')).expectedRows;
+  let extractions=0;
+  const imports=createPlanImport({workspace,put:worksiteBlob.put,get:worksiteBlob.get,environment:()=>environment,analyzer:{async analyze(source){
+   assert.equal(source.contentType,'application/pdf');assert.equal(source.sha256,pdfSha);extractions++;
+   return {success:true,rows:extractionRows.map((row,index)=>({...row,evidence:'Fila '+(index+1)+' del PDF sintético.',uncertainty:''})),warnings:[],provider:'synthetic-openai-adapter',model:'synthetic'};
+  }}});
+  const planEndpoint='https://obrasaas.com/api/identity/plan-import',directorPlan=createPlanImportHandlers({verify:async()=>director,imports}),form=new FormData();
+  for(const [key,value] of Object.entries({...directorContext,operationId:randomUUID(),consent:PLAN_IMPORT_CONSENT}))form.set(key,value);
+  form.set('file',new Blob([pdf],{type:'application/pdf'}),'plan-import-synthetic-v1.pdf');
+  const draft=await jsonResponse(await directorPlan.POST(new Request(planEndpoint,{method:'POST',headers:{origin:'https://obrasaas.com'},body:form})));
+  assert.equal(draft.draft.status,'READY');assert.equal(extractions,1);assert.equal(worksiteBlob.puts(),1);assert.equal(fieldPhotoDownloads,0);
+  const beforeApply=await workspace.read(director,directorContext);
+  assert.ok(!beforeApply.tasks.some(task=>task.title===extractionRows[0].title));
+  const applyPlan={...directorContext,operationId:randomUUID(),draftId:draft.draft.id,expectedRevision:draft.draft.revision,action:'APPLY',rows:draft.draft.rows,reason:'Dirección revisó los plazos del PDF sintético.'};
+  const appliedPlan=await jsonResponse(await directorPlan.POST(post(planEndpoint,applyPlan))),appliedReplay=await jsonResponse(await directorPlan.POST(post(planEndpoint,applyPlan)));
+  assert.equal(appliedPlan.draft.status,'APPLIED');assert.equal(appliedPlan.tasks.length,extractionRows.length);
+  assert.equal(appliedReplay.replayed,true);assert.equal(appliedReplay.receiptId,appliedPlan.receiptId);assert.equal(extractions,1);
+  const task=appliedPlan.tasks.find(row=>row.title===extractionRows[0].title);assert.ok(task);
+  const taskState=async()=>(await query('SELECT progress,metadata FROM public."Task" WHERE id=$1 AND "projectId"=$2',[task.id,personal.projectId])).rows[0];
+  const importProvenance=(await taskState()).metadata.planImport;assert.equal(importProvenance.receiptId,appliedPlan.receiptId);
+  assert.equal((await taskState()).progress,0);
+  checks.push('same-destination-Director-HTTP-imports-reviewed-synthetic-PDF-once-without-changing-unapproved-progress');
+
+  const beforeGrant=await worker(p3.id),ownParticipants=createParticipantHandlers({verify:async()=>person,store});
+  assert.deepEqual(beforeGrant.metadata.participant.permissions,{attendance:true,report:false});
+  const grant=command('SET_FIELD_PERMISSIONS',{workerId:p3.id,revision:beforeGrant.revision,permissions:{attendance:true,report:true},reason:'Administración habilita reportes para la prueba sintética de esta obra.'});
+  const selfGrant=await jsonResponse(await ownParticipants.POST(post(participantEndpoint,{...grant,...personal})),403);
+  assert.equal(selfGrant.code,'PARTICIPANT_MANAGE_REQUIRED');assert.deepEqual(await worker(p3.id),beforeGrant);
+  const granted=await jsonResponse(await ownerHttp.POST(post(participantEndpoint,grant))),grantReplay=await jsonResponse(await ownerHttp.POST(post(participantEndpoint,grant)));
+  assert.equal(granted.saved,true);assert.equal(grantReplay.receiptId,granted.receiptId);
+  const authorized=(await worker(p3.id)).metadata.participant;assert.equal(authorized.fieldPermissionDecision.receiptId,granted.receiptId);
+  assert.deepEqual(authorized.permissions,{attendance:true,report:true});assert.equal(authorized.channelIdentity.binding.id,identity.binding.id);
+
+  const fieldView=async()=>jsonResponse(await directorField.GET(get(fieldEndpoint,directorContext)));
+  const directorAction=(action,payload)=>({...directorContext,operationId:randomUUID(),action,payload});
+  const reviewField=body=>directorField.POST(post(fieldEndpoint,body)).then(response=>jsonResponse(response));
+  async function selectTask(action){
+   const start=await field('HOLA');
+   let selected=action==='CONSUMO'?await field(action,start.messageId):await chooseField(start,action);
+   selected=await chooseField(selected,task.title.slice(0,24));
+   return chooseField(selected,sector.name);
+  }
+  const preparedPhoto=await selectTask('Enviar evidencia');
+  const image={type:'image',image:{id:evidenceMediaId,mime_type:'image/png',caption:'Foto sintética de la tarea importada.'}};
+  const unquotedPhoto=await field(image);assert.equal(unquotedPhoto.result.kind,'WORKSITE_INPUT_CONTEXT_REQUIRED');assert.equal(fieldPhotoDownloads,0);assert.equal(worksiteBlob.puts(),1);
+  const offeredPhoto=await field(image,preparedPhoto.messageId);assert.equal(offeredPhoto.result.kind,'CONVERSATION');
+  assert.equal(fieldPhotoDownloads,0);assert.equal(worksiteBlob.puts(),1);
+  allowWorksitePhoto=true;
+  const photo=await chooseField(offeredPhoto,'Sólo guardar',true);
+  allowWorksitePhoto=false;
+  assert.equal(photo.result.kind,'EVIDENCE');assert.equal(fieldPhotoDownloads,1);assert.equal(worksiteBlob.puts(),2);
+  const afterPhotoSends=fieldSends;
+  assert.equal((await fieldProcessor.process(photo.eventId)).done,true);assert.equal(fieldSends,afterPhotoSends);
+  assert.equal(fieldPhotoDownloads,1);assert.equal(worksiteBlob.puts(),2);
+  const [photoRoute]=await routed(photo.eventId);assert.equal(photoRoute.projectId,personal.projectId);assert.equal(photoRoute.sourceProjectId,anchor.projectId);
+  const evidence=(await fieldView()).evidence.find(row=>row.taskId===task.id);
+  assert.equal(evidence?.status,'PENDING');assert.equal(evidence.workerId,p3.id);assert.equal(evidence.sectorId,sector.id);
+  const privateMedia=createFieldMedia({operations,put:worksiteBlob.put,get:worksiteBlob.get,analyzer:manualMediaAnalyzer,environment:()=>environment});
+  const mediaHttp=createFieldMediaHandlers({verify:async()=>director,media:privateMedia});
+  const evidenceFile=await mediaHttp.GET(get('https://obrasaas.com/api/identity/field-media',{...directorContext,evidenceId:evidence.id}));
+  assert.equal(evidenceFile.status,200);assert.match(evidenceFile.headers.get('cache-control'),/private, no-store/);assert.deepEqual(Buffer.from(await evidenceFile.arrayBuffer()),lifecyclePng);
+  const evidenceDecision=await reviewField(directorAction('REVIEW_EVIDENCE',{evidenceId:evidence.id,revision:evidence.revision,decision:'APPROVE',reason:'Dirección revisó la foto privada de la tarea importada.'}));
+  assert.equal(evidenceDecision.evidence.status,'APPROVED');assert.equal((await taskState()).progress,0);
+  checks.push('explicit-report-grant-allows-same-signed-worker-private-photo-with-correlation-and-consent-once');
+
+  let proposal=await selectTask('Proponer avance');
+  proposal=await field('25%',proposal.messageId);
+  proposal=await chooseField(proposal,'Fotografía de obra');
+  proposal=await field('Medición sintética respaldada por la foto revisada de la tarea importada.',proposal.messageId);
+  const savedProgress=await chooseField(proposal,'Guardar',true);assert.equal(savedProgress.result.kind,'PROGRESS_PROPOSAL');
+  const sameProposal=(await fieldView()).proposals.find(row=>row.taskId===task.id);
+  assert.equal(sameProposal?.workerId,p3.id);assert.deepEqual(sameProposal.evidenceIds,[evidence.id]);assert.equal((await taskState()).progress,0);
+  const decideProgress=directorAction('DECIDE_PROGRESS',{proposalId:sameProposal.id,revision:sameProposal.revision,decision:'APPROVE',reason:'Dirección aprobó la medición sintética con evidencia revisada.'});
+  const approvedProgress=await reviewField(decideProgress),progressReplay=await reviewField(decideProgress);
+  assert.equal(approvedProgress.task.progress,25);assert.equal(progressReplay.receiptId,approvedProgress.receiptId);
+  assert.equal((await taskState()).progress,25);
+  const curve=await jsonResponse(await directorField.GET(get(fieldEndpoint,{...directorContext,progressCurveTaskId:task.id})));
+  assert.equal(curve.state,'CONFIRMED');assert.equal(curve.total,1);
+  assert.equal(curve.rows[0].origin,'HUMAN_APPROVAL');assert.equal(curve.rows[0].progress,25);assert.equal(curve.rows[0].receiptId,approvedProgress.receiptId);
+  checks.push('same-imported-task-signed-proposal-stays-zero-until-Director-review-and-one-curve-point');
+
+  const catalogSetup=await jsonResponse(await ownerField.GET(get(fieldEndpoint,context)));
+  const saveOwner=body=>ownerField.POST(post(fieldEndpoint,body)).then(response=>jsonResponse(response));
+  await saveOwner(command('ADD_MATERIAL',{revision:catalogSetup.projectRevision,catalogHash:catalogSetup.inventory.catalogHash,name:'Cemento sintético',unit:'bolsa'}));
+  const catalog=(await fieldView()).inventory,material=catalog.materials.find(row=>row.name==='Cemento sintético');assert.ok(material);
+  const opening=(await saveOwner(command('PROPOSE_STOCK_ADJUSTMENT',{materialId:material.id,catalogHash:catalog.catalogHash,quantity:'3.000',direction:'IN',source:{type:'OPENING',reference:'PILOTO-PDF-001'},reason:'Saldo inicial sintético revisado para esta obra.'}))).adjustment;
+  await reviewField(directorAction('DECIDE_STOCK_ADJUSTMENT',{proposalId:opening.id,revision:opening.revision,catalogHash:catalog.catalogHash,decision:'APPROVE',reason:'Dirección comprobó saldo y unidad de apertura.'}));
+  const balance=async()=>(await fieldView()).inventory.materials.find(row=>row.id===material.id).balance;
+  assert.equal(await balance(),'3.000');
+  let consumption=await selectTask('CONSUMO');consumption=await chooseField(consumption,(material.name+' · '+material.unit).slice(0,24));
+  consumption=await field('1.000',consumption.messageId);consumption=await field('Se consumió una bolsa sintética en la tarea importada.',consumption.messageId);
+  const proposedConsumption=await chooseField(consumption,'Guardar',true);assert.equal(proposedConsumption.result.kind,'CONSUMPTION_PROPOSAL');assert.equal(await balance(),'3.000');
+  const pendingConsumption=(await fieldView()).inventory.consumptions.find(row=>row.taskId===task.id);
+  assert.equal(pendingConsumption?.state,'PENDING');assert.equal(pendingConsumption.workerId,p3.id);assert.equal(pendingConsumption.quantity,'1.000');
+  const decideConsumption=directorAction('DECIDE_CONSUMPTION',{proposalId:pendingConsumption.id,revision:pendingConsumption.revision,catalogHash:catalog.catalogHash,decision:'APPROVE',reason:'Dirección comprobó el consumo de la tarea importada.'});
+  const approvedConsumption=await reviewField(decideConsumption),consumptionReplay=await reviewField(decideConsumption);
+  assert.equal(approvedConsumption.consumption.state,'APPROVED');assert.equal(consumptionReplay.receiptId,approvedConsumption.receiptId);assert.equal(await balance(),'2.000');
+  assert.equal((await query("SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE action='material.inventory.moved' AND metadata->>'proposalId'=$1",[pendingConsumption.id])).rows[0].n,1);
+  assert.deepEqual((await taskState()).metadata.planImport,importProvenance);
+  const gantt=(await workspace.read(director,directorContext)).tasks.find(row=>row.id===task.id);
+  assert.deepEqual([gantt.startsOn,gantt.endsOn,gantt.progress],[extractionRows[0].startsOn,extractionRows[0].endsOn,25]);
+  checks.push('same-signed-worker-consumption-does-not-decrement-stock-until-Director-approval-with-single-movement');
  }
  const beforeRevokeWorker=await worker(p3.id),beforeRevokeChallenge=structuredClone(beforeRevokeWorker.metadata.participant.kycChatChallenge),beforeRevokeKyc=structuredClone(beforeRevokeWorker.metadata.participant.kyc);
  const revoked=await store.save(owner,command('REVOKE',{workerId:p3.id,revision:beforeRevokeWorker.revision,reason:'Synthetic canonical revocation for reactive generation fence'}));assert.equal(revoked.saved,true);await failSame(p3,'ESTADO');
@@ -516,4 +632,4 @@ try{
  void reviewedMetadata;void adoptedMetadata;
  void pending;
 }finally{globalThis.fetch=originalFetch;try{await closeDisposablePool(pool);if(created){assert.match(schema,/^obrasaas_reactive_kyc_[a-f0-9]{32}$/);await admin.query('DROP SCHEMA '+quoted+' CASCADE');schemaRemoved=true;}}finally{await admin.end();}}
-const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,verifiedAttendanceSimulation:true,realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
+const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,verifiedAttendanceSimulation:true,verifiedImportedTaskComposition:true,realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));

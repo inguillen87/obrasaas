@@ -2,8 +2,8 @@
 // React DOM scheduling, real sessions, database and provider acceptance are separate.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {actualWorksiteLiveRead as actualRead} from './fixtures/worksite-live-reader-source.mjs';
-import {collectRetainedPages,liveContextChanged,liveReadSignature} from '../src/app/(identity)/cuenta/workspace-live-read.mjs';
+import {actualWorksiteLiveCallback as actualRead} from './fixtures/worksite-live-reader-source.mjs';
+import {collectRetainedPages,liveContextChanged,liveReadSignature,retainedRows} from '../src/app/(identity)/cuenta/workspace-live-read.mjs';
 const scope='a'.repeat(64),stamp='b'.repeat(64),revision='2026-10-18T12:00:00.000001';
 const rows=()=>['a','b','c'].map(id=>({id,revision,status:'PENDING'}));
 
@@ -41,10 +41,13 @@ test('actual field callback sends no head request when a draft opens during base
  f.draftRef.current={action:'PROPOSE_PROGRESS'};f.release();await assert.rejects(run,{name:'AbortError'});assert.equal(f.calls.length,1);
 });
 
-function inventoryFixture({manage=true,changedStamp=false,missingOld=false,balanceChanges=false}={}){
- const list=rows().map(row=>({...row,state:'PENDING'})),inventory={canManage:manage,...(manage?{inventoryFilter:'PENDING',pendingCounts:{consumptions:3,adjustments:0}}:{}),materials:[{id:'cement',balance:'10.000'}],catalogVersion:1,catalogHash:'catalog',consumptions:list,adjustments:[],nextConsumptionCursor:null,nextAdjustmentCursor:null,movements:[],nextMovementCursor:null};
+function inventoryFixture({manage=true,changedStamp=false,missingOld=false,balanceChanges=false,newMovement=false,retainedMovements=[]}={}){
+ const list=rows().map(row=>({...row,state:'PENDING'})),inventory={canManage:manage,...(manage?{inventoryFilter:'PENDING',pendingCounts:{consumptions:3,adjustments:0}}:{}),materials:[{id:'cement',balance:'10.000'}],catalogVersion:1,catalogHash:'catalog',consumptions:list,adjustments:[],nextConsumptionCursor:null,nextAdjustmentCursor:null,movements:retainedMovements,nextMovementCursor:retainedMovements.length>=100?retainedMovements.at(-1).id:null};
  const data={scope,projectId:'project',reviewAccessStamp:stamp,projectRevision:revision,inventory},context={data,kind:'consumptions',epoch:0,blocked:false,pageChanged:false},calls=[];
- const deps={liveInventoryContext:{current:context},alive:{current:true},epoch:{current:0},control:{current:{busy:false,draft:null,attempt:null}},collectRetainedPages,liveContextChanged,liveReadSignature,
+ const liveInventoryContext={current:context},epoch={current:0},state={queueCurrent:false,pageChanged:false,movementChanged:false};
+ const deps={liveInventoryContext,alive:{current:true},epoch,control:{current:{busy:false,draft:null,attempt:null}},collectRetainedPages,liveContextChanged,liveReadSignature,retainedRows,
+  setData:update=>{const current=liveInventoryContext.current;liveInventoryContext.current={...current,data:update(current.data)};},
+  setQueueCurrent:value=>{state.queueCurrent=value;},setLivePageChanged:value=>{state.pageChanged=value;},setLiveMovementChanged:value=>{state.movementChanged=value;},
   consult:async(params,options)=>{
    calls.push({...params});assert.equal(options.method,undefined);assert.equal(options.body,undefined);
    if(params.afterConsumption)throw new Error('Automatic own history must not dispatch');
@@ -52,9 +55,10 @@ function inventoryFixture({manage=true,changedStamp=false,missingOld=false,balan
    const base={...inventory};delete base.inventoryFilter;delete base.pendingCounts;
    if(missingOld){base.consumptions=list.slice(1);base.nextConsumptionCursor='last-recent';}
    if(balanceChanges&&calls.length===3)base.materials=[{id:'cement',balance:'9.000'}];
+   if(newMovement){base.materials=[{id:'cement',balance:'11.000'}];base.movements=[{id:'new-receipt',kind:'RECEIPT'},...inventory.movements].slice(0,100);base.nextMovementCursor=inventory.movements.length>=100?base.movements.at(-1).id:null;}
    return {...data,reviewAccessStamp:changedStamp?'c'.repeat(64):stamp,inventory:base};
   }};
- return {read:actualRead('material-inventory-panel.js','inventoryLive',deps),calls};
+ return {read:actualRead('material-inventory-panel.js','inventoryLive',deps),apply:actualRead('material-inventory-panel.js','inventoryLive',deps,'apply'),calls,liveInventoryContext,epoch,state};
 }
 
 test('actual pilot inventory read costs three admin GETs or two own GETs',async()=>{
@@ -71,4 +75,29 @@ test('own older history returns LIMITED before entering writable-history GET',as
 
 test('balance changes between base and final read cannot be marked checked with old stock',async()=>{
  const f=inventoryFixture({balanceChanges:true});await assert.rejects(f.read(new AbortController().signal),{code:'WORKSITE_LIVE_READ_INCOMPLETE'});assert.equal(f.calls.length,3);
+});
+
+test('coherent stock receipt flags movement history separately while retaining its loaded rows and cursor',async()=>{
+ for(const retainedMovements of [[],Array.from({length:101},(_,i)=>({id:`movement-${i}`,kind:'RECEIPT'}))]){
+  const f=inventoryFixture({newMovement:true,retainedMovements}),prior=f.liveInventoryContext.current.data.inventory;
+  const read=await f.read(new AbortController().signal);
+  assert.deepEqual(f.apply(read),{updates:false,message:''});
+  const current=f.liveInventoryContext.current.data.inventory;
+  assert.equal(current.materials[0].balance,'11.000');
+  assert.strictEqual(current.movements,prior.movements);
+  assert.equal(current.nextMovementCursor,prior.nextMovementCursor);
+  assert.deepEqual(f.state,{queueCurrent:true,pageChanged:false,movementChanged:true});
+  assert.equal(f.calls.length,3);
+ }
+});
+
+test('an unchanged ledger or an obsolete live apply cannot produce a movement notice',async()=>{
+ const unchanged=inventoryFixture({retainedMovements:[{id:'known-receipt',kind:'RECEIPT'}]});
+ unchanged.apply(await unchanged.read(new AbortController().signal));
+ assert.equal(unchanged.state.movementChanged,false);
+ const obsolete=inventoryFixture({newMovement:true}),read=await obsolete.read(new AbortController().signal);
+ obsolete.epoch.current++;
+ assert.equal(obsolete.apply(read),false);
+ assert.equal(obsolete.state.movementChanged,false);
+ assert.equal(obsolete.liveInventoryContext.current.data.inventory.materials[0].balance,'10.000');
 });
