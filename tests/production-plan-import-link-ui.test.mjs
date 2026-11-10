@@ -175,13 +175,30 @@ test('actual AccountWorkspace locks live reads from the render that mounts a pan
 });
 
 const identitySource=source('workspace-identity.js');
-const identityPrefix=`import {identityAccountReturnPath,identitySignInPath,identityWorkspaceProjectHint,identityWorkspacePlanHint} from ${JSON.stringify(returnUrl)};let auth={},params=new URLSearchParams();const useSearchParams=()=>params,useAuth=()=>auth,useOrganization=()=>({organization:null});const Link=()=>null,OrganizationSwitcher=()=>null,AccountWorkspace=function AccountWorkspace(){return null;},CompanyBootstrapPanel=()=>null,ParticipantSelfServicePanel=()=>null,OfficeJoinPanel=()=>null,OnboardingGuide=()=>null,IdentityLoadingNotice=()=>null;export const configure=(nextAuth,nextParams)=>{auth=nextAuth;params=nextParams;};`;
-const identity=await compile(identitySource,identityPrefix,resetExport([])+'export const render=()=>{cursors();return WorkspaceIdentityPanel();};export const renderContext=props=>{cursors();return WorkspaceIdentityContext(props);};');
+const identityPrefix=`import {identityAccountReturnPath,identitySignInPath,identityWorkspaceProjectHint,identityWorkspacePlanHint} from ${JSON.stringify(returnUrl)};let auth={},params=new URLSearchParams(),clerk={},userProfile={};const useSearchParams=()=>params,useAuth=()=>auth,useOrganization=()=>({organization:null}),useClerk=()=>clerk,useUser=()=>userProfile;const Link=()=>null,OrganizationSwitcher=()=>null,AccountWorkspace=function AccountWorkspace(){return null;},CompanyBootstrapPanel=()=>null,ParticipantSelfServicePanel=()=>null,OfficeJoinPanel=()=>null,OnboardingGuide=()=>null,IdentityLoadingNotice=()=>null;export const configure=(nextAuth,nextParams,provider={})=>{auth=nextAuth;params=nextParams;clerk=provider.clerk||{};userProfile=provider.userProfile||{};};`;
+const identity=await compile(identitySource,identityPrefix,resetExport(stateNames(identitySource))+'export const render=()=>{cursors();return WorkspaceIdentityPanel();};export const renderContext=props=>{cursors();return WorkspaceIdentityContext(props);};');
 test('actual identity layer forwards the pair through real auth props and blocks anonymous/priority-invitation plan opening',()=>{
  const auth={isLoaded:true,isSignedIn:true,userId:'synthetic-user',sessionId:'synthetic-session',orgId:'synthetic-org',orgRole:'org:member',getToken:()=>assert.fail('Provider forbidden')};
  identity.reset();identity.configure(auth,new URLSearchParams({obra:projectId,plan:planId}));let wrapper=identity.render();assert.equal(wrapper.props.initialPlanId,planId);assert.equal(wrapper.props.returnPath,'/cuenta?obra='+projectId+'&plan='+planId);let children=identity.renderContext(wrapper.props);assert.equal(nodes(children,node=>node.type?.name==='AccountWorkspace')[0].props.initialPlanId,planId);
  identity.reset();identity.configure({...auth,isSignedIn:false},new URLSearchParams({obra:projectId,plan:planId}));wrapper=identity.render();children=identity.renderContext(wrapper.props);assert.equal(nodes(children,node=>node.type?.name==='AccountWorkspace').length,0);
  identity.reset();identity.configure(auth,new URLSearchParams({obra:projectId,plan:planId,participar:'invite_'+'a'.repeat(32)}));wrapper=identity.render();assert.equal(wrapper.props.initialPlanId,'');assert.equal(wrapper.props.returnPath,'/cuenta?participar=invite_'+'a'.repeat(32));
+});
+
+test('personal company creation opens only the Clerk dialog and yields to invitations and current locks',()=>{
+ const auth={isLoaded:true,isSignedIn:true,userId:'synthetic-user',sessionId:'synthetic-session',orgId:null,orgRole:null,getToken:()=>assert.fail('Unexpected session token request')};
+ const opens=[],provider={clerk:{loaded:true,openCreateOrganization:options=>opens.push(options)},userProfile:{isLoaded:true,user:{id:auth.userId,createOrganizationEnabled:true}}};
+ const action=(params={},currentAuth=auth,currentProvider=provider)=>{
+  identity.configure(currentAuth,new URLSearchParams(params),currentProvider);
+  const tree=identity.renderContext(identity.render().props);identity.flushEffects();
+  return nodes(tree,node=>node.type==='button'&&node.props.children==='Crear empresa')[0];
+ };
+ identity.reset();const ready=action({seccion:'mi-whatsapp'});assert.ok(ready);assert.equal(ready.props.disabled,false);assert.deepEqual(opens,[]);
+ ready.props.onClick();assert.deepEqual(opens,[{afterCreateOrganizationUrl:'/cuenta?seccion=mi-whatsapp',skipInvitationScreen:true}]);
+ assert.equal(action({__clerk_ticket:'incomplete-ticket'}),undefined);ready.props.onClick();assert.equal(opens.length,1);
+ for(const params of [{__clerk_status:'sign_up'},{participar:''},{oficina:'invalid'},{obra:projectId}])assert.equal(action(params),undefined);
+ for(const currentAuth of [{...auth,isSignedIn:false},{...auth,orgId:'org-present'}])assert.equal(action({},currentAuth),undefined);
+ for(const userProfile of [{isLoaded:false},{isLoaded:true,user:{id:'other-user',createOrganizationEnabled:true}},{isLoaded:true,user:{id:auth.userId,createOrganizationEnabled:false}}])assert.equal(action({},auth,{...provider,userProfile}),undefined);
+ identity.reset({pendingSources:{workspace:true,bootstrap:false}});const blocked=action();assert.equal(blocked.props.disabled,true);blocked.props.onClick();assert.equal(opens.length,1);
 });
 
 

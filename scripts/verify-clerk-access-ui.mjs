@@ -70,6 +70,8 @@ async function getToken(options){
 }
 export function useAuth(){return {...useSyncExternalStore(subscribe,snapshot,()=>initial),getToken};}
 export function useOrganization(){const state=useAuth();return {organization:state.orgId?{id:state.orgId,name:'Organización de ensayo'}:null};}
+export function useClerk(){return {loaded:true};}
+export function useUser(){return {isLoaded:true,user:null};}
 export function UserButton(){return <span>Cuenta sintética de ensayo</span>;}
 function Widget({kind,props}){
  const router=useRouter();

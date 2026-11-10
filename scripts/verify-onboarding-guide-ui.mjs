@@ -60,6 +60,8 @@ export function FixtureProvider({children}){
 export const useFixtureState=()=>useContext(Context);
 export function useAuth(){return {...useContext(Context),getToken:token};}
 export function useOrganization(){const{orgId}=useContext(Context);return {organization:orgId?{id:orgId,name:'Empresa sintética'}:null};}
+export function useClerk(){return {loaded:true};}
+export function useUser(){return {isLoaded:true,user:null};}
 export function OrganizationSwitcher(){const{set}=useContext(Context);return <button id="organization" onClick={()=>set(value=>({...value,orgId:'org_a',orgRole:'org:admin',register:true}))}>Seleccionar organización de ensayo</button>;}`);
 writeFileSync(path.join(app,'layout.js'),`import './globals.css';import {FixtureProvider} from '../clerk-fixture';export default function Layout({children}){return <html lang="es"><body style={{margin:0,fontFamily:'Arial'}}><FixtureProvider>{children}</FixtureProvider></body></html>;}`);
 writeFileSync(path.join(account,'page.js'),`import{Suspense}from'react';import{WorkspaceIdentityPanel}from'./workspace-identity';import styles from'../identity.module.css';import workspaceStyles from'./workspace.module.css';export default function Page(){return <main className={styles.shell}><section className={styles.card+' '+workspaceStyles.shell}><h1>Mi cuenta</h1><Suspense fallback={<p>Esperando contexto</p>}><WorkspaceIdentityPanel/></Suspense></section></main>;}`);

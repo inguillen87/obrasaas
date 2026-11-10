@@ -56,6 +56,8 @@ export function FixtureProvider({children}){
 }
 export function useAuth(){return useContext(Context).auth;}
 export function useOrganization(){return {organization:useContext(Context).organization};}
+export function useClerk(){return {loaded:true};}
+export function useUser(){return {isLoaded:true,user:null};}
 export function OrganizationSwitcher(){const value=useContext(Context);return <select aria-label="Elegir espacio de trabajo" data-fixture-organization value={value.auth.orgId} onChange={event=>value.choose(event.target.value)} style={{minHeight:44,maxWidth:'100%'}}>{Object.entries(names).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select>;}
 export function SignIn(){return null;}
 export function UserButton(){return null;}
