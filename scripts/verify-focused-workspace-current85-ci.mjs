@@ -92,7 +92,14 @@ export async function main(args=process.argv.slice(2),environment=process.env){
    const artifacts={};for(const [kind,text,suffix]of [['tap',run.stdout||'','tap'],['stderr',run.stderr||'','stderr.log']]){const p=outputPrefix+'unit85-'+index+'.'+suffix,b=Buffer.from(text);writeFileSync(path.join(root,p),b,{flag:'wx'});artifacts[kind]={path:p,bytes:b.length,sha256:digest(b)};}
    reject(run.status===0,'UNIT_FAILED_'+file);unitSuites.push({file,sourceSha256:digest(bytes(readSource,file)),exitCode:run.status,...artifacts,result:parseFocusedWorkspaceTap(Buffer.from(run.stdout||''))});
   }
-  const run=spawnSync(process.execPath,[producer,'--ci',...sourceArgs],{cwd:root,env:childEnvironment,windowsHide:true,encoding:'utf8',maxBuffer:32*1024*1024});for(const [name,text]of [['stdout',run.stdout||''],['stderr',run.stderr||'']])writeFileSync(path.join(root,outputPrefix+'browser85.'+name+'.log'),text,{flag:'wx'});reject(run.status===0,'ORIGINAL85_PRODUCER_FAILED');
+  const browserEnvironment={...childEnvironment};
+  if(process.platform==='linux'&&environment.RUNNER_ENVIRONMENT==='github-hosted'){
+   // The runner-installed Chrome has the Ubuntu AppArmor profile for its sandbox.
+   const chrome='/opt/google/chrome/chrome';
+   reject(existsSync(chrome)&&lstatSync(chrome).isFile(),'HOSTED_SYSTEM_CHROME_REQUIRED');
+   browserEnvironment.PUPPETEER_EXECUTABLE_PATH=chrome;
+  }
+  const run=spawnSync(process.execPath,[producer,'--ci',...sourceArgs],{cwd:root,env:browserEnvironment,windowsHide:true,encoding:'utf8',maxBuffer:32*1024*1024});for(const [name,text]of [['stdout',run.stdout||''],['stderr',run.stderr||'']])writeFileSync(path.join(root,outputPrefix+'browser85.'+name+'.log'),text,{flag:'wx'});reject(run.status===0,'ORIGINAL85_PRODUCER_FAILED');
   const emitted=JSON.parse(run.stdout.trim().split(/\r?\n/).at(-1)),relative=path.relative(root,emitted.target).split(path.sep).join('/'),rawBytes=bytes(readEvidence,relative),rawBrowser={path:relative,bytes:rawBytes.length,sha256:digest(rawBytes)};
   const result=validateCurrent85Raw(rawBytes,{...authority,expectedHead:head,expectedTree:tree,expectedSourceState:'EXACT_CI_SOURCE',ciRun:options.ciRun,expectedRawSourceFiles:descriptor.rawSourceFiles,rawReference:rawBrowser,readEvidence});
   const proof={version:CURRENT85_CI_VERSION,status:'PASS',sourceRevision:head,sourceTree:tree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,ciRun:options.ciRun,harnessSha256:descriptor.producerSha256,sourceManifest:before,checks:[...CURRENT85_CHECK_NAMES],rawBrowser,browserExitCode:run.status,unitSuites,claims:CURRENT85_CLAIMS,legacy59Projection:result.legacy59Projection};

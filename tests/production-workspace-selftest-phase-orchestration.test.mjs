@@ -94,8 +94,17 @@ function records(){return Object.entries(expectedPhases).map(([worker,phases])=>
 });}
 const denied=(run,code)=>assert.throws(run,error=>error.code===code);
 
-test('serial reference and complete B deferred oracle retain their exact original canonical LF source',()=>{
- assert.equal(hash(declaration('selftest')),originalSerialHash);assert.equal(hash(declaration('selftestWorkerB')),originalWorkerBHash);
+function previousFieldUiReaderCall(text){
+ const current='})(fieldUiAssignmentPreviousContract(contract,shadowSource));';
+ assert.equal(text.split(current).length,2);
+ return text.replace(current,'})(fieldUiAssignmentPreviousContract(contract));');
+}
+test('serial and worker C use the exact source reader while preserving the historical oracles',()=>{
+ const helper=declaration('fieldUiAssignmentPreviousContract');
+ assert.ok(helper.includes('function fieldUiAssignmentPreviousContract(contract,readSource)'));
+ assert.ok(helper.includes('restorePilotCompletionPreviousContract(contract,readSource)'));
+ assert.equal(hash(previousFieldUiReaderCall(declaration('selftest'))),originalSerialHash);
+ assert.equal(hash(declaration('selftestWorkerB')),originalWorkerBHash);
 });
 test('F0 F1 and F3 preserve every original canonical LF statement and phase-segment byte',()=>{
  const a=declaration('selftestWorkerA'),c=declaration('selftestWorkerC');
@@ -104,8 +113,8 @@ test('F0 F1 and F3 preserve every original canonical LF statement and phase-segm
  assert.equal(bodies.F1.split(needsContinuation).length,2);
  assert.equal(bodies.F1.split("verifyAlteredNeeds(n)").length-1,14);
  assert.equal(bodies.F1.split("verifyAlteredNeeds(prior)").length-1,1);
- bodies.F1=bodies.F1.replace(needsContinuation,"")
-  .replaceAll("verifyAlteredNeeds(n)","gate({...input,needs:n})").replaceAll("verifyAlteredNeeds(prior)","gate({...input,needs:prior})");
+ bodies.F1=previousFieldUiReaderCall(bodies.F1.replace(needsContinuation,"")
+  .replaceAll("verifyAlteredNeeds(n)","gate({...input,needs:n})").replaceAll("verifyAlteredNeeds(prior)","gate({...input,needs:prior})"));
  for(const phase of ['F0','F1','F3'])assert.equal(hash(bodies[phase]),phaseHashes[phase]);
  assert.equal(c.includes("const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\\r\\n','\\n'));"),true);
  assert.equal(c.includes('const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);'),true);

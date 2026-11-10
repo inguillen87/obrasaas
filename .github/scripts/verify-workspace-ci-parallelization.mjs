@@ -1975,10 +1975,10 @@ export function assertSourceIdentity({actualHead,expectedHead,dirtyTrackedPaths}
 }
 // Only the authenticated current metadata inverse can move the complete UI39
 // to business. Historical assertions below still run on the genuine predecessor.
-function fieldUiAssignmentPreviousContract(contract){
+function fieldUiAssignmentPreviousContract(contract,readSource){
  const patches=contract?.planBudgetCurrentRevision?.pilotCompletionAdvance?.metadataInverse;
  if(!Array.isArray(patches)||!patches.some(row=>row.pointer==='/lanes/field/blocks'))return contract;
- const previous=restorePilotCompletionPreviousContract(contract),folder='.vercel/field-operations-evidence/',pg=folder+'postgres.json',ui=folder+'browser*.json',png=folder+'*.png';
+ const previous=restorePilotCompletionPreviousContract(contract,readSource),folder='.vercel/field-operations-evidence/',pg=folder+'postgres.json',ui=folder+'browser*.json',png=folder+'*.png';
  const field=clone(previous.lanes.field),business=clone(previous.lanes.business),producer=previous.evidenceProducers[40];
  equal(field.blocks,[20,39,40,52,65],'FIELD_UI_LANE_ASSIGNMENT');
  equal(business.blocks,[13,21,31,32,34,43,44,45,58],'FIELD_UI_LANE_ASSIGNMENT');
@@ -2558,7 +2558,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   const overtimeHistoricalContract=contract.whatsappFieldContinuityCurrentRevision?restoreWhatsappFieldContinuityPreviousContract(contract):contract;
   equal(overtimeHistoricalContract.lanes.field.blocks,[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
   equal(contract.lanes.field.blocks,contract.whatsappFieldContinuityCurrentRevision?[20,39,40,52,65]:[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
-  })(fieldUiAssignmentPreviousContract(contract));
+  })(fieldUiAssignmentPreviousContract(contract,shadowSource));
  });
  for(const [name,code,edit] of [
   ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==52);}],
@@ -3151,7 +3151,7 @@ good('overtime-block-52-three-canonical-proofs',()=>{
   const overtimeHistoricalContract=contract.whatsappFieldContinuityCurrentRevision?restoreWhatsappFieldContinuityPreviousContract(contract):contract;
   equal(overtimeHistoricalContract.lanes.field.blocks,[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
   equal(contract.lanes.field.blocks,contract.whatsappFieldContinuityCurrentRevision?[20,39,40,52,65]:[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
-  })(fieldUiAssignmentPreviousContract(contract));
+  })(fieldUiAssignmentPreviousContract(contract,shadowSource));
  });
 for(const [name,code,edit] of [
   ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==52);}],

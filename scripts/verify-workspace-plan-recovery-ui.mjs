@@ -297,9 +297,14 @@ async function recoveryClosureScenario(mode,width){
  if(legacyMode){await page.evaluate(({scope,projectId,operationId})=>sessionStorage.setItem('obrasaas-plan-attempt-v1:'+scope+':'+projectId,JSON.stringify({scope,projectId,operationId,kind:'UPLOAD'})),{scope,projectId,operationId:legacyId});}
  await openProject(page);await assertCount(page,150);
  if(!legacyMode){
-  await click(page,'Importar cronograma o presupuesto');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(mode==='invalid-source'?invalidSourceFile:mode==='oversized-source'?oversizedSourceFile:sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');
+  await click(page,'Importar cronograma o presupuesto');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(mode==='invalid-source'?invalidSourceFile:mode==='oversized-source'?oversizedSourceFile:sourceFile);
+  if(mode!=='oversized-source'){await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');}
   if(correctionMode){
    await waitText(page,mode==='invalid-source'?'El archivo fue rechazado antes de reservar un borrador':'El PDF, Excel o CSV debe pesar hasta 3 MB y la imagen hasta 2 MB.');assert.equal(posts.length,mode==='invalid-source'?1:0);assert.equal(rejectedAttachCalls,0);assert.deepEqual(await browserReferences(page),[]);
+   if(mode==='oversized-source'){
+    assert.equal(await page.$eval('[data-plan-import] input[type=file]',input=>input.value===''&&input.files?.length===0),true,'Oversized selection must clear the file input');
+    assert.equal(await page.$eval('[data-plan-import] button[type=submit]',button=>button.textContent.trim()==='Extraer borrador'&&button.disabled),true,'Oversized selection must keep extraction disabled');
+   }
    await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');
    assert.equal(posts.length,mode==='invalid-source'?2:1);if(mode==='invalid-source')assert.notEqual(posts[0].operationId,posts[1].operationId);assert.deepEqual(await browserReferences(page),[]);await assertCount(page,150);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push({mode,width,posts:posts.length,rejectedAttachCalls,durableJournal:true,explicitCorrection:true});await context.close();return;
