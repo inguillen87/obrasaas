@@ -26,8 +26,19 @@ const publishedWorksiteNativeCount=(fixture,proof)=>{
  const contract=JSON.parse(fixture.gitSources['.github/workspace-acceptance-contract.json']),files=fixture.postgres.sourceManifest.map(row=>row.path),previous=restoreWorksiteLiveHoursSourceSet(contract,'PLAN_MEASUREMENT',files),delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.sourceSetDeltas.find(row=>row.family==='PLAN_MEASUREMENT');
  const readNative=file=>fixture.gitSources[file]??null,rawManifestBefore=JSON.stringify(fixture.postgres.sourceManifest),authenticatedPrior=restorePilotCompletionPreviousContract(contract,readNative),publishedFiles=restorePilotCompletionPreviousSourceSet(contract,'PLAN_MEASUREMENT',files);
  assert.equal(sha(JSON.stringify(authenticatedPrior,null,2)+'\n'),'4d813ad4f40496d1355b2820607d138d899ea51d336ab176c9fb2febe6ce9a00');
- const currentNativeAdditions=['src/lib/approved-progress-curve-store.mjs','src/lib/approved-progress-curve.mjs','src/lib/attendance-chronology.mjs','src/lib/attendance-closure-policy.mjs','src/lib/attendance-closure-store.mjs','src/lib/attendance-effective-store.mjs','src/lib/identity-return-path.mjs','src/lib/plan-budget-csv-source.mjs'];
- assert.equal(files.length,138);assert.deepEqual(files,[...publishedFiles,...currentNativeAdditions].sort());
+ const currentNativeAdditions=[
+  'src/lib/approved-progress-curve-store.mjs',
+  'src/lib/approved-progress-curve.mjs',
+  'src/lib/attendance-chronology.mjs',
+  'src/lib/attendance-closure-policy.mjs',
+  'src/lib/attendance-closure-store.mjs',
+  'src/lib/attendance-effective-store.mjs',
+  'src/lib/company-number-transfer-history.mjs',
+  'src/lib/identity-return-path.mjs',
+  'src/lib/meta-greeting.mjs',
+  'src/lib/plan-budget-csv-source.mjs',
+ ];
+ assert.deepEqual(files,[...publishedFiles,...currentNativeAdditions].sort());
  for(const file of currentNativeAdditions){const ref=contract[PLAN_BUDGET_CURRENT_SECTION].pilotCompletionAdvance.sourceChanges.find(row=>row.path===file),bytes=fixture.gitSources[file];assert.ok(Buffer.isBuffer(bytes));assert.equal(ref.status,file==='src/lib/identity-return-path.mjs'?'MODIFIED':'ADDED');const currentText=bytes.toString('utf8').replaceAll('\r\n','\n'),previousText=restorePilotCompletionPreviousSourceText(contract,file,currentText);assert.equal(sha(currentText),ref.currentSha256);assert.equal(Buffer.byteLength(currentText),ref.currentBytes);assert.equal(Buffer.byteLength(previousText),ref.previousBytes);if(ref.status==='ADDED'){assert.equal(ref.previousSha256,null);assert.equal(ref.previousBytes,0);assert.equal(previousText,'');}else{assert.ok(ref.previousBytes>0);assert.equal(sha(previousText),ref.previousSha256);}}
  const beforeBudget=restorePlanBudgetSourceSet(contract,'PLAN_MEASUREMENT',files);const git67Native=[...beforeBudget,'src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'].sort(),kycNativeAdditions=["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"];
  assert.equal(git67Native.length,123);assert.equal(sha(JSON.stringify(git67Native)),'19d1d0cbdd3238c0627cbd63f28a42bea78abbbfe35a8b2a09e15b0f1f13e801');assert.deepEqual(publishedFiles,[...git67Native,...kycNativeAdditions].sort());assert.equal(publishedFiles.length,130);assert.equal(sha(JSON.stringify(publishedFiles)),'f8bdf09ccd21ad85fa5e1b73d557ae7fa28617de5e126d593e0ecb343fb6556b');
