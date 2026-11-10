@@ -2,9 +2,15 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
+import {createLocalJWKSet,exportJWK,generateKeyPair,SignJWT} from 'jose';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createCompanyOnboardingStore} from '../src/lib/company-onboarding-store.mjs';
+import {createCompanyOnboardingHandlers} from '../src/lib/company-onboarding-http.mjs';
+import {createBootstrapProfileVerifier} from '../src/lib/company-onboarding-identity.mjs';
+import {BOOTSTRAP_PROFILE_AUDIENCE} from '../src/lib/company-onboarding-policy.mjs';
 import {createCompanyBilling} from '../src/lib/company-billing.mjs';
+import {createParticipantStore} from '../src/lib/participant-store.mjs';
+import {IDENTITY_ISSUER,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {executeCompanyContactAdoption} from './lib/company-contact-migration.mjs';
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'https://not-configured.invalid');
@@ -213,6 +219,83 @@ try{
   if(originalTimezone===undefined)delete process.env.TZ;else process.env.TZ=originalTimezone;
   await closeDisposablePool(nonUtcPool);
  }
+ // Join the real bootstrap and office assignment stores in one new tenant.
+ // The Clerk session and membership lookup remain controlled test inputs.
+ await pool.query('ALTER TABLE "PlatformUser" ADD COLUMN "fullName" text');
+ const newOwner=identity('ComposedOwner'),newDirector={...identity('ComposedDirector'),organizationId:newOwner.organizationId,organizationRole:'org:member'};
+ const now=new Date(),epoch=Math.floor(now.getTime()/1000),keyPair=await generateKeyPair('RS256');
+ const publicKey={...await exportJWK(keyPair.publicKey),kid:'synthetic-bootstrap',alg:'RS256',use:'sig'};
+ const bootstrapProfile=await new SignJWT({
+  iss:IDENTITY_ISSUER,aud:BOOTSTRAP_PROFILE_AUDIENCE,sub:newOwner.userId,jti:randomUUID(),iat:epoch,nbf:epoch,exp:epoch+60,azp:IDENTITY_ORIGIN,
+  purpose:'new-constructor-profile',profile_version:1,email:'composed-owner@example.invalid',email_verified:true,
+ }).setProtectedHeader({alg:'RS256',typ:'JWT',kid:publicKey.kid}).sign(keyPair.privateKey);
+ const bootstrapHandler=createCompanyOnboardingHandlers({verifySession:async()=>newOwner,verifyProfile:createBootstrapProfileVerifier(createLocalJWKSet({keys:[publicKey]}),{now:()=>now}),store});
+ const bootstrapBody={...command(newOwner),initialTasks:[{title:'Replanteo del piloto sintético',startsOn:'2026-12-01',endsOn:'2026-12-04'}]};
+ const bootstrapUrl=IDENTITY_ORIGIN+'/api/identity/company-onboarding';
+ const bootstrapRequest=()=>new Request(bootstrapUrl,{method:'POST',headers:{origin:IDENTITY_ORIGIN,'content-type':'application/json','x-obrasaas-bootstrap-profile':bootstrapProfile},body:JSON.stringify(bootstrapBody)});
+ const bootstrapResponse=await bootstrapHandler.POST(bootstrapRequest()),bootstrap=await bootstrapResponse.json();
+ assert.equal(bootstrapResponse.status,200,bootstrap.code);
+ assert.equal(bootstrap.created,true);
+ const bootstrapReplay=await bootstrapHandler.POST(bootstrapRequest());
+ assert.equal(bootstrapReplay.status,200);
+ const repeatedBootstrap=await bootstrapReplay.json();
+ assert.equal(repeatedBootstrap.replayed,true);
+ assert.equal(repeatedBootstrap.receiptId,bootstrap.receiptId);
+ const ownerList=await workspace.list(newOwner),newContext={projectId:bootstrap.projectId,scope:ownerList.scope};
+ assert.equal(ownerList.role,'ADMIN');
+ assert.deepEqual(ownerList.projects.map(project=>project.id),[bootstrap.projectId]);
+ await assert.rejects(workspace.list(newDirector),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+
+ const directorEmail='composed-director@example.invalid';
+ let acceptedProviderMembership=false,officeProviderReads=0;
+ const officeIdentity={async findVerifiedOfficeAccount(input){
+  assert.deepEqual(input,{organizationId:newOwner.organizationId,email:directorEmail});
+  officeProviderReads++;
+  if(!acceptedProviderMembership)return {state:'NOT_READY',code:'PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED',account:null};
+  return {state:'READY',code:null,account:{
+   clerkUserId:newDirector.userId,name:'Directora sintética',email:directorEmail,primaryEmail:directorEmail,clerkRole:'org:member',
+   providerMembershipId:'orgmem_ComposedDirector',providerMembershipUpdatedAt:now.getTime(),userUpdatedAt:now.getTime(),
+   emailAddressId:'idn_ComposedDirector',primaryEmailAddressId:'idn_ComposedDirector',
+  }};
+ }};
+ const officeStore=createParticipantStore({workspace,connect:()=>pool.connect(),identity:officeIdentity});
+ const lookupDirector=()=>officeStore.verifiedOfficeAccount(newOwner,{...newContext,email:directorEmail});
+ assert.equal((await lookupDirector()).verifiedOfficeAccount.state,'NOT_READY');
+ await assert.rejects(workspace.list(newDirector),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+ acceptedProviderMembership=true;
+ const officeLookup=(await lookupDirector()).verifiedOfficeAccount;
+ assert.equal(officeLookup.state,'READY');
+ const officeCommand={...newContext,operationId:randomUUID(),action:'ASSIGN_VERIFIED_OFFICE',payload:{
+  email:directorEmail,clerkUserId:newDirector.userId,expectedProofDigest:officeLookup.account.proofDigest,role:'DIRECTOR',
+  reason:'Asignación de Dirección en una empresa sintética recién creada.',confirmOfficePermissions:true,
+ }};
+ const assignment=await officeStore.save(newOwner,officeCommand),readsAfterAssignment=officeProviderReads;
+ assert.equal(assignment.saved,true);
+ assert.equal(assignment.account.role,'DIRECTOR');
+ const assignmentReplay=await officeStore.save(newOwner,officeCommand);
+ assert.equal(assignmentReplay.replayed,true);
+ assert.equal(assignmentReplay.receiptId,assignment.receiptId);
+ const assignmentStatus=await officeStore.officeAssignmentStatus(newOwner,{...newContext,operationId:officeCommand.operationId,action:officeCommand.action});
+ assert.equal(assignmentStatus.receiptId,assignment.receiptId);
+ assert.equal(officeProviderReads,readsAfterAssignment);
+
+ const directorList=await workspace.list(newDirector),directorContext={projectId:bootstrap.projectId,scope:directorList.scope};
+ assert.equal(directorList.role,'DIRECTOR');
+ assert.deepEqual(directorList.projects.map(project=>project.id),[bootstrap.projectId]);
+ const {tasks:[initialTask]}=await workspace.read(newDirector,directorContext);
+ assert.equal(initialTask.title,bootstrapBody.initialTasks[0].title);
+ const planned=await workspace.schedule(newDirector,{...directorContext,operationId:randomUUID(),taskId:initialTask.id,expectedRevision:initialTask.revision,startsOn:'2026-12-02',endsOn:'2026-12-05',reason:'Replanificación de Dirección'});
+ assert.equal(planned.saved,true);
+ const {tasks:[updatedByDirector]}=await workspace.read(newOwner,newContext);
+ assert.equal(updatedByDirector.id,initialTask.id);
+ assert.equal(updatedByDirector.startsOn,'2026-12-02');
+ assert.equal(updatedByDirector.progress,0);
+ await assert.rejects(workspace.read(newDirector,{...directorContext,projectId:companyB.projectId}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
+ assert.deepEqual((await pool.query(`SELECT action,count(*)::int AS count FROM "AuditLog" WHERE "organizationId"=$1 AND (action='company.self_service.created' OR metadata->>'kind'='VERIFIED_OFFICE_ASSIGNED') GROUP BY action ORDER BY action`,[bootstrap.organizationId])).rows,[
+  {action:'company.self_service.created',count:1},{action:'participant.operation.recorded',count:1},
+ ]);
+ assert.equal((await pool.query(`SELECT count(*)::int AS count FROM "Worker" WHERE "projectId"=$1`,[bootstrap.projectId])).rows[0].count,0);
+ checks.push('local-signed-profile-bootstrap-and-distinct-verified-DIRECTOR-compose-in-the-new-tenant-with-replay-isolation-and-shared-Gantt');
  const report={status:'PASS',environment:'disposable-local-postgresql',databaseServerVersion:(await pool.query('SHOW server_version')).rows[0].server_version,checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false};
  mkdirSync('.vercel/company-onboarding-evidence',{recursive:true});writeFileSync('.vercel/company-onboarding-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${db}"`);}finally{await admin.end();}}
