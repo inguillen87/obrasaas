@@ -5,9 +5,14 @@ import {Client,Pool} from 'pg';
 import {COMPANY_CHANNEL_DISPOSABLE_FIXTURE_SQL} from './lib/company-channel-disposable-fixture.mjs';
 import {executeCompanyChannelAdoption} from './lib/company-channel-migration.mjs';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
-import {lifecycleEnvironment,lifecyclePng,lifecycleDisposableUrl,createControlledLifecycleBlob} from './fixtures/meta-signup-field-lifecycle-fixture.mjs';
+import {lifecycleEnvironment,lifecyclePng,lifecycleDisposableUrl,createControlledLifecycleBlob,createControlledLifecycleGraph} from './fixtures/meta-signup-field-lifecycle-fixture.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createCompanyChannelStore} from '../src/lib/company-channel-store.mjs';
+import {createCustomerWhatsAppSetup} from '../src/lib/customer-whatsapp-setup.mjs';
+import {createMetaCustomerOnboarding} from '../src/lib/meta-customer-onboarding.mjs';
+import {createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
+import {createMetaCustomerHandlers} from '../src/lib/meta-customer-http.mjs';
+import {createParticipantHandlers} from '../src/lib/participant-http.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
 import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers,splitMetaCustomerEvents} from '../src/lib/meta-customer-callback.mjs';
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
@@ -33,12 +38,20 @@ assert.equal(new Date().getTimezoneOffset(),180);
 const schema='obrasaas_reactive_kyc_'+randomUUID().replaceAll('-','');assert.match(schema,/^obrasaas_reactive_kyc_[a-f0-9]{32}$/);const quoted='"'+schema+'"';
 const rewrite=sql=>{let text=sql.replace(/\bpublic\./g,quoted+'.').replace(/'public'::regnamespace/g,"'"+schema+"'::regnamespace").replace(/table_schema='public'/g,"table_schema='"+schema+"'");if(text.includes('FROM pg_trigger WHERE tgname=ANY'))text=text.replace('AND NOT tgisinternal','AND NOT tgisinternal AND tgrelid IN (SELECT oid FROM pg_class WHERE relnamespace=\''+schema+'\'::regnamespace)');return text;};
 const environment={...lifecycleEnvironment},admin=new Client({connectionString:url.href}),checks=[],sqlFailures=[],messages=new Map(),blob=createControlledLifecycleBlob(),invitations=new Map();let pool,created=false,schemaRemoved=false,networkCalls=0,sends=0,downloads=0,invites=0,sequence=0,crossFinalClock=null,holdWorker=null,lastStatement=null,dispatchFailure=null;
+const args=process.argv.slice(2);assert.ok(args.length===0||args.length===1&&args[0]==='--business-app');
+const businessApp=args.length===1;
+if(businessApp)Object.assign(environment,{META_COEXISTENCE_CONFIG_ID:'1555555555555556',OBRASAAS_META_COEXISTENCE_RELEASE:'business-app-coexistence-v1'});
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{networkCalls++;throw Error('UNCONTROLLED_REACTIVE_NETWORK');};
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),walk=dir=>readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(e=>e.isDirectory()?walk(dir+'/'+e.name):[dir+'/'+e.name]);
-const sourceManifest=[...walk('src/lib'),'scripts/lib/synthetic-capture-quality.mjs'].sort().map(file=>({path:file,sha256:sha(readFileSync(file))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...walk('src/lib'),'scripts/lib/synthetic-capture-quality.mjs',...(businessApp?['scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/company-channel-disposable-fixture.mjs','scripts/lib/company-channel-migration.mjs']:[])].sort().map(file=>({path:file,sha256:sha(readFileSync(file))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 const query=(sql,args)=>pool.query(rewrite(sql),args);
 const connect=async()=>{const c=await pool.connect();await c.query('SET search_path TO '+quoted);return {release:bad=>c.release(bad),query:async(sql,args)=>{try{if(!/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL)/.test(sql))lastStatement=sql;const result=await c.query(rewrite(sql),args);if(holdWorker&&sql.startsWith('UPDATE public."Worker" SET metadata=')&&args?.[0]===holdWorker.id){const gate=holdWorker;holdWorker=null;gate.entered();await gate.release;}if(crossFinalClock&&args?.[0]===crossFinalClock.eventId&&(crossFinalClock.kind==='intake'?sql.startsWith('SELECT id,clock_timestamp() AS now'):sql.startsWith('SELECT id,"projectId",payload,status::text AS status,"leaseToken"')&&sql.includes('clock_timestamp() AS now'))){result.rows[0].now=new Date(crossFinalClock.expiresAt);if(crossFinalClock.kind!=='intake')result.rows[0].leaseExpiresAt=new Date(Date.parse(crossFinalClock.expiresAt)+60000);crossFinalClock=null;}return result;}catch(error){if(error.code&&/^\d/.test(error.code))sqlFailures.push({code:error.code});throw error;}}};};
 const owner={authenticated:true,verification:'clerk-production-jwt',userId:'user_Owner',organizationId:'org_A',organizationRole:'org:admin'};
+const director={...owner,userId:'user_ReactiveDirector',organizationRole:'org:member'},directorEmail='reactive-director@example.invalid';
+const participantEndpoint='https://obrasaas.com/api/identity/participants';
+const post=(url,body)=>new Request(url,{method:'POST',headers:{Origin:'https://obrasaas.com','Content-Type':'application/json'},body:JSON.stringify(body)});
+const get=(url,params)=>new Request(url+'?'+new URLSearchParams(params));
+const jsonResponse=async(response,expected=200)=>{const result=await response.json();assert.equal(response.status,expected,result.code);return result;};
 const provider={async sendReply({message,correlationId}){sends++;const messageId='wamid.SyntheticReactiveReply_'+sends;messages.set(correlationId,{messageId,message:structuredClone(message)});return {messageId};},async downloadMedia({beforeExternal,mediaId}){assert.equal(mediaId,'150000001');await beforeExternal?.();downloads++;return {bytes:lifecyclePng,contentType:'image/png'};}};
 
 // Closed synthetic quality only: these generated fixture pixels are never identity or liveness proof.
@@ -58,16 +71,52 @@ try{
  await admin.query(`CREATE TYPE "SystemRole" AS ENUM('TENANT_USER');ALTER TABLE "PlatformUser" ADD COLUMN "systemRole" "SystemRole" NOT NULL DEFAULT 'TENANT_USER'`);
  await admin.query('ALTER TABLE "Worker" ADD COLUMN role text;ALTER TABLE "WhatsAppConnection" ADD COLUMN "updatedAt" timestamp NOT NULL DEFAULT clock_timestamp();ALTER TABLE "Organization" ADD COLUMN "subscriptionPlan" text DEFAULT \'PRO\',ADD COLUMN "subscriptionStatus" text DEFAULT \'ACTIVE\'');
  pool=trackDisposablePool(new Pool({connectionString:url.href,max:8}));await query(`INSERT INTO public."Project"(id,"organizationId",name,status,metadata) VALUES('project-c','org-a','Synthetic destination B','ACTIVE','{}')`);
- const metadata={credentialFormat:'tenant-aad-v2',credentialOrganizationId:'org-a',customerSignupId:'signup-synthetic',customerSubscribed:true,customerActivation:{version:1,state:'ACTIVE',actorId:'owner'},customerVerification:{registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null}},token=encryptCustomerSecret('synthetic-reactive-token',{organizationId:'org-a',projectId:'project-a',purpose:'access-token',resourceId:'120000001'},environment);
- await query(`INSERT INTO public."WhatsAppConnection"(id,"projectId",enabled,"connectionStatus","phoneNumberId","whatsappBusinessId","encryptedAccessToken",metadata) VALUES('channel-a','project-a',true,'CONNECTED','120000001','130000001',$1,$2::jsonb)`,[token,JSON.stringify(metadata)]);
+ let channelId='channel-a',phoneNumberId='120000001',wabaId='130000001';
+ if(!businessApp){
+  const metadata={credentialFormat:'tenant-aad-v2',credentialOrganizationId:'org-a',customerSignupId:'signup-synthetic',customerSubscribed:true,customerActivation:{version:1,state:'ACTIVE',actorId:'owner'},customerVerification:{registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null}},token=encryptCustomerSecret('synthetic-reactive-token',{organizationId:'org-a',projectId:'project-a',purpose:'access-token',resourceId:'120000001'},environment);
+  await query(`INSERT INTO public."WhatsAppConnection"(id,"projectId",enabled,"connectionStatus","phoneNumberId","whatsappBusinessId","encryptedAccessToken",metadata) VALUES('channel-a','project-a',true,'CONNECTED','120000001','130000001',$1,$2::jsonb)`,[token,JSON.stringify(metadata)]);
+ }else{
+  await admin.query('ALTER TABLE "WhatsAppConnection" ADD UNIQUE ("projectId"),ADD COLUMN "verifiedBusinessName" text,ADD COLUMN "lastVerifiedAt" timestamp,ADD COLUMN "encryptedPin" text');
+ }
  const migration=await connect();try{const dry=await executeCompanyChannelAdoption(migration);await executeCompanyChannelAdoption(migration,{mode:'APPLY',expectedFingerprint:dry.fingerprint});}finally{migration.release();}
- const workspace=createWorkspaceStore({connect}),company=createCompanyChannelStore({workspace}),scope=(await workspace.list(owner)).scope,context={projectId:'project-c',scope};
- for(const [action,targetProjectId] of [['PREPARE',null],['ASSIGN','project-c'],['ACTIVATE',null]]){const s=await company.read(owner,{projectId:'project-a',scope});await company.command(owner,{projectId:'project-a',scope,operationId:randomUUID(),action,payload:{connectionId:'channel-a',revision:s.channels[0].revision,targetProjectId}});}
+ const workspace=createWorkspaceStore({connect}),company=createCompanyChannelStore({workspace,environment}),scope=(await workspace.list(owner)).scope,context={projectId:'project-c',scope},anchor={projectId:'project-a',scope};
+ if(businessApp){
+  const graph=createControlledLifecycleGraph(environment),asset=graph.assets.get('a');Object.assign(asset,{isOnBizApp:true,registered:true});
+  const setup=createCustomerWhatsAppSetup({workspace}),onboarding=createMetaCustomerOnboarding({workspace,provider:createMetaCustomerProvider({environment,fetchImpl:graph.fetchImpl}),environment}),http=createMetaCustomerHandlers({verify:async()=>owner,service:onboarding});
+  const action=(name,extra)=>({...anchor,operationId:randomUUID(),action:name,...extra});
+  const invoke=body=>http.POST(post('https://obrasaas.com/api/identity/meta-onboarding',body)).then(response=>jsonResponse(response));
+  const before=await setup.read(owner,anchor);
+  await setup.save(owner,{...anchor,operationId:randomUUID(),profile:{assistantName:'Asistente sintético',numberMode:'BUSINESS_APP',initialProjectId:anchor.projectId,useCases:['FIELD_REPORTS','MATERIAL_REQUESTS','SCHEDULE_QUERIES'],expectedRevision:before.profile.revision,confirmOwnership:true}});
+  const started=await invoke(action('begin',{preparedRevision:1}));assert.equal(started.signup.state,'PREPARED');assert.equal(started.signup.configId,environment.META_COEXISTENCE_CONFIG_ID);
+  const finish=action('complete',{signupId:started.signup.id,stateToken:started.stateToken,code:asset.code,wabaId:asset.wabaId,phoneNumberId:null,signupEvent:'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'});
+  const linked=await invoke(finish);assert.equal(linked.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(linked.signup.canRegister,false);assert.equal(linked.coexistence.verified,true);assert.equal(linked.connection.enabled,false);
+  await invoke(finish);assert.equal(asset.exchanges,1);assert.equal(asset.subscriptions,1);assert.equal(asset.registrations,0);assert.deepEqual(graph.unexpected,[]);
+  const channels=(await query('SELECT id,"projectId","phoneNumberId","whatsappBusinessId","encryptedPin",metadata FROM public."WhatsAppConnection"')).rows;assert.equal(channels.length,1);
+  const channel=channels[0];assert.equal(channel.projectId,anchor.projectId);assert.equal(channel.phoneNumberId,asset.phoneNumberId);assert.equal(channel.whatsappBusinessId,asset.wabaId);assert.equal(channel.encryptedPin,null);assert.equal(channel.metadata.customerSignupId,started.signup.id);
+  ({id:channelId,phoneNumberId,whatsappBusinessId:wabaId}=channel);
+  const enrolled=(await query('SELECT c.mode,a.status,a."projectId" FROM public."WhatsAppCompanyChannel" c JOIN public."WhatsAppChannelProjectAssignment" a ON a."connectionId"=c."connectionId" WHERE c."connectionId"=$1',[channelId])).rows;
+  assert.deepEqual(enrolled,[{mode:'PROJECT_ONLY',status:'ACTIVE',projectId:anchor.projectId}]);
+  const activated=await invoke(action('activate_channel',{confirmActivation:true}));assert.equal(activated.activation.operational,true);assert.equal(activated.activation.roundTrip,'NOT_VERIFIED');assert.equal(asset.registrations,0);assert.deepEqual(graph.unexpected,[]);
+  checks.push('BUSINESS_APP-real-adapter-WABA-only-finish-replay-zero-register-auto-enrolled-project-only-and-explicit-activation');
+ }
+ for(const [action,targetProjectId] of [['PREPARE',null],['ASSIGN','project-c'],['ACTIVATE',null]]){
+  const state=await company.read(owner,anchor),channel=state.channels.find(item=>item.id===channelId);assert.ok(channel);
+  const receipt=await company.command(owner,{...anchor,operationId:randomUUID(),action,payload:{connectionId:channelId,revision:channel.revision,targetProjectId}});assert.equal(receipt.state,'RECORDED',receipt.code);
+ }
+ if(businessApp){
+  const promoted=(await company.read(owner,anchor)).channels.find(item=>item.id===channelId);assert.equal(promoted.mode,'COMPANY');
+  assert.deepEqual(promoted.assignments.map(item=>[item.projectId,item.status]).sort(),[[anchor.projectId,'ACTIVE'],[context.projectId,'ACTIVE']]);
+  checks.push('same-coexistence-channel-canonical-PREPARE-ASSIGN-ACTIVATE-distinct-destination');
+ }
  let acceptedAccount=null,membershipChecks=0;
  const identity={async createInvitation({invitationId,email}){invites++;const result={id:'orginv_Reactive'+invites,invitationId,email,role:'org:member',state:'pending',expiresAt:new Date(Date.now()+7*86400000).toISOString()};invitations.set(invitationId,result);return result;},async findInvitation({invitationId}){return invitations.get(invitationId);},async verifiedEmail(userId){assert.equal(userId,acceptedAccount?.userId,'Only the explicit account acceptance fixture may query its provider');return acceptedAccount.email;},async verifyMembership({userId,organizationId}){assert.equal(userId,acceptedAccount?.userId,'REACTIVE_MUST_NOT_ACCEPT_ACCOUNT');assert.equal(organizationId,acceptedAccount.organizationId);membershipChecks++;return {userId,organizationId,role:'org:member'};}};
- const store=createParticipantStore({workspace,connect,identity,assessCaptureQuality,assessBiometrics,environment}),upload=createParticipantChannelKycUploader({get:blob.get,put:async(...args)=>{assert.equal(qualityCalls.length,Math.ceil((blob.puts()+1)/3)*3);return blob.put(...args);},environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,assessCaptureQuality,assessBiometrics,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment});
+ if(businessApp)identity.findVerifiedOfficeAccount=async({organizationId,email})=>{
+  assert.equal(organizationId,owner.organizationId);assert.equal(email,directorEmail);
+  return {state:'READY',code:null,account:{clerkUserId:director.userId,name:'Directora sintética',email,primaryEmail:email,clerkRole:'org:member',providerMembershipId:'orgmem_ReactiveDirector',providerMembershipUpdatedAt:1791580000000,userUpdatedAt:1791580000000,emailAddressId:'email_ReactiveDirector',primaryEmailAddressId:'email_ReactiveDirector'}};
+ };
+ const store=createParticipantStore({workspace,connect,identity,get:blob.get,assessCaptureQuality,assessBiometrics,environment}),upload=createParticipantChannelKycUploader({get:blob.get,put:async(...args)=>{assert.equal(qualityCalls.length,Math.ceil((blob.puts()+1)/3)*3);return blob.put(...args);},environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,assessCaptureQuality,assessBiometrics,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment});
  const processor=createMetaCustomerProcessor({connect,environment,authorizationCodes:[...EMPLOYEE_INTAKE_AUTHORIZATION_CODES,...META_KYC_AUTHORIZATION_CODES],dispatch:async c=>{try{return (await bridge.executeIntake(c))||await bridge.execute(c);}catch(error){dispatchFailure={code:error.code,stack:error.stack,lastStatement};throw error;}},outbound:{send:(c,reply,{purpose})=>outbound.send(c,reply,{purpose})}}),callback=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect,environment}),environment,schedule:()=>{}});
- const push=async(message,{sender='15550001001',reply=null,timestamp=Math.floor(Date.now()/1000)}={})=>{sequence++;const value={id:'wamid.SyntheticReactiveMessage_'+sequence,from:sender,timestamp:String(timestamp),...(reply?{context:{id:reply}}:{}),...(typeof message==='string'?{type:'text',text:{body:message}}:message)},body={object:'whatsapp_business_account',entry:[{id:'130000001',changes:[{field:'messages',value:{metadata:{phone_number_id:'120000001'},messages:[value]}}]}]},bytes=Buffer.from(JSON.stringify(body)),signature='sha256='+createHmac('sha256',environment.META_APP_SECRET).update(bytes).digest('hex');assert.equal((await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':signature},body:bytes}))).status,200);return 'customer_webhook_'+splitMetaCustomerEvents(body)[0].externalId;};
+ const push=async(message,{sender='15550001001',reply=null,timestamp=Math.floor(Date.now()/1000)}={})=>{sequence++;const value={id:'wamid.SyntheticReactiveMessage_'+sequence,from:sender,timestamp:String(timestamp),...(reply?{context:{id:reply}}:{}),...(typeof message==='string'?{type:'text',text:{body:message}}:message)},body={object:'whatsapp_business_account',entry:[{id:wabaId,changes:[{field:'messages',value:{metadata:{phone_number_id:phoneNumberId},messages:[value]}}]}]},bytes=Buffer.from(JSON.stringify(body)),signature='sha256='+createHmac('sha256',environment.META_APP_SECRET).update(bytes).digest('hex');assert.equal((await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':signature},body:bytes}))).status,200);return 'customer_webhook_'+splitMetaCustomerEvents(body)[0].externalId;};
  const execute=async(message,options)=>{const eventId=await push(message,options),result=await processor.process(eventId),sent=messages.get(customerOutboundId(eventId));return {eventId,result,...(sent||{})};};
  const choice=(last,title)=>{const row=last.message?.sections?.flatMap(s=>s.rows).find(r=>r.title===title);assert.ok(row,'Missing exact prompt '+title);return {type:'interactive',interactive:{type:'list_reply',list_reply:row}};};
  const assertPendingWorksiteReply=message=>{
@@ -82,7 +131,18 @@ try{
  const recordedIntake=async id=>{const row=(await query(`SELECT payload FROM public."WebhookEvent" WHERE id=$1`,[id])).rows[0];assert.ok(row?.payload?.employeeIntakeDispatch);return JSON.parse(decryptCustomerSecret(row.payload.employeeIntakeDispatch.encryptedResult,{organizationId:'org-a',projectId:'project-a',purpose:'employee-intake-dispatch',resourceId:id},environment));};
  const worker=async id=>(await query(`SELECT *,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE id=$1`,[id])).rows[0];
  const command=(action,payload)=>({...context,operationId:randomUUID(),action,payload});
- const current=await customerJobTransaction(connect,c=>readEmployeeIntake(c,{organizationId:'org-a',role:'ADMIN'},'project-c',environment));await store.save(owner,command('CONFIGURE_EMPLOYEE_INTAKE',{connectionId:'channel-a',expectedRevision:current.revision,enabled:true,confirmed:true}));
+ const ownerHttp=createParticipantHandlers({verify:async()=>owner,store}),directorHttp=createParticipantHandlers({verify:async()=>director,store});
+ let directorContext,directorMembershipId,directorDenied=false;
+ if(businessApp){
+  const discovered=await jsonResponse(await ownerHttp.GET(get(participantEndpoint,{...context,detail:'verified-office-account',email:directorEmail})));
+  const candidate=discovered.verifiedOfficeAccount;assert.equal(candidate.state,'READY');assert.equal(candidate.account.clerkUserId,director.userId);
+  const assignment=command('ASSIGN_VERIFIED_OFFICE',{email:directorEmail,clerkUserId:director.userId,expectedProofDigest:candidate.account.proofDigest,role:'DIRECTOR',reason:'Asignación sintética de Dirección para revisar identidad en otra cuenta.',confirmOfficePermissions:true});
+  const assigned=await jsonResponse(await ownerHttp.POST(post(participantEndpoint,assignment)));assert.equal(assigned.account.role,'DIRECTOR');assert.equal(assigned.officeAssignmentReceipt.assignedProjectId,null);
+  directorMembershipId=assigned.officeAssignmentReceipt.membershipId;
+  const directory=await workspace.list(director);assert.ok(directory.projects.some(project=>project.id===context.projectId));directorContext={projectId:context.projectId,scope:directory.scope};
+  const observed=await jsonResponse(await directorHttp.GET(get(participantEndpoint,directorContext)));assert.equal(observed.canManage,true);assert.equal(observed.canInvite,false);assert.equal(observed.employeeIntake,null);
+ }
+ const current=await customerJobTransaction(connect,c=>readEmployeeIntake(c,{organizationId:'org-a',role:'ADMIN'},'project-c',environment));await store.save(owner,command('CONFIGURE_EMPLOYEE_INTAKE',{connectionId:channelId,expectedRevision:current.revision,enabled:true,confirmed:true}));
  let initialMemberships=digest((await query(`SELECT * FROM public."TenantMembership" ORDER BY id`)).rows),initialProjects=digest((await query(`SELECT * FROM public."ProjectMembership" ORDER BY id`)).rows);
  async function admitted(sender,email){
   let last=await execute('HOLA',{sender});
@@ -94,7 +154,22 @@ try{
   await execute(choice(last,'Enviar solicitud'),{sender,reply:last.messageId});
   const s=await state(app);
   assert.equal(s.status,'WAITING_RESPONSIBLE');
-  const admitted=await store.save(owner,command('ADMIT_EMPLOYEE_INTAKE',{connectionId:'channel-a',applicationId:app,expectedRevision:s.revision,job:'WORKER',permissions:{attendance:true,report:false},confirmed:true}));
+  const admission=command('ADMIT_EMPLOYEE_INTAKE',{connectionId:channelId,applicationId:app,expectedRevision:s.revision,job:'WORKER',permissions:{attendance:true,report:false},confirmed:true});
+  if(businessApp&&!directorDenied){
+   const before=(await query('SELECT count(*)::int AS count FROM public."Worker"')).rows[0].count;
+   assert.equal(before,0);
+   const denied=await jsonResponse(await directorHttp.POST(post(participantEndpoint,{...admission,...directorContext})),403);
+   assert.equal(denied.code,'PARTICIPANT_INVITE_REQUIRED');assert.deepEqual(await state(app),s);
+   assert.equal((await query('SELECT count(*)::int AS count FROM public."Worker"')).rows[0].count,before);
+   directorDenied=true;
+   checks.push('same-signed-intake-WAITING-no-worker-and-DIRECTOR-admit-403-without-mutation');
+  }
+  const admitted=businessApp?await jsonResponse(await ownerHttp.POST(post(participantEndpoint,admission))):await store.save(owner,admission);
+  if(businessApp){
+   const replay=await jsonResponse(await ownerHttp.POST(post(participantEndpoint,admission)));
+   assert.equal(replay.receiptId,admitted.receiptId);assert.equal(replay.workerId,admitted.workerId);
+   const admittedRow=await worker(admitted.workerId);assert.equal(admittedRow.projectId,context.projectId);assert.equal(admittedRow.metadata.participant,undefined);
+  }
   assert.equal(admitted.permissionsGranted,false);
   const id=admitted.workerId,w=await worker(id);
   await store.save(owner,command('INVITE',{workerId:id,revision:w.revision,email,whatsAppConsent:{confirmed:true,noticeVersion:PARTICIPANT_ONBOARDING_NOTICE_VERSION,noticeSha256:PARTICIPANT_ONBOARDING_NOTICE_SHA256}}));
@@ -255,7 +330,24 @@ try{
  checks.push('accepted-pending-review-status-requires-current-own-TM-PM-and-exact-capture-receipt-without-provider-lookups');
  const currentForReview=await worker(p3.id),kycForReview=currentForReview.metadata.participant.kyc;
  assert.notEqual(acceptedAudit.actorId,'owner');
- const reviewed=await store.save(owner,command('REVIEW_KYC',{workerId:p3.id,revision:currentForReview.revision,submissionId:kycForReview.submissionId,decision:'APPROVED',reason:'Synthetic independent reviewer in canonical store; not real identity acceptance'}));assert.equal(reviewed.saved,true);
+ const review=command('REVIEW_KYC',{workerId:p3.id,revision:currentForReview.revision,submissionId:kycForReview.submissionId,decision:'APPROVED',reason:'Synthetic independent reviewer in canonical store; not real identity acceptance'});
+ let reviewed;
+ if(businessApp){
+  const dashboard=await jsonResponse(await directorHttp.GET(get(participantEndpoint,directorContext)));
+  const pending=dashboard.records.find(row=>row.id===p3.id);assert.equal(pending?.kyc.status,'PENDING_REVIEW');assert.equal(pending.kyc.images.length,3);
+  for(const image of pending.kyc.images){
+   const preview=await directorHttp.GET(get(participantEndpoint,{...directorContext,workerId:p3.id,imageId:image.id}));
+   assert.equal(preview.status,200);assert.match(preview.headers.get('cache-control'),/private, no-store/);assert.deepEqual(Buffer.from(await preview.arrayBuffer()),lifecyclePng);
+  }
+  const directorReview={...review,...directorContext};
+  reviewed=await jsonResponse(await directorHttp.POST(post(participantEndpoint,directorReview)));
+  const replay=await jsonResponse(await directorHttp.POST(post(participantEndpoint,directorReview)));assert.equal(replay.receiptId,reviewed.receiptId);
+  const receipts=(await query('SELECT a."actorId",m."tenantRole"::text AS role FROM public."AuditLog" a JOIN public."TenantMembership" m ON m."userId"=a."actorId" AND m."organizationId"=a."organizationId" WHERE a.id=$1 AND m.id=$2',[reviewed.receiptId,directorMembershipId])).rows;
+  assert.equal(receipts.length,1);assert.equal(receipts[0].role,'DIRECTOR');assert.notEqual(receipts[0].actorId,'owner');assert.notEqual(receipts[0].actorId,acceptedAudit.actorId);
+  assert.deepEqual((await worker(p3.id)).metadata.participant.permissions,accepted.participant.permissions);
+  checks.push('same-destination-canonical-DIRECTOR-private-3-image-review-APPROVED-one-receipt-no-permission-change');
+ }else reviewed=await store.save(owner,review);
+ assert.equal(reviewed.saved,true);
  const reviewedMetadata=structuredClone((await worker(p3.id)).metadata),reviewedSnapshot=await snapshot(p3.id),approvedStatus=await execute('HOLA',{sender:p3.sender});assert.equal(approvedStatus.result.replySent,true);assert.equal((await recordedIntake(approvedStatus.eventId)).reactiveKycStatus.status,'APPROVED');assert.match(approvedStatus.message.body,/identidad fue aprobada/);assert.match(approvedStatus.message.body,/no concede permisos ni vincula/);assert.equal(await snapshot(p3.id),reviewedSnapshot);assert.equal((await worker(p3.id)).metadata.participant.channelIdentity?.binding,undefined);assert.equal(blob.puts(),pendingPuts);assert.equal(downloads,pendingDownloads);
  const beforeStatusReplay=sends;assert.equal((await processor.process(approvedStatus.eventId)).done,true);assert.equal(sends,beforeStatusReplay);assert.equal(await snapshot(p3.id),reviewedSnapshot);
  const reviewRow=(await query(`SELECT id,"actorId",metadata FROM public."AuditLog" WHERE "entityId"=$1 AND metadata->>'kind'='REVIEW_KYC' AND metadata->>'submissionId'=$2`,[p3.id,kycForReview.submissionId])).rows[0];assert.ok(reviewRow);await failSame(p3,'ESTADO',{},()=>query(`UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1`,[reviewRow.id,acceptedAudit.actorId]),()=>query(`UPDATE public."AuditLog" SET "actorId"=$2 WHERE id=$1`,[reviewRow.id,reviewRow.actorId]));
@@ -278,4 +370,4 @@ try{
  void reviewedMetadata;void adoptedMetadata;
  void pending;
 }finally{globalThis.fetch=originalFetch;try{await closeDisposablePool(pool);if(created){assert.match(schema,/^obrasaas_reactive_kyc_[a-f0-9]{32}$/);await admin.query('DROP SCHEMA '+quoted+' CASCADE');schemaRemoved=true;}}finally{await admin.end();}}
-const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
+const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
