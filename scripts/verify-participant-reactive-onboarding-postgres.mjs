@@ -48,12 +48,17 @@ assert.equal(new Date().getTimezoneOffset(),180);
 const schema='obrasaas_reactive_kyc_'+randomUUID().replaceAll('-','');assert.match(schema,/^obrasaas_reactive_kyc_[a-f0-9]{32}$/);const quoted='"'+schema+'"';
 const rewrite=sql=>{let text=sql.replace(/\bpublic\./g,quoted+'.').replace(/'public'::regnamespace/g,"'"+schema+"'::regnamespace").replace(/table_schema='public'/g,"table_schema='"+schema+"'");if(text.includes('FROM pg_trigger WHERE tgname=ANY'))text=text.replace('AND NOT tgisinternal','AND NOT tgisinternal AND tgrelid IN (SELECT oid FROM pg_class WHERE relnamespace=\''+schema+'\'::regnamespace)');return text;};
 const environment={...lifecycleEnvironment},admin=new Client({connectionString:url.href}),checks=[],sqlFailures=[],messages=new Map(),blob=createControlledLifecycleBlob(),invitations=new Map();let pool,created=false,schemaRemoved=false,networkCalls=0,sends=0,downloads=0,invites=0,sequence=0,crossFinalClock=null,holdWorker=null,lastStatement=null,dispatchFailure=null;
-const args=process.argv.slice(2);assert.ok(args.length===0||args.length===1&&args[0]==='--business-app');
-const businessApp=args.length===1;
+const args=process.argv.slice(2);
+assert.ok(args.length===0||args[0]==='--business-app'&&(args.length===1||args.length===2&&args[1]==='--plan-image'));
+const businessApp=args.length>0,planImage=args.length===2;
+const planFixture=planImage
+ ?{name:'plan-import-synthetic-v1.png',contentType:'image/png',sha256:'e57146090c0436bb75b6c8c21ee958abffae777fb5ba151081dc50def4ba91db',label:'diagrama PNG'}
+ :{name:'plan-import-synthetic-v1.pdf',contentType:'application/pdf',sha256:'88254bd24823b0d6d8da46d0f2dfe4494f92f3d92fe7fc92080519e554dc5f12',label:'PDF'};
+let planImageSource=null;
 if(businessApp)Object.assign(environment,{META_COEXISTENCE_CONFIG_ID:'1555555555555556',OBRASAAS_META_COEXISTENCE_RELEASE:'business-app-coexistence-v1'});
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{networkCalls++;throw Error('UNCONTROLLED_REACTIVE_NETWORK');};
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),walk=dir=>readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(e=>e.isDirectory()?walk(dir+'/'+e.name):[dir+'/'+e.name]);
-const sourceManifest=[...walk('src/lib'),'scripts/lib/synthetic-capture-quality.mjs',...(businessApp?['scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/fixtures/plan-import-synthetic-v1.pdf','scripts/fixtures/plan-import-synthetic-v1.json','scripts/lib/company-channel-disposable-fixture.mjs','scripts/lib/company-channel-migration.mjs']:[])].sort().map(file=>({path:file,sha256:sha(readFileSync(file))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...walk('src/lib'),'scripts/lib/synthetic-capture-quality.mjs',...(businessApp?['scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/fixtures/'+planFixture.name,'scripts/fixtures/plan-import-synthetic-v1.json','scripts/lib/company-channel-disposable-fixture.mjs','scripts/lib/company-channel-migration.mjs']:[])].sort().map(file=>({path:file,sha256:sha(readFileSync(file))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 const query=(sql,args)=>pool.query(rewrite(sql),args);
 const connect=async()=>{const c=await pool.connect();await c.query('SET search_path TO '+quoted);return {release:bad=>c.release(bad),query:async(sql,args)=>{try{if(!/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL)/.test(sql))lastStatement=sql;const result=await c.query(rewrite(sql),args);if(holdWorker&&sql.startsWith('UPDATE public."Worker" SET metadata=')&&args?.[0]===holdWorker.id){const gate=holdWorker;holdWorker=null;gate.entered();await gate.release;}if(crossFinalClock&&args?.[0]===crossFinalClock.eventId&&(crossFinalClock.kind==='intake'?sql.startsWith('SELECT id,clock_timestamp() AS now'):sql.startsWith('SELECT id,"projectId",payload,status::text AS status,"leaseToken"')&&sql.includes('clock_timestamp() AS now'))){result.rows[0].now=new Date(crossFinalClock.expiresAt);if(crossFinalClock.kind!=='intake')result.rows[0].leaseExpiresAt=new Date(Date.parse(crossFinalClock.expiresAt)+60000);crossFinalClock=null;}return result;}catch(error){if(error.code&&/^\d/.test(error.code))sqlFailures.push({code:error.code});throw error;}}};};
 const owner={authenticated:true,verification:'clerk-production-jwt',userId:'user_Owner',organizationId:'org_A',organizationRole:'org:admin'};
@@ -509,30 +514,30 @@ try{
   assert.ok(breakMs>0);assert.ok(elapsedMs>breakMs);assert.equal(readyShift.elapsedMs,elapsedMs);assert.equal(readyShift.breakMs,breakMs);assert.equal(readyShift.netMs,elapsedMs-breakMs);
   assert.equal(report.totals.closedEvidenceReadyNetMs,readyShift.netMs);
   checks.push('Director-hours-report-matches-six-audited-punches-excludes-registered-breaks-and-separates-pending-evidence');
-  const pdf=readFileSync(new URL('./fixtures/plan-import-synthetic-v1.pdf',import.meta.url)),pdfSha=sha(pdf);
-  assert.equal(pdfSha,'88254bd24823b0d6d8da46d0f2dfe4494f92f3d92fe7fc92080519e554dc5f12');
+  const diagram=readFileSync(new URL('./fixtures/'+planFixture.name,import.meta.url));
+  assert.equal(sha(diagram),planFixture.sha256);
   const extractionRows=JSON.parse(readFileSync(new URL('./fixtures/plan-import-synthetic-v1.json',import.meta.url),'utf8')).expectedRows;
   let extractions=0;
   const imports=createPlanImport({workspace,put:worksiteBlob.put,get:worksiteBlob.get,environment:()=>environment,analyzer:{async analyze(source){
-   assert.equal(source.contentType,'application/pdf');assert.equal(source.sha256,pdfSha);extractions++;
-   return {success:true,rows:extractionRows.map((row,index)=>({...row,evidence:'Fila '+(index+1)+' del PDF sintético.',uncertainty:''})),warnings:[],provider:'synthetic-openai-adapter',model:'synthetic'};
+   assert.equal(source.contentType,planFixture.contentType);assert.equal(source.sha256,planFixture.sha256);extractions++;
+   return {success:true,rows:extractionRows.map((row,index)=>({...row,evidence:'Fila '+(index+1)+' del '+planFixture.label+' sintético.',uncertainty:''})),warnings:[],provider:'synthetic-openai-adapter',model:'synthetic'};
   }}});
   const planEndpoint='https://obrasaas.com/api/identity/plan-import',directorPlan=createPlanImportHandlers({verify:async()=>director,imports}),form=new FormData();
   for(const [key,value] of Object.entries({...directorContext,operationId:randomUUID(),consent:PLAN_IMPORT_CONSENT}))form.set(key,value);
-  form.set('file',new Blob([pdf],{type:'application/pdf'}),'plan-import-synthetic-v1.pdf');
+  form.set('file',new Blob([diagram],{type:planFixture.contentType}),planFixture.name);
   const draft=await jsonResponse(await directorPlan.POST(new Request(planEndpoint,{method:'POST',headers:{origin:'https://obrasaas.com'},body:form})));
-  assert.equal(draft.draft.status,'READY');assert.equal(extractions,1);assert.equal(worksiteBlob.puts(),1);assert.equal(fieldPhotoDownloads,0);
+  assert.equal(draft.draft.status,'READY');assert.deepEqual(draft.draft.source,{contentType:planFixture.contentType,bytes:diagram.length,sha256:planFixture.sha256});assert.equal(extractions,1);assert.equal(worksiteBlob.puts(),1);assert.equal(fieldPhotoDownloads,0);
   const beforeApply=await workspace.read(director,directorContext);
   assert.ok(!beforeApply.tasks.some(task=>task.title===extractionRows[0].title));
-  const applyPlan={...directorContext,operationId:randomUUID(),draftId:draft.draft.id,expectedRevision:draft.draft.revision,action:'APPLY',rows:draft.draft.rows,reason:'Dirección revisó los plazos del PDF sintético.'};
+  const applyPlan={...directorContext,operationId:randomUUID(),draftId:draft.draft.id,expectedRevision:draft.draft.revision,action:'APPLY',rows:draft.draft.rows,reason:'Dirección revisó los plazos del '+planFixture.label+' sintético.'};
   const appliedPlan=await jsonResponse(await directorPlan.POST(post(planEndpoint,applyPlan))),appliedReplay=await jsonResponse(await directorPlan.POST(post(planEndpoint,applyPlan)));
   assert.equal(appliedPlan.draft.status,'APPLIED');assert.equal(appliedPlan.tasks.length,extractionRows.length);
   assert.equal(appliedReplay.replayed,true);assert.equal(appliedReplay.receiptId,appliedPlan.receiptId);assert.equal(extractions,1);
   const task=appliedPlan.tasks.find(row=>row.title===extractionRows[0].title);assert.ok(task);
   const taskState=async()=>(await query('SELECT progress,metadata FROM public."Task" WHERE id=$1 AND "projectId"=$2',[task.id,personal.projectId])).rows[0];
-  const importProvenance=(await taskState()).metadata.planImport;assert.equal(importProvenance.receiptId,appliedPlan.receiptId);
+  const importProvenance=(await taskState()).metadata.planImport;assert.equal(importProvenance.receiptId,appliedPlan.receiptId);assert.equal(importProvenance.sourceSha256,planFixture.sha256);
   assert.equal((await taskState()).progress,0);
-  checks.push('same-destination-Director-HTTP-imports-reviewed-synthetic-PDF-once-without-changing-unapproved-progress');
+  checks.push('same-destination-Director-HTTP-imports-reviewed-synthetic-'+(planImage?'PNG-diagram':'PDF')+'-once-without-changing-unapproved-progress');
 
   const beforeGrant=await worker(p3.id),ownParticipants=createParticipantHandlers({verify:async()=>person,store});
   assert.deepEqual(beforeGrant.metadata.participant.permissions,{attendance:true,report:false});
@@ -596,7 +601,7 @@ try{
   const saveOwner=body=>ownerField.POST(post(fieldEndpoint,body)).then(response=>jsonResponse(response));
   await saveOwner(command('ADD_MATERIAL',{revision:catalogSetup.projectRevision,catalogHash:catalogSetup.inventory.catalogHash,name:'Cemento sintético',unit:'bolsa'}));
   const catalog=(await fieldView()).inventory,material=catalog.materials.find(row=>row.name==='Cemento sintético');assert.ok(material);
-  const opening=(await saveOwner(command('PROPOSE_STOCK_ADJUSTMENT',{materialId:material.id,catalogHash:catalog.catalogHash,quantity:'3.000',direction:'IN',source:{type:'OPENING',reference:'PILOTO-PDF-001'},reason:'Saldo inicial sintético revisado para esta obra.'}))).adjustment;
+  const opening=(await saveOwner(command('PROPOSE_STOCK_ADJUSTMENT',{materialId:material.id,catalogHash:catalog.catalogHash,quantity:'3.000',direction:'IN',source:{type:'OPENING',reference:planImage?'PILOTO-PNG-001':'PILOTO-PDF-001'},reason:'Saldo inicial sintético revisado para esta obra.'}))).adjustment;
   await reviewField(directorAction('DECIDE_STOCK_ADJUSTMENT',{proposalId:opening.id,revision:opening.revision,catalogHash:catalog.catalogHash,decision:'APPROVE',reason:'Dirección comprobó saldo y unidad de apertura.'}));
   const balance=async()=>(await fieldView()).inventory.materials.find(row=>row.id===material.id).balance;
   assert.equal(await balance(),'3.000');
@@ -613,6 +618,7 @@ try{
   const gantt=(await workspace.read(director,directorContext)).tasks.find(row=>row.id===task.id);
   assert.deepEqual([gantt.startsOn,gantt.endsOn,gantt.progress],[extractionRows[0].startsOn,extractionRows[0].endsOn,25]);
   checks.push('same-signed-worker-consumption-does-not-decrement-stock-until-Director-approval-with-single-movement');
+  if(planImage)planImageSource={contentType:planFixture.contentType,sha256:planFixture.sha256,appliedTasks:appliedPlan.tasks.length,controlledExtractions:extractions,startsOn:gantt.startsOn,endsOn:gantt.endsOn,approvedProgress:gantt.progress,curvePoints:curve.total};
  }
  const beforeRevokeWorker=await worker(p3.id),beforeRevokeChallenge=structuredClone(beforeRevokeWorker.metadata.participant.kycChatChallenge),beforeRevokeKyc=structuredClone(beforeRevokeWorker.metadata.participant.kyc);
  const revoked=await store.save(owner,command('REVOKE',{workerId:p3.id,revision:beforeRevokeWorker.revision,reason:'Synthetic canonical revocation for reactive generation fence'}));assert.equal(revoked.saved,true);await failSame(p3,'ESTADO');
@@ -632,4 +638,4 @@ try{
  void reviewedMetadata;void adoptedMetadata;
  void pending;
 }finally{globalThis.fetch=originalFetch;try{await closeDisposablePool(pool);if(created){assert.match(schema,/^obrasaas_reactive_kyc_[a-f0-9]{32}$/);await admin.query('DROP SCHEMA '+quoted+' CASCADE');schemaRemoved=true;}}finally{await admin.end();}}
-const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,verifiedAttendanceSimulation:true,verifiedImportedTaskComposition:true,realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));
+const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256,checks,sqlFailures,schemaRemoved,...(businessApp?{composition:'BUSINESS_APP_INTAKE_DIRECTOR',verifiedFieldHandoff:true,verifiedAttendanceSimulation:true,verifiedImportedTaskComposition:true,...(planImage?{planImageSource}:{}),realProviderCalls:0}:{}),unexpectedNetworkCalls:networkCalls,syntheticInvitations:invites,syntheticReplies:sends,syntheticPrivateImages:blob.puts(),productionDataWritten:false,providerAcceptance:false,physicalPilotAccepted:false,coverageBoundary:'isolated local PostgreSQL canonical transactions and synthetic controlled adapters; explicit separate account acceptance before CURRENT v3 manual capture; historical pre-account v2 remains in the separate Recovery fixture and a different controlled actor review through canonical store with actual receipts; current reactive status tested without granting or channel binding'};mkdirSync('.vercel/private',{recursive:true});const proofPath='.vercel/private/reactive-onboarding-postgres-'+(planImage?'business-app-plan-image-':businessApp?'business-app-':'')+new Date().toISOString().replaceAll(':','-')+'.json';writeFileSync(proofPath,JSON.stringify(proof,null,2),{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,providerCalls:0,proofPath}));

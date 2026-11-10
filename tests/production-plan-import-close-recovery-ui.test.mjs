@@ -88,6 +88,36 @@ test('closing an uncertain upload preserves the exact RAM transport and requires
 test('closing an uncertain correction preserves source rows reason and snapshot while invalidating the old resend callback',async()=>{await closeAndRecover({decision:true});});
 test('closing a pending usage observation preserves its exact transport and reference without authorizing any retry',async()=>{await closeAndRecover({pendingUsage:true});});
 
+test('the real file picker rejects an unusable image before retaining it and preserves an earlier valid selection',()=>{
+ const png=new File(['synthetic PNG'],'cronograma.png',{type:'image/png'});
+ const oversized=new File([new Uint8Array(2*1024*1024+1)],'cronograma-grande.jpg',{type:'image/jpeg'});
+ const unsupported=new File(['synthetic HEIC'],'cronograma.heic',{type:'image/heic'});
+ const picker=()=>nodes(panel.render(props),node=>node.type==='input'&&node.props.type==='file')[0];
+ const choose=file=>{const target={files:[file],value:file.name};picker().props.onChange({target});return target;};
+
+ panel.reset({open:true,recoveryReady:true},[]);
+ assert.equal(choose(oversized).value,'');
+ assert.match(panel.snapshot().message,/imagen hasta 2 MB/);
+ assert.ok(!panel.snapshot().file);
+ assert.equal(picker().props.required,true);
+ assert.equal(choose(png).value,png.name);
+ assert.equal(panel.snapshot().file,png);
+ assert.equal(panel.snapshot().message,'');
+ assert.equal(picker().props.required,false);
+
+ const recorded={...draft('OBSERVED'),status:'APPLIED'};
+ panel.reset({open:true,recoveryReady:true,canApprove:true,file:png,consent:true,draft:recorded,documentPurpose:'FINANCIAL_MONTHLY_CURVE'},[]);
+ assert.equal(choose(unsupported).value,'');
+ const state=panel.snapshot();
+ assert.match(state.message,/imagen PNG\/JPEG\/WebP/);
+ assert.equal(state.file,png);
+ assert.equal(state.consent,true);
+ assert.equal(state.draft,recorded);
+ assert.equal(state.documentPurpose,'FINANCIAL_MONTHLY_CURVE');
+ assert.equal(picker().props.required,false);
+ assert.deepEqual(panel.requests(),[]);
+});
+
 test('removing a selected local file requires a current confirmation and preserves canonical draft rows and receipt',()=>{
  const file=new File(['synthetic'],'local-selected.pdf',{type:'application/pdf'}),recorded={...draft('OBSERVED'),status:'APPLIED'},receipt='recorded-synthetic-receipt';
  panel.reset({open:true,recoveryReady:true,file,consent:true,draft:recorded,rows:[row],reason:'Retained recorded work',receipt},[]);

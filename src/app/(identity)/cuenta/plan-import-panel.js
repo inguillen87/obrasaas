@@ -22,6 +22,11 @@ const financialProfile=value=>['MONTHLY_RUBROS_CURVE','CYP_PARTIDAS_CURVE',PLAN_
 const documentConsent='plan-document-monthly-curve-openai-v1';
 const documentFinancialDraft=value=>Object.hasOwn(value||{},'documentCurve');
 const selectedFile=value=>{if(!value)return null;const extension=value.name.split('.').at(-1).toLowerCase(),contentType=extension==='csv'?'text/csv':extension==='xlsm'?'application/vnd.ms-excel.sheet.macroenabled.12':extension==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':value.type;return contentType===value.type?value:new File([value],value.name,{type:contentType,lastModified:value.lastModified});};
+function selectedFileIssue(file){
+ if(!['application/pdf','image/png','image/jpeg','image/webp','text/csv',...Object.keys(spreadsheetTypes)].includes(file.type)||file.size===0)return 'PLAN_IMPORT_FILE_INVALID';
+ const limit=(file.type.startsWith('image/')?2:3)*1024*1024;
+ return file.size>limit?'PLAN_IMPORT_FILE_TOO_LARGE':null;
+}
 const messages={PLAN_IMPORT_REVIEW_REQUIRED:'Completá todas las fechas y resolvé las dudas de cada fila antes de aplicar.',PLAN_IMPORT_SCHEDULE_CHANGED:'El cronograma cambió desde la carga. Subí nuevamente la fuente para revisar un borrador sobre el estado actual.',PLAN_IMPORT_REVISION_CHANGED:'Otra persona modificó o decidió este borrador. Actualizá su estado antes de continuar.',PLAN_IMPORT_PERMISSION_REQUIRED:'Tu permiso actual no autoriza esta acción.',PLAN_IMPORT_ROWS_LIMIT:'El archivo supera las 50 tareas o no pudo extraerse completo. Dividilo en documentos completos de hasta 50 tareas.',PLAN_IMPORT_DATES_INVALID:'Revisá las fechas; el fin debe ser igual o posterior al inicio.',PLAN_IMPORT_FILE_TOO_LARGE:'El PDF debe pesar hasta 3 MB y la imagen hasta 2 MB.',PLAN_IMPORT_FILE_INVALID:'Usá un PDF válido o una imagen PNG, JPEG o WebP legible.',PLAN_IMPORT_OPERATION_CONFLICT:'El intento corresponde a otros datos. Comprobá su resultado.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Recargá tus obras.',PLAN_IMPORT_STORAGE_UNCONFIRMED:'No se confirmó la fuente privada. Comprobá el borrador antes de volver a subir.',AI_PROVIDER_NOT_CONFIGURED:'La IA no está configurada en este entorno.',PLAN_IMPORT_NOT_A_SCHEDULE:'El documento no se reconoció como un cronograma legible.'};
 Object.assign(messages,{PLAN_IMPORT_SOURCE_ALREADY_APPLIED:'Esta misma fuente ya fue aplicada a esta obra. Consultá el borrador aplicado y sus tareas; no se creó otro lote.',PLAN_IMPORT_SCHEDULE_TOO_LARGE:'Esta obra supera las 5.000 tareas que permite revisar la importación. La operación se detuvo completa; solicitá una revisión del cronograma.'});
 Object.assign(messages,{SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'});
@@ -173,8 +178,7 @@ export function PlanImportPanel({projectId,scope,getSessionToken,onPending,onApp
  }
   async function upload(event){event.preventDefault();if(locked||busy||!recoveryReady||attempt||!file||!consent||[PLAN_BUDGET_SOURCE_PROFILE,csvBudgetProfile].includes(spreadsheetSelection)&&(!canApprove||canonicalAccess!==true||selectedBudgetOwner!==measurementOwner)||documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&(!canApprove||Boolean(spreadsheetTypes[file.type]))||spreadsheetTypes[file.type]&&!spreadsheetProfiles.includes(spreadsheetSelection))return;
    if(file.type==='text/csv'&&(spreadsheetSelection!==csvBudgetProfile||!canApprove||canonicalAccess!==true||selectedBudgetOwner!==measurementOwner)||spreadsheetSelection===csvBudgetProfile&&file.type!=='text/csv')return;
-  if(!['application/pdf','image/png','image/jpeg','image/webp','text/csv',...Object.keys(spreadsheetTypes)].includes(file.type)||file.size===0){setMessage(explain('PLAN_IMPORT_FILE_INVALID'));return;}
-  if(file.size>(file.type==='application/pdf'||file.type==='text/csv'||spreadsheetTypes[file.type]?3:2)*1024*1024){setMessage(explain('PLAN_IMPORT_FILE_TOO_LARGE'));return;}
+   const issue=selectedFileIssue(file);if(issue){setMessage(explain(issue));return;}
    const operationId=crypto.randomUUID(),form=new FormData();for(const [key,value] of Object.entries({operationId,projectId,scope,consent:file.type==='text/csv'?csvBudgetConsent:spreadsheetTypes[file.type]?(spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?PLAN_BUDGET_SOURCE_CONSENT:spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE?investmentConsent:spreadsheetSelection==='CYP_PARTIDAS'?cypConsent:spreadsheetSelection==='CYP_PARTIDAS_CURVE'?cypCurveConsent:spreadsheetSelection==='MONTHLY_RUBROS_CURVE'?monthlyCurveConsent:spreadsheetConsent):documentPurpose==='FINANCIAL_MONTHLY_CURVE'?documentConsent:consentVersion}))form.append(key,value);form.append('file',file);
   await dispatch({operationId,projectId,scope,kind:'UPLOAD',form});
  }
@@ -229,7 +233,13 @@ export function PlanImportPanel({projectId,scope,getSessionToken,onPending,onApp
   const spreadsheetForm=Boolean(spreadsheetTypes[file?.type]||reviewable&&spreadsheetTypes[draft?.source?.contentType]);
  const spreadsheetReviewed=!spreadsheetTypes[draft?.source?.contentType]||draft?.spreadsheet?.reviewed===true&&JSON.stringify(rows)===JSON.stringify(draft.rows);
  const change=(index,key,value)=>{replaceRows(old=>old.map((row,i)=>i===index?{...row,[key]:value}:row));setApproved(false);};
-  const chooseFile=event=>{linkedUserWork.current=true;cancelLinkedRead();removeFileTargetRef.current=null;setRemoveFileRequested(false);const next=selectedFile(event.target.files?.[0]),csv=next?.type==='text/csv';if(documentCurve||draft?.budgetImport===true){setDraft(null);setCurveDraft(null);setReason('');setReceipt(null);replaceRows([]);}setFile(next);setConsent(false);setSpreadsheetSelection(csv?csvBudgetProfile:'');setSelectedBudgetOwner(csv?measurementOwner:null);setDocumentPurpose('TASKS');setCurveReviewConfirmed(false);setApproved(false);privateView.current=csv||(!documentCurve&&draft?.budgetImport!==true&&financialDraft(draft));};
+  function chooseFile(event){
+   const next=selectedFile(event.target.files?.[0]);if(!next)return;
+   const issue=selectedFileIssue(next);if(issue){event.target.value='';setMessage(explain(issue));return;}
+   if([explain('PLAN_IMPORT_FILE_INVALID'),explain('PLAN_IMPORT_FILE_TOO_LARGE')].includes(message))setMessage('');
+   linkedUserWork.current=true;cancelLinkedRead();removeFileTargetRef.current=null;setRemoveFileRequested(false);
+   const csv=next.type==='text/csv';if(documentCurve||draft?.budgetImport===true){setDraft(null);setCurveDraft(null);setReason('');setReceipt(null);replaceRows([]);}setFile(next);setConsent(false);setSpreadsheetSelection(csv?csvBudgetProfile:'');setSelectedBudgetOwner(csv?measurementOwner:null);setDocumentPurpose('TASKS');setCurveReviewConfirmed(false);setApproved(false);privateView.current=csv||(!documentCurve&&draft?.budgetImport!==true&&financialDraft(draft));
+  }
  function requestLocalFileRemoval(){
   if(!mounted.current||!file||blocked||localRequest.current||attemptReference.current||linkedRead.current)return;
   removeFileTargetRef.current={file,projectId,scope};setRemoveFileRequested(true);

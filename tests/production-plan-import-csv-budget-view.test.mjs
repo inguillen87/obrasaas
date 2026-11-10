@@ -85,9 +85,10 @@ test('revocation and A to B to A contexts remove prices and prevent a late CSV r
 const panel=readFileSync(new URL('plan-import-panel.js',account),'utf8'),ast=parse(panel,{sourceType:'module',plugins:['jsx']});
 function astNode(predicate){let found;const visit=value=>{if(!value||typeof value!=='object')return;if(predicate(value))found=value;for(const child of Object.values(value))if(Array.isArray(child))child.forEach(visit);else if(child&&typeof child==='object')visit(child);};visit(ast);assert.ok(found);return found;}
 const uploadNode=astNode(node=>node.type==='FunctionDeclaration'&&node.id?.name==='upload');
+const fileIssueNode=astNode(node=>node.type==='FunctionDeclaration'&&node.id?.name==='selectedFileIssue');
 async function upload(overrides={}){
  const owner={},calls=[],messages=[],file=new File(['synthetic,not,parsed,here'],'synthetic.csv',{type:'text/csv'}),environment={locked:false,busy:false,recoveryReady:true,attempt:null,file,consent:true,spreadsheetSelection:PLAN_CSV_BUDGET_PROFILE,PLAN_BUDGET_SOURCE_PROFILE,csvBudgetProfile:PLAN_CSV_BUDGET_PROFILE,csvBudgetConsent:PLAN_CSV_BUDGET_CONSENT,canApprove:true,canonicalAccess:true,selectedBudgetOwner:owner,measurementOwner:owner,documentPurpose:'TASKS',spreadsheetTypes:{},spreadsheetProfiles:[],setMessage:value=>messages.push(value),explain:code=>code,projectId:context.projectId,scope:context.scope,dispatch:value=>calls.push(value),...overrides};
- const run=Function(...Object.keys(environment),'return ('+panel.slice(uploadNode.start,uploadNode.end)+');')(...Object.values(environment));await run({preventDefault(){}});return {calls,messages};
+ const run=Function(...Object.keys(environment),panel.slice(fileIssueNode.start,fileIssueNode.end)+'\nreturn ('+panel.slice(uploadNode.start,uploadNode.end)+');')(...Object.values(environment));await run({preventDefault(){}});return {calls,messages};
 }
 
 test('actual upload command sends deterministic CSV consent with intact file and no AI fields',async()=>{
