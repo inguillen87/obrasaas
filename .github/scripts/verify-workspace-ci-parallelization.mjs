@@ -413,6 +413,7 @@ const isPortfolioEvidence=filename=>PORTFOLIO_ARTIFACTS.some(pattern=>matches(fi
 const preparationDependenciesFor=kind=>['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC'].includes(kind)?['src/lib/participant-kyc-image-set.mjs',...(kind==='PG_COMPANY_KYC'?['src/lib/project-preparation-http.mjs','src/lib/project-preparation-policy.mjs','src/lib/project-preparation-store.mjs']:[])]:[];
 const planImportDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?['src/lib/plan-import-ooxml.mjs']:[];
 export const LANES=['contracts','plans','people','field','meta','channels','business','workspace-ui'];
+const CONTRACTS_CI_LIMITS=Object.freeze({jobTimeoutMinutes:135,selftestBudgetMs:105*60*1000});
 // Keep each serialized lane below Linux's 128 KiB per-environment-string limit.
 // Leave room for the environment key and GitHub's outer JSON formatting while
 // retaining every screenshot, source digest and proof binding in the artifact.
@@ -2071,6 +2072,7 @@ export function loadContract(filename){
 export function buildWorkflow(contract){
  validateContract(contract);
  const base=contract.workflow;
+ const contractsTimeout=contract[PLAN_BUDGET_CURRENT_SECTION]?.pilotCompletionAdvance?CONTRACTS_CI_LIMITS.jobTimeoutMinutes:base.timeout;
  const jobs={};
  const setup=clone(contract.setup);
  setup[0].with.ref='${{ github.sha }}';
@@ -2078,7 +2080,7 @@ export function buildWorkflow(contract){
   const ownership=contract.lanes[lane];
   const manifest='.vercel/workspace-ci-evidence/lane-'+lane+'.json';
   jobs[lane]={
-   'runs-on':base.runner,'timeout-minutes':base.timeout,services:clone(base.services),env:clone(base.env),
+   'runs-on':base.runner,'timeout-minutes':lane==='contracts'?contractsTimeout:base.timeout,services:clone(base.services),env:clone(base.env),
    outputs:{provenance:'${{ steps.provenance.outputs.record }}',artifactId:'${{ steps.evidence.outputs.artifact-id }}',artifactDigest:'${{ steps.evidence.outputs.artifact-digest }}'},
    steps:[...clone(setup),
     {name:'Verify exact source, workflow and fresh evidence',run:`node ${script} preflight --lane ${lane} --expected-head "$GITHUB_SHA"`},
@@ -3421,8 +3423,10 @@ function runParallelSelftest(root,options){
   if(process.env.NODE_OPTIONS||process.env.NODE_PATH)throw fail('SELFTEST_NODE_PRELOAD');
   const execution={session:randomUUID(),parentPid:process.pid,workflowFile:options.workflowFile,contractFile:options.contractFile};
   const before=snapshotSelftestPhysicalSource(root,options.expectedHead,execution);
-  const budget=options.timeoutMs??SELFTEST_WORKER_PROTOCOL.defaultBudgetMs;
-  if(!Number.isSafeInteger(budget)||budget<50||budget>SELFTEST_WORKER_PROTOCOL.maxBudgetMs)throw fail('SELFTEST_BUDGET');
+  const contractsCi=options.pilotCompletion===true&&before.context.run.kind==='GITHUB_ACTIONS'&&before.context.run.job==='contracts';
+  const maxBudget=contractsCi?CONTRACTS_CI_LIMITS.selftestBudgetMs:SELFTEST_WORKER_PROTOCOL.maxBudgetMs;
+  const budget=options.timeoutMs??(contractsCi?maxBudget:SELFTEST_WORKER_PROTOCOL.defaultBudgetMs);
+  if(!Number.isSafeInteger(budget)||budget<50||budget>maxBudget)throw fail('SELFTEST_BUDGET');
   const parent=path.join(before.root,'.vercel','workspace-ci-evidence');mkdirSync(parent,{recursive:true});
   if(realpathSync(parent)!==parent)throw fail('SELFTEST_SCRATCH_ROOT');
   const privateRoot=path.join(before.root,'.vercel','private');mkdirSync(privateRoot,{recursive:true});
@@ -3623,7 +3627,8 @@ async function main(){
  if(mode==='selftest'){
   if(opts['execution-mode']&&!['parallel','serial-reference'].includes(opts['execution-mode']))deny('CLI_ARGUMENT');
   const sourceHead=opts['expected-head']?identity(root,opts['expected-head']):identity(root,execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim());
-   const checks=opts['execution-mode']==='serial-reference'?selftest(workflow,contract,root):await runParallelSelftest(root,{expectedHead:sourceHead,workflowFile:file,contractFile:path.resolve(root,opts.contract||contractPath)}),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
+  const runOptions={expectedHead:sourceHead,workflowFile:file,contractFile:path.resolve(root,opts.contract||contractPath),pilotCompletion:Boolean(contract[PLAN_BUDGET_CURRENT_SECTION]?.pilotCompletionAdvance)};
+  const checks=opts['execution-mode']==='serial-reference'?selftest(workflow,contract,root):await runParallelSelftest(root,runOptions),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
   const escape=value=>value.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
   writeFileSync(output.replace(/\.json$/,'.xml'),`<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="workspace-ci-private-design" tests="${checks.length}" failures="0">${checks.map(check=>`<testcase name="${escape(check.name)}"/>`).join('')}</testsuite>\n`);
   console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,lanes:8}));return;
