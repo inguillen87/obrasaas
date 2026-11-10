@@ -100,9 +100,21 @@ test('serial reference and complete B deferred oracle retain their exact origina
 test('F0 F1 and F3 preserve every original canonical LF statement and phase-segment byte',()=>{
  const a=declaration('selftestWorkerA'),c=declaration('selftestWorkerC');
  const bodies={F0:a.slice(a.indexOf('tracker.mark("F0",4);'),a.indexOf('tracker.mark("F3",153);')),F1:c.slice(c.indexOf('tracker.mark("F1",12);'),c.lastIndexOf('return checks;')),F3:a.slice(a.indexOf('tracker.mark("F3",153);'),a.lastIndexOf('return checks;'))};
+ const needsContinuation="// The exact gate just checked the shared source inputs above. These cases\n// alter only lane results, so repeat the lane validation on the same inputs.\nconst verifyAlteredNeeds=needs=>gateLaneResults({...input,needs});\n";
+ assert.equal(bodies.F1.split(needsContinuation).length,2);
+ assert.equal(bodies.F1.split("verifyAlteredNeeds(n)").length-1,14);
+ assert.equal(bodies.F1.split("verifyAlteredNeeds(prior)").length-1,1);
+ bodies.F1=bodies.F1.replace(needsContinuation,"")
+  .replaceAll("verifyAlteredNeeds(n)","gate({...input,needs:n})").replaceAll("verifyAlteredNeeds(prior)","gate({...input,needs:prior})");
  for(const phase of ['F0','F1','F3'])assert.equal(hash(bodies[phase]),phaseHashes[phase]);
  assert.equal(c.includes("const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\\r\\n','\\n'));"),true);
  assert.equal(c.includes('const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);'),true);
+});
+test('the exported gate preserves its original preflight and lane validation in the original order',()=>{
+ const complete=declaration('gate'),lanes=declaration('gateLaneResults');
+ const delegate=" return gateLaneResults({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource,allowLegacyProvenance});\n}", header="function gateLaneResults({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource,allowLegacyProvenance}){\n";
+ assert.ok(complete.endsWith(delegate));assert.ok(lanes.startsWith(header));
+ assert.equal(hash(complete.slice(0,-delegate.length)+lanes.slice(header.length)),"3429721a31cecf8e9cf7091a46fe1d1125caca2162a8c6e9edf6cfc76be4cd72");
 });
 test('fixed three-worker topology preserves four canonical phases statement bounds and all transport budgets',()=>{
  const {protocol:p}=fixture().api;assert.equal(JSON.stringify(p.workers),JSON.stringify(expectedPhases));assert.equal(JSON.stringify(p.phases),JSON.stringify(['F0','F1','F2','F3']));

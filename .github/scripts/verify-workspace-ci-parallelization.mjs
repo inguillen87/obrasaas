@@ -2244,6 +2244,9 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
  validateContract(contract);if(!head(expectedHead)||!sha(workflowSha256)||!positive(runId)||!positive(runAttempt))deny('EXPECTED_IDENTITY_INVALID');
  if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');
  try{verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);}catch(error){if(['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code))deny('PROOF_BINDING_SOURCE');throw error;}
+ return gateLaneResults({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource,allowLegacyProvenance});
+}
+function gateLaneResults({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource,allowLegacyProvenance}){
  exactKeys(needs,LANES,'MISSING_OR_EXTRA_LANE');
  const paths=new Set(),artifacts=new Set();let fileCount=0;
  const records=[];
@@ -3009,6 +3012,9 @@ good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restorePartici
 const laneEnv=Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),JSON.stringify(needs[lane])]));
 good('lane-environment-preserves-exact-eight-records',()=>equal(readLaneNeedsEnvironment({...laneEnv,PATH:'controlled'}),needs,'ENV_TRANSPORT_CHANGED'));
 good('lane-environment-still-runs-exact-gate',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,contract.blocks.length);});
+// The exact gate just checked the shared source inputs above. These cases
+// alter only lane results, so repeat the lane validation on the same inputs.
+const verifyAlteredNeeds=needs=>gateLaneResults({...input,needs});
 bad('legacy-aggregate-environment-denied','LEGACY_AGGREGATE_ENV_DENIED',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_NEEDS_JSON:JSON.stringify(needs)}));
 const missingEnv={...laneEnv};
 delete missingEnv.WORKSPACE_LANE_META_JSON;
@@ -3036,26 +3042,26 @@ good('lane-output-size-bounds-every-fixture',()=>{
 bad('oversized-output-blocked-before-github-output','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('x'.repeat(LANE_OUTPUT_BYTES)));
 bad('escaped-output-size-uses-wire-bytes','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('"'.repeat(LANE_OUTPUT_BYTES/2)));
 bad('non-string-output-size-denied','PROVENANCE_LIMIT',()=>assertLaneOutputSize(null));
-for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>gate({...input,needs:n}));}
+for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>verifyAlteredNeeds(n));}
 let n=clone(needs);
 delete n.meta;
 bad('missing-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
 n=clone(needs);
 n.unexpected=n.meta;
-bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
+bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 n.meta.outputs.artifactId='';
-bad('missing-artifact','MISSING_ARTIFACT',()=>gate({...input,needs:n}));
+bad('missing-artifact','MISSING_ARTIFACT',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 delete n.meta.outputs.provenance;
-bad('missing-output','MISSING_LANE_OUTPUT',()=>gate({...input,needs:n}));
+bad('missing-output','MISSING_LANE_OUTPUT',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 n.meta.outputs.artifactDigest='';
-bad('missing-artifact-digest','MISSING_ARTIFACT',()=>gate({...input,needs:n}));
+bad('missing-artifact-digest','MISSING_ARTIFACT',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 n.meta.outputs.artifactId=n.contracts.outputs.artifactId;
-bad('artifact-id-collision','ARTIFACT_COLLISION',()=>gate({...input,needs:n}));
-function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+bad('artifact-id-collision','ARTIFACT_COLLISION',()=>verifyAlteredNeeds(n));
+function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>verifyAlteredNeeds(n));}
 altered('wrong-source-sha','PROVENANCE_IDENTITY',r=>{r.head='c'.repeat(40);});
 altered('wrong-workflow-sha','PROVENANCE_IDENTITY',r=>{r.workflowSha256='c'.repeat(64);});
 altered('wrong-contract-sha','PROVENANCE_IDENTITY',r=>{r.contractSha256='c'.repeat(64);});
@@ -3076,12 +3082,12 @@ altered('traversal-absolute','UNSAFE_PATH',r=>{r.files[0].path='/tmp/foreign.jso
 altered('traversal-backslash','UNSAFE_PATH',r=>{r.files[0].path='C:\\private\\foreign.json';});
 n=clone(needs);
 n.people.outputs.provenance='{}';
-bad('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>gate({...input,needs:n}));
+bad('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 let r=JSON.parse(n.people.outputs.provenance);
 r.files[0].bytes++;
 n.people.outputs.provenance=JSON.stringify(r);
-bad('unsealed-provenance-change','PROVENANCE_DIGEST',()=>gate({...input,needs:n}));
+bad('unsealed-provenance-change','PROVENANCE_DIGEST',()=>verifyAlteredNeeds(n));
 for(const [name,edit] of [
   ['omitted-workflow-block',w=>{w.jobs.people.steps.splice(6,1);}],
   ['duplicate-workflow-block',w=>{w.jobs.people.steps.splice(6,0,clone(w.jobs.people.steps[6]));}],
@@ -3093,7 +3099,7 @@ for(const [name,edit] of [
   ['changed-upload-path',w=>{w.jobs.channels.steps.at(-1).with.path+='.vercel/private/**\n';}]
  ]){const w=clone(original);edit(w);bad(name,'WORKFLOW_NOT_EQUIVALENT',()=>equivalent(w,contract));}
 good('all-historical-optional-PNGs-absent-with-required-weekly-captures-present',()=>assert.equal(gate(input).state,'PASS'));
-if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));bad('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>gate({...input,needs:n}));}
+if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));bad('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>verifyAlteredNeeds(n));}
 for(const lane of LANES)for(const pattern of contract.lanes[lane].optionalArtifactPatterns.filter(pattern=>!PORTFOLIO_ARTIFACTS.includes(pattern))){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.files.push({path:pattern.replaceAll('*','fixture'),sha256:'4'.repeat(64),bytes:128});
@@ -3106,14 +3112,14 @@ for(const lane of LANES)for(const filename of contract.lanes[lane].requiredRetai
   if(!r.files.length){const owned=contract.lanes[lane].artifacts.find(pattern=>pattern.endsWith('/'));if(owned)r.files.push({path:owned+'diagnostic.json',sha256:'4'.repeat(64),bytes:128});}
   delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
    const historicalEmpty=lane==='contracts'&&filename==='.vercel/private/biometric-real-model-proof.json';
-   bad((historicalEmpty?'missing-main-proof-with-other-artifact-':'missing-main-proof-')+lane+'-'+filename,r.files.length?'MISSING_REQUIRED_RETAINED_EVIDENCE':'EMPTY_EVIDENCE',()=>gate({...input,needs:n}));
-   if(historicalEmpty){const prior=clone(needs),empty=JSON.parse(prior[lane].outputs.provenance);empty.files=[];delete empty.manifestSha256;prior[lane].outputs.provenance=JSON.stringify(seal(empty));bad('missing-main-proof-'+lane+'-'+filename,'EMPTY_EVIDENCE',()=>gate({...input,needs:prior}));}
+   bad((historicalEmpty?'missing-main-proof-with-other-artifact-':'missing-main-proof-')+lane+'-'+filename,r.files.length?'MISSING_REQUIRED_RETAINED_EVIDENCE':'EMPTY_EVIDENCE',()=>verifyAlteredNeeds(n));
+   if(historicalEmpty){const prior=clone(needs),empty=JSON.parse(prior[lane].outputs.provenance);empty.files=[];delete empty.manifestSha256;prior[lane].outputs.provenance=JSON.stringify(seal(empty));bad('missing-main-proof-'+lane+'-'+filename,'EMPTY_EVIDENCE',()=>verifyAlteredNeeds(prior));}
  }
 for(const lane of LANES)for(const filename of contract.lanes[lane].requiredProducedEvidence){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.producedNotUploaded=r.producedNotUploaded.filter(file=>file.path!==filename);
   delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
-  bad('missing-produced-not-uploaded-'+filename,'MISSING_REQUIRED_PRODUCED_EVIDENCE',()=>gate({...input,needs:n}));
+  bad('missing-produced-not-uploaded-'+filename,'MISSING_REQUIRED_PRODUCED_EVIDENCE',()=>verifyAlteredNeeds(n));
  }
 altered('required-retained-list-omitted','RETAINED_EVIDENCE_CONTRACT',r=>{r.requiredRetainedEvidence.pop();});
 altered('required-produced-list-omitted','PRODUCED_EVIDENCE_CONTRACT',r=>{r.requiredProducedEvidence.pop();});
@@ -3154,7 +3160,7 @@ for(const [name,code,edit] of [
   ['foreign-lane','EVIDENCE_PRODUCER_COVERAGE',c=>{c.lanes.field.blocks=c.lanes.field.blocks.filter(id=>id!==52);c.lanes.meta.blocks.push(52);}],
   ['changed-command','CONTRACT_COMMAND',c=>{c.blocks.find(block=>block.id===52).step.run+='\ntrue';}]
  ]){const c=clone(historicalContractForNegativeFixtures);edit(c);bad('overtime-52-'+name,code,()=>validateContract(c));}
-function alteredField(name,code,edit){const n=clone(needs),r=JSON.parse(n.field.outputs.provenance);edit(r);delete r.manifestSha256;n.field.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+function alteredField(name,code,edit){const n=clone(needs),r=JSON.parse(n.field.outputs.provenance);edit(r);delete r.manifestSha256;n.field.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>verifyAlteredNeeds(n));}
 alteredField('overtime-52-omitted-from-provenance','BLOCK_COVERAGE',r=>{r.blockIds=r.blockIds.filter(id=>id!==52);});
 alteredField('overtime-52-duplicate-in-provenance','BLOCK_COVERAGE',r=>{r.blockIds.push(52);});
 alteredField('overtime-52-command-digest-changed','COMMAND_DIGEST',r=>{r.commandDigests[r.blockIds.indexOf(52)]='3'.repeat(64);});
@@ -3210,7 +3216,7 @@ for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYS
     ['binding-source-manifest-valid64-wrong','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],
     ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],
     ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}]
-   ]){if(spec.kind==='UI_CAUSAL'&&name==='binding-checks')continue;const n=clone(needs),r=JSON.parse(n[spec.lane].outputs.provenance);edit(r);delete r.manifestSha256;n[spec.lane].outputs.provenance=JSON.stringify(seal(r));bad(spec.id+'-'+name,code,()=>gate({...input,needs:n}));}
+   ]){if(spec.kind==='UI_CAUSAL'&&name==='binding-checks')continue;const n=clone(needs),r=JSON.parse(n[spec.lane].outputs.provenance);edit(r);delete r.manifestSha256;n[spec.lane].outputs.provenance=JSON.stringify(seal(r));bad(spec.id+'-'+name,code,()=>verifyAlteredNeeds(n));}
    bad(spec.id+'-current-source-bytes-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:file=>file===spec.sourceFiles[0]?Buffer.concat([shadowSource(file),Buffer.from('altered shadow source')]):shadowSource(file)}));
    // Keep this binding control independent from the causal fixture-presence
    // guard when its additive script source sorts before the application graph.
