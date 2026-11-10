@@ -445,6 +445,21 @@ jobs:
       - run: node scripts/verify-meta-customer-ui.mjs
       - run: node scripts/verify-worker-channel-ui.mjs
       - run: node scripts/verify-customer-whatsapp-ui.mjs
+      - name: Customer inbox pagination and operation recovery
+        run: |
+          npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
+          node --test tests/production-customer-inbox.test.mjs
+          node scripts/verify-customer-inbox-postgres.mjs
+      - name: Full page receipt recovery and private inbox UX
+        run: |
+          npx eslint scripts/verify-workspace-reload-ui.mjs scripts/verify-customer-inbox-ui.mjs tests/production-workspace-recovery-journal.test.mjs
+          node scripts/verify-workspace-reload-ui.mjs
+          node scripts/verify-customer-inbox-ui.mjs
+      - name: Clerk entry, invitation navigation and expired-session recovery
+        run: |
+          npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/identity-load-guard.js' 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
+          node --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
+          node scripts/verify-clerk-access-ui.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane meta --expected-head "$GITHUB_SHA"
@@ -462,6 +477,9 @@ jobs:
             .vercel/template-send-evidence/
             .vercel/meta-demo-pilot-evidence/
             .vercel/demo-pilot-evidence/
+            .vercel/clerk-access-evidence/
+            .vercel/workspace-reload-evidence/
+            .vercel/customer-inbox-evidence/
             .vercel/workspace-ci-evidence/lane-meta.json
           include-hidden-files: true
           retention-days: 7
@@ -518,6 +536,9 @@ jobs:
           node scripts/verify-company-channel-postgres.mjs
           node scripts/verify-company-channel-boundary.mjs
           node scripts/verify-company-channel-ui.mjs
+      - run: node scripts/verify-company-onboarding-postgres.mjs
+      - run: node scripts/verify-workspace-ui.mjs
+      - run: node scripts/verify-company-onboarding-ui.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane channels --expected-head "$GITHUB_SHA"
@@ -534,6 +555,10 @@ jobs:
             .vercel/private/company-channel-postgres-proof.json
             .vercel/private/company-channel-boundary-proof.json
             .vercel/company-channel-ui-evidence/
+            .vercel/workspace-evidence/browser*.json
+            .vercel/workspace-evidence/workspace-*.json
+            .vercel/workspace-evidence/*.png
+            .vercel/company-onboarding-evidence/
             .vercel/workspace-ci-evidence/lane-channels.json
           include-hidden-files: true
           retention-days: 7
@@ -672,24 +697,6 @@ jobs:
       - name: Pinned Python dependencies
         run: python -m pip install --disable-pip-version-check -r requirements.txt
       - run: node scripts/verify-workspace-postgres.mjs
-      - name: Customer inbox pagination and operation recovery
-        run: |
-          npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
-          node --test tests/production-customer-inbox.test.mjs
-          node scripts/verify-customer-inbox-postgres.mjs
-      - run: node scripts/verify-company-onboarding-postgres.mjs
-      - run: node scripts/verify-workspace-ui.mjs
-      - name: Full page receipt recovery and private inbox UX
-        run: |
-          npx eslint scripts/verify-workspace-reload-ui.mjs scripts/verify-customer-inbox-ui.mjs tests/production-workspace-recovery-journal.test.mjs
-          node scripts/verify-workspace-reload-ui.mjs
-          node scripts/verify-customer-inbox-ui.mjs
-      - run: node scripts/verify-company-onboarding-ui.mjs
-      - name: Clerk entry, invitation navigation and expired-session recovery
-        run: |
-          npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/identity-load-guard.js' 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
-          node --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
-          node scripts/verify-clerk-access-ui.mjs
       - name: Canonical authorized portfolio, private source-bound contracts and responsive recovery
         run: |
           npx eslint scripts/verify-portfolio-overview-contracts.mjs scripts/verify-portfolio-overview-ui.mjs scripts/verify-workspace-postgres.mjs tests/production-portfolio-overview.test.mjs --max-warnings 0
@@ -714,11 +721,7 @@ jobs:
         with:
           name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-workspace-ui
           path: |
-            .vercel/workspace-evidence/
-            .vercel/company-onboarding-evidence/
-            .vercel/clerk-access-evidence/
-            .vercel/workspace-reload-evidence/
-            .vercel/customer-inbox-evidence/
+            .vercel/workspace-evidence/postgres.json
             .vercel/portfolio-overview-contract-evidence/
             .vercel/private/portfolio-overview-ui-validation.json
             .vercel/private/portfolio-*.png
