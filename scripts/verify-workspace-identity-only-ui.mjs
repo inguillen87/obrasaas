@@ -6,6 +6,7 @@ import {createServer} from 'node:net';
 import {spawn,execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+import {PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION} from '../src/lib/participant-analysis-consent.mjs';
 import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
 
 // Actual account/private identity components, isolated synthetic session/API.
@@ -48,7 +49,7 @@ function pinFixtureGraph(relative){
   assert.ok(resolved,'Missing fixture source dependency '+match[1]);pinFixtureGraph(path.relative(root,resolved));
  }
 }
-pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');
+pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');pinFixtureGraph('src/lib/participant-analysis-consent.mjs');
 function copyGraph(relative){
  relative=relative.split(/[\\/]/).join('/');
  if(copied.has(relative))return;assert.ok(relative.startsWith('src'+path.sep)||relative.startsWith('src/'));
@@ -79,7 +80,11 @@ export default function Page(){
  return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><OnboardingGuide key={"guide-"+context} orgId={"fixture-"+context} orgRole="org:member" observation={guideObservation?.context===context?guideObservation.value:null}/><AccountWorkspace key={"workspace-"+context} getSessionToken={token} onGuideObservation={observeGuide} initialProjectId={initialProjectId}/></main>;
 }`);
 const picturePath=path.join(fixture,'synthetic.png');
-writeFileSync(picturePath,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'));
+// Geometric synthetic pixels only; the real local quality gate remains active.
+const selfiePicturePath=path.join(fixture,'synthetic-selfie.png'),tinyPicturePath=path.join(fixture,'synthetic-too-small.png');
+writeFileSync(picturePath,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAoAAAAHgCAIAAAC6s0uzAAAGsElEQVR42u3VwQkAIAwEwVRhcULKsT/L8WkPPgKRgang4NgYuQCAYmECABBgABBgAECAAUCAAQABBgABBgAEGAAEGAAQYAAQYAAQYABAgAFAgAEAAQYAAQYABBgABBgAEGAAEGAAEGAAQIABQIABAAEGAAEGAAQYAAQYABBgABBgABBgAECAAUCAAQABBgABBgAEGAAEGAAQYAAQYAAQYACgdYDPnrTmHgACjAADCLAACzAAAowAAwiwAAswAAKMAAMIMAIMgAAjwAACjAADCLAAI8AAAowAAwiwAAswAAKMAAMIsAALMAACjAADCDACDIAAI8AAAowAAwiwACPAAAKMAAMIsAALMAACjAADCLAACzAAAowAAwgwAgyAACPAAAKMAAMIsAAjwAACjAADCLAACzAAAowAAwiwAAswAAKMAAMIMAIMgAAjwAACjAADCLAAI8AAAowAAwiwAAswAAKMAAMIsAALMAACjAADCDACDIAAI8AAAowAAwiwACPAAAKMAAMIsAALMAACjAADCLAACzAAAowAAwgwAgyAACPAAAKMAAMIsAAjwAACjAADCLAACzAAAowAAwiwAAswAAKMAAMIsIAJMAACjAADCDACDCDAAowAAwgwAgwgwAIswAAIMAIMIMACLMAACDACDCDAAizAAAgwAgwgwAgwgAALMAIMIMAIMIAAC7AAAyDACDCAAAuwAAMgwAgwgAALsAADIMAIMIAAI8AACDACDCDACDCAAAuwAHsIgAAjwAACLMACDIAAI8AAAizAAgyAACPAAAKMAAMgwAgwgAAjwAACLMAIMIAAI8AAAizAAgyAACPAAAIswAIMgAAjwAACjAADIMAIMMCfAQYABBgABBgABBgAEGAAEGAAQIABQIABAAEGAAEGAAQYAAQYAATYBAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAAIMAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwACDAACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAgwAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAAIMAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwACDAACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAgwAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAAIMAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwACDAACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAgwAAgwAAgwFYAAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAQABBgABBgABBgAEGAAEGAAQYAAQYABAgAFAgAEAAQYAAQYAAQYABBgABBgAEGAAEGAAQIABQIABAAEGAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAQABBgABBgABBgAEGAAEGAAQYAAQYABAgAFAgAEAAQYAAQYAAQYABBgABBgAEGAAEGAAQIABQIABAAEGAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAQABBgABBgABBgAEGAAEGAAQYAAQYABAgAFAgAEAAQYAAQYAAQYABBgABBgAEGAAEGAAQIABQIABAAEGAAEGAAG2AgAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAACDAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwAAgwACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAACDAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwAAgwACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAACDAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwAAgwACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAACLAJAECAAUCAAQABBgABBgAEGAAEGAAQYAAQYABAgAFAgAFAgAEAAQYAAQYABBgABBgAEGAAEGAAQIABQIABQIABAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAUCAAQABBgABBgAEGAAEGAAQYAAQYABAgAFAgAFAgAEAAQYAAQYABBgABBgAEGAAEGAAQIABQIABQIABAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAUCAAQABBgABBgAEGAAEGAAQYAAQYABAgAFAgAFAgAEAAQYAAQYABBgABBgAeHABYBn9Aw4cORsAAAAASUVORK5CYII=','base64'));
+writeFileSync(selfiePicturePath,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAoAAAAHgCAIAAAC6s0uzAAAHAElEQVR42u3VQQkAMAwEwaiJkMqohoqNnD4job9CYGAUHAcbeRYA8FmYAAAEGAAEGAAQYAAQYABAgAFAgAEAAQYAAQYABBgABBgABBgAEGAAEGAAQIABQIABAAEGAAEGAAQYAAQYAAQYABBgABBgAECAAUCAAQABBgABBgAEGAAEGAAEGAAQYAAQYABAgAFAgAEAAQYAAQYABBgABBgABBgAEGCebm1G82EQYAQYAQYEGAEWYECAEWAEGBBgBFiAAQFGgBFgQIAFGAEGBBgBRoABARZgBBgQYAQYAQYBRoARYECAEWABBgQYAUaAAQFGgAUYEGAEGAEGBFiAEWBAgBFgBBgQYAFGgAEBRoARYBBgBBgBBgQYARZgQIARYAQYEGAEWIABAUaAEWBAgAUYAQYEGAFGgAEBFmAEGBBgBBgBBgG2ggAjwIAAI8ACDAgwAowAAwKMAAswIMAIMAIMCLAAI8CAACPACDAgwAKMAAMCjAAjwIAACzACDAgwAizAgAAjwAgwIMAIsAADAowAI8CAAAswAgwIMAKMAAMCLMAIMCDACDACDAiwACPAgAAjwAIMCDACjAADAowACzAgwAgwAgwIsAAjwIAAI8AIMCDAAowAAwKMACPAgAALMAIMCDACLMCAACPACDAgwAiwAAMCjAAjwIAAI2ACDAgwAowAAwIswAgwIMAIMAIMCLAAI8CAACPAAgwIMAKMAAMCjAALMCDACDACDAgwAizAgAAjwAgwIMACjAADAowAI8CAAAswAgwIMAIswIAAI8AIMCDACLAAAwKMACPAgAAjwAIMCDACjAADAizACDAgwAgwAgwIsAAjwIAAI8AC7MYgwAgwAgwIMAIswIAAI8AIMCDACLAAAwKMACPAgAALMAIMCDACjAADAizACDAgwAgwAgwCjAAjwIAAI8ACDAgwAowAAwKMAAswIMAIMAIMCLAAI8CAACPACDAgwAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAAIMAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwACDAACDAACDAJgAAAQYAAQYABBgABBgAEGAAEGAAQIABQIABAAEGAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAQABBgABBgABBgAEGAAEGAAQYAAQYABAgAFAgAEAAQYAAQYAAQYABBgABBgAEGAAEGAAQIABQIABAAEGAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAQABBgABBgABBgAEGAAEGAAQYAAQYABAgAFAgAEAAQYAAQYAAQYABBgABBgAEGAAEGAAQIABQIABAAEGAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAQABBgABBgABBgAEGAAEGAAQYAAQYABAgAFAgAEAAQYAAQYAAbYCAAgwAAgwACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAACDAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwAAgwACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAACDAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwAAgwACDAACDAAIAAA4AAAwACDAACDAAIMAAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwACDAACDAACDAAIMAAIMAAgAADgAADAAIMAAIMAAgwAAgwAAiwFQBAgAFAgAEAAQYAAQYABBgABBgAEGAAEGAAQIABQIABQIABAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAUCAAQABBgABBgAEGAAEGAAQYAAQYABAgAFAgAFAgAEAAQYAAQYABBgABBgAEGAAEGAAQIABQIABQIABAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAUCAAQABBgABBgAEGAAEGAAQYAAQYABAgAFAgAFAgAEAAQYAAQYABBgABBgAEGAAEGAAQIABQIABQIABAAEGAAEGAAQYAAQYABBgABBgAECAAUCAAUCAAQABBgABBgAEGAAEGAAQYAAQYABAgAFAgAFAgAEAAQYAAQYABBgABBgAEGAAEGAAQIABQIABQIBNAAACDAACDAAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwAAgwACDAACDAAIMAAIMAAgAADgAADAAIMAAIMAAIMAAgwAAgwACDAACDAAIAAA4AAAwACDAACDAACDAAIMAAIMAAgwAAgwACAAAOAAAMAAgwAAgwAAgwACDAACDAAIMAAIMAAgAADgAADAAIMAAIMAAIMAAgwAAgwACDAACDAAIAAA4AAAwACDAACDAACDAAIMAAIMAAgwAAgwACAAAPAAA2+9XEDlQLA1AAAAABJRU5ErkJggg==','base64'));
+writeFileSync(tinyPicturePath,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'));
 const port=Number(process.env.WORKSPACE_IDENTITY_UI_PORT||3174);assert.ok(Number.isInteger(port)&&port>=3000&&port<=65535);
 await new Promise((resolve,reject)=>{const probe=createServer();probe.once('error',reject);probe.listen(port,'127.0.0.1',()=>probe.close(error=>error?reject(error):resolve()));});
 const origin='http://127.0.0.1:'+port;
@@ -91,6 +96,8 @@ const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function waitText(page,label){await page.waitForFunction(text=>document.body.innerText.includes(text),{timeout:15000},label);}
 async function visibleElementClick(page,handle){
+ assert.ok(handle,'A click requires a current element handle');
+ assert.ok(await page.evaluate(node=>Boolean(node?.isConnected),handle),'Click target must still be connected before opening disclosures');
  // Open only necessary disclosures by clicking their visible native summary.
  // Never set details.open or bypass the rendered user navigation.
  for(let depth=0;depth<12;depth++){
@@ -104,9 +111,9 @@ async function visibleElementClick(page,handle){
 async function click(page,label){
  const hiddenScreen=await page.evaluate(text=>{const matches=[...document.querySelectorAll('button')].filter(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text));if(matches.some(button=>!button.closest('[hidden]')))return null;return matches[0]?.closest('[data-workspace-screen]')?.dataset.workspaceScreen||null;},label);
  if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);await chooseWorkspaceView(page,id);}
- await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),{timeout:15000},label);
- const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),label);
- await visibleElementClick(page,handle.asElement());await handle.dispose();
+ const handle=await page.waitForFunction(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text))||false,{timeout:15000},label);
+ const element=handle.asElement();assert.ok(element,'Missing current button '+label);
+ try{await visibleElementClick(page,element);}finally{await handle.dispose();}
 }
 async function chooseWorkspaceView(page,id){
  const own='nav[aria-label="Mi participación en la obra"]';if(await page.$(own)){const anchor=await page.$(own+' a[href="#'+id+'"]');assert.ok(anchor,'Private destination must be listed');await visibleElementClick(page,anchor);await anchor.dispose();await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);return;}
@@ -184,17 +191,17 @@ async function createPage(width,current,sharedContext=null,{initialPath=''}={}){
    }
    if(url.pathname==='/api/identity/participants'){
     assert.equal(scope,scopeA);assert.ok(['p-a','p-a2'].includes(projectId));
-    if(projectId==='p-a2'){assert.equal(request.method(),'GET');assert.equal(url.searchParams.has('operationId'),false);return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[{...current.row,id:'worker-second',name:'Perfil propio de segunda obra',kyc:current.secondKycApproved?current.row.kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}});}
+    if(projectId==='p-a2'){assert.equal(request.method(),'GET');assert.equal(url.searchParams.has('operationId'),false);return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[{...current.row,id:'worker-second',name:'Perfil propio de segunda obra',kyc:current.secondKycApproved?current.row.kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},privateBiometricNotice:{version:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,text:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE}});}
     if(current.mode==='revoked-own')return answer(request,403,{code:'PARTICIPANT_ACCESS_REQUIRED'});
     if(request.method()==='POST'){
-     assert.equal(payload.action,undefined);assert.equal(payload.scope,scopeA);assert.equal(payload.workerId,'worker-fixture');assert.equal(payload.consent,true);assert.match(payload.front,/^data:image\/png;base64,/);assert.match(payload.selfie,/^data:image\/png;base64,/);
+     assert.equal(payload.action,undefined);assert.equal(payload.scope,scopeA);assert.equal(payload.workerId,'worker-fixture');assert.equal(payload.consent,true);assert.equal(payload.noticeVersion,PARTICIPANT_NOTICE_VERSION);assert.equal(payload.biometricNoticeVersion,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION);assert.equal(payload.biometricMode,'MANUAL');assert.equal(payload.biometricConsent,false);assert.notEqual(payload.ocrConsent,true);assert.match(payload.front,/^data:image\/png;base64,/);assert.match(payload.selfie,/^data:image\/png;base64,/);
      current.posts.push(payload);current.row={...current.row,kyc:{...current.row.kyc,status:'PENDING_REVIEW',submissionId:'kyc-fixture',submittedAt:'2026-10-07T12:00:00Z'}};
      current.receipts.set(payload.operationId,{scope,projectId,state:'RECORDED',saved:true,replayed:true,receiptId:'participant_'+payload.operationId,participant:current.row});
      return answer(request,503,{code:'PARTICIPANT_OPERATION_UNCONFIRMED'});
     }
     if(url.searchParams.has('operationId')){const id=url.searchParams.get('operationId');current.receiptQueries.push(id);assert.ok(current.receipts.has(id));return answer(request,200,current.receipts.get(id));}
     if(current.destinationHoldProfile===true)await new Promise(resolve=>(current.destinationHeldProfile??=[]).push(resolve));
-    return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[current.row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}});
+    return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[current.row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},privateBiometricNotice:{version:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,text:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE}});
    }
    if(url.pathname==='/api/identity/portfolio-overview')return answer(request,200,{scope,records:[],nextCursor:null});
    // No operational module may fetch during the private-only state.
@@ -212,16 +219,27 @@ function safeReferences(value,expected){
 async function waitRecordedTask(page,label){
  await page.waitForFunction(text=>document.querySelector('[data-schedule-workbench]')?.textContent.includes(text),{timeout:15000},label);
 }
-async function prepareOwn(page,{consult=true}={}){
+async function prepareOwn(page,{consult=true,current}={}){
+ assert.ok(current,'An own presentation fixture requires its controlled request ledger');const beforePosts=current.posts.length;
  if(consult)await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');
  for(const [title,label]of [['Frente del documento','Usar documento revisado'],['Fotografía del rostro','Usar fotografía revisada']]){
-  const selector='fieldset[aria-label="'+title+'"]';await (await page.$(selector+' input[type=file]')).uploadFile(picturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());await click(page,label);
-  await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Imagen revisada y lista'),{},title);
+  const selector='fieldset[aria-label="'+title+'"]';
+  if(title==='Frente del documento'){
+   await (await page.$(selector+' input[type=file]')).uploadFile(tinyPicturePath);
+   await page.waitForFunction(selector=>document.querySelector(selector)?.innerText.includes('La imagen es demasiado pequeña.'),{},selector);
+   assert.equal(await page.$(selector+' img'),null,'A too-small source must not create a preparation preview');assert.equal(current.posts.length,beforePosts,'Rejected local photo quality never submits an identity');
+  }
+  await (await page.$(selector+' input[type=file]')).uploadFile(title==='Frente del documento'?picturePath:selfiePicturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());await click(page,label);
+  await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Foto preparada. El encuadre y la calidad se comprobarán al enviar.'),{},title);
   if(title==='Frente del documento'){await click(page,'Continuar al dorso');await click(page,'Continuar sin dorso');}
  }
- await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo presentar estas imágenes')).querySelector('input').click());
+ const capture='[data-kyc-capture-step="3"]',labels=['Enviar para verificar','Solicitar revisión sin comparación facial'];
+ const choices=await page.$eval(capture,(root,labels)=>({requiredChecks:root.querySelectorAll('input[type=checkbox][required]').length,radios:root.querySelectorAll('input[type=radio]').length,buttons:labels.map(label=>{const button=[...root.querySelectorAll('button')].find(node=>node.textContent.trim()===label);return button?{label,type:button.type,disabled:button.disabled}:null;})}),labels);
+ assert.deepEqual(choices,{requiredChecks:0,radios:0,buttons:labels.map(label=>({label,type:'button',disabled:false}))});assert.equal(current.posts.length,beforePosts,'Preparing photos never chooses or submits a final action');
+ const previews=await page.$$eval('form fieldset img',nodes=>nodes.map(node=>node.src));
+ await page.$eval('[aria-labelledby="participant-title"] form',form=>form.requestSubmit());await waitText(page,'Elegí una de las dos opciones de envío para presentar las imágenes.');assert.equal(current.posts.length,beforePosts,'Implicit form submission must not authorize identity or comparison');assert.deepEqual(await page.$$eval('form fieldset img',nodes=>nodes.map(node=>node.src)),previews);
 }
-async function presentOwn(page){await prepareOwn(page);await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');
+async function presentOwn(page,current){await prepareOwn(page,{current});await click(page,'Solicitar revisión sin comparación facial');await waitText(page,'El resultado quedó sin confirmar');
 }
 async function privateFlow(width,{reload=false,director=false}={}){
  const current=newState(director?'director':'pending'),{context,page}=await createPage(width,current);
@@ -229,7 +247,7 @@ async function privateFlow(width,{reload=false,director=false}={}){
  const privateScreenshot=path.join(evidence,'identity-private-'+width+(reload?'-reload':director?'-director':'')+'.png');await page.screenshot({path:privateScreenshot,fullPage:true});screenshots.push(path.relative(root,privateScreenshot).split(path.sep).join('/'));
  assert.deepEqual(current.requests.map(row=>row.path),['/api/identity/workspace','/api/identity/workspace','/api/identity/participants']);
  assert.deepEqual(current.requests.at(-1),{path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null});
- await presentOwn(page);await identityOnly(page);safeReferences(await references(page),1);assert.equal(current.posts.length,1);
+ await presentOwn(page,current);await identityOnly(page);safeReferences(await references(page),1);assert.equal(current.posts.length,1);
  assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/participants'].includes(row.path)));
  if(reload){await page.reload({waitUntil:'networkidle0'});assert.equal(current.acceptedReloadWarning,true);await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await identityOnly(page);await waitText(page,'Comprobar el mismo intento');assert.equal(current.receiptQueries.length,0);safeReferences(await references(page),1);}
  await click(page,'Comprobar el mismo intento');await waitText(page,reload?'Recibo confirmado':'Operación guardada con recibo');assert.equal(current.posts.length,1);assert.deepEqual(current.receiptQueries,[current.posts[0].operationId]);safeReferences(await references(page),0);
@@ -300,7 +318,7 @@ async function restrictedChannel(page,{loaded=true}={}){
 }
 async function startPrivacy(width,status='PENDING_REVIEW'){
  const current=newState('privacy-'+status);current.row.kyc={...current.row.kyc,status};
- const value=await createPage(width,current);await click(value.page,'Obra A');await privacySurface(value.page);return {current,...value};
+ const value=await createPage(width,current);await click(value.page,'Obra A');await waitText(value.page,'Persona de ensayo');await privacySurface(value.page);return {current,...value};
 }
 async function withdraw(page,action){
  if(action==='REVOKE_TEMPLATE_MESSAGES')return click(page,'Retirar autorización de avisos');
@@ -308,6 +326,9 @@ async function withdraw(page,action){
 }
 async function privacyWithdrawal(width,status,action,{reload=false}={}){
  const {current,context,page}=await startPrivacy(width,status);current.channelLoseReply=reload;
+ const ownProfileGet={path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null},profileReads=()=>current.requests.filter(row=>row.path==='/api/identity/participants');
+ assert.deepEqual(profileReads(),[ownProfileGet],'Initial visible identity loads exactly its canonical own profile');
+ assert.equal(await page.$eval('#participant-title',node=>node.closest('[data-workspace-screen]').hidden),true,'Mi WhatsApp keeps the identity panel hidden');
  await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');await restrictedChannel(page);assert.equal(ownChannel(current,'p-a').eligible,false);assert.equal(ownChannel(current,'p-a').templateConsent.canGrant,false);
  await withdraw(page,action);
  if(reload){
@@ -316,8 +337,13 @@ async function privacyWithdrawal(width,status,action,{reload=false}={}){
   assert.equal(current.channelPosts.length,1);assert.deepEqual(current.channelReceiptQueries,[]);safeReferences(await references(page),1);
   await click(page,'Consultar resultado pendiente');await waitText(page,'Recibo confirmado');assert.deepEqual(current.channelReceiptQueries,[current.channelPosts[0].operationId]);safeReferences(await references(page),0);
   await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');
+  assert.deepEqual(profileReads(),[ownProfileGet],'Reloading Mi WhatsApp must not fetch the hidden identity profile');
+  assert.equal(await page.$eval('#participant-title',node=>node.closest('[data-workspace-screen]').hidden),true);
+  await privacyDisclosure(page,false);await waitText(page,'Persona de ensayo');
+  assert.deepEqual(profileReads(),[ownProfileGet,ownProfileGet],'Returning to visible identity after reload performs its fresh canonical read');
+  await privacySurface(page);await waitText(page,'Titular propio WhatsApp A');safeReferences(await references(page),0);
  }else await waitText(page,action==='UNLINK'?'WhatsApp desvinculado.':'Autorización retirada.');
- await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel','/api/identity/participants'].includes(row.path)));assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/participants'),Array.from({length:reload?2:1},()=>({path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null})),'Exactly one canonical own-profile metadata GET per initial load or explicit reload is allowed');
+ await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel','/api/identity/participants'].includes(row.path)));assert.deepEqual(profileReads(),Array.from({length:reload?2:1},()=>({...ownProfileGet})),'Own-profile reads occur only for initial visible identity and explicit return after reload');assert.equal(current.posts.length,0,'Private withdrawal and section navigation never submit identity');
  const screenshot=path.join(evidence,'privacy-'+status+'-'+action+'-'+width+(reload?'-reload':'')+'.png');await page.screenshot({path:screenshot,fullPage:true});screenshots.push(path.relative(root,screenshot).split(path.sep).join('/'));
  checks.push({name:reload?'own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST':'own-private-withdrawal-without-KYC-admission',width,status,action,reload,posts:current.channelPosts.length,receiptGets:current.channelReceiptQueries.length,...(reload?{sameOperationId:true,durableReference:true}:{})});await context.close();
 }
@@ -405,7 +431,15 @@ async function approvalTokenNavigationRace(width,outcome){
   await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');releaseCurrent();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);
   assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A');assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual selection must cancel the previous focus request');
-  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');
+  const workspaceRead=projectId=>page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/workspace'&&response.request().method()==='GET'&&(projectId===null?url.search==='':url.searchParams.get('projectId')===projectId&&url.searchParams.get('scope')===scopeA);},{timeout:15000});
+  const workspaceBefore=current.requests.filter(row=>row.path==='/api/identity/workspace').length;
+  const refreshedReads=Promise.all([workspaceRead(null),workspaceRead('p-a')]);
+  await click(page,'Actualizar');assert.deepEqual((await refreshedReads).map(response=>response.status()),[200,200]);
+  await settled(page);await waitRecordedTask(page,'Tarea operativa p-a');
+  assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/workspace').slice(workspaceBefore).map(row=>row.projectId||null),[null,'p-a'],'Refresh must complete the account and preserved canonical project reads before manual selection');
+  const reselectedRead=workspaceRead('p-a');await click(page,'Obra A');assert.equal((await reselectedRead).status(),200);
+  await settled(page);await waitRecordedTask(page,'Tarea operativa p-a');
+  assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/workspace').slice(workspaceBefore).map(row=>row.projectId||null),[null,'p-a','p-a'],'The preserved manual selection requires exactly one additional canonical project read');
   assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','A refreshed manual selection must not restore the consumed focus request');
   assert.equal(current.requests.filter(row=>row.path==='/api/identity/worker-channel').length,0);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);
  }else{
@@ -455,7 +489,7 @@ async function guideDestination(page,id){
 async function destinationDelayedMount(width){
  const current=newState('destination-delayed');current.holdWorkspaceProject='p-a';current.destinationHoldProfile=true;const {context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await heldCanonical(current);
  assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#identity-access-title'),null);assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');const beforeRelease={targetMounted:false,focused:false,heldCanonicalCount:current.held.length,...destinationNetwork(current)};
- current.holdWorkspaceProject=null;current.held.shift()();await identityOnly(page);for(let attempt=0;!current.destinationHeldProfile?.length&&attempt<100;attempt++)await pause(20);assert.equal(current.destinationHeldProfile?.length,1);const beforeProfileGeometry=await destinationGeometry(page,'worker-channel-title');current.destinationHoldProfile=false;current.destinationHeldProfile.shift()();await page.waitForFunction(()=>document.querySelector('[aria-labelledby="participant-title"]')?.textContent.includes('Persona de ensayo'));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const geometry=await destinationGeometry(page,'worker-channel-title'),profileRead={heldBeforeNavigation:true,releasedAfterNavigation:true,beforeGeometry:beforeProfileGeometry,afterGeometry:geometry},activationControls=await noDestinationActivation(page),network=destinationNetwork(current);assert.equal(network.workspaceGets,2);assert.equal(network.participantGets,1);const screenshot=await destinationScreenshot(page,'delayed',width);
+ current.holdWorkspaceProject=null;current.held.shift()();await identityOnly(page);await destinationGeometry(page,'worker-channel-title');assert.equal(destinationNetwork(current).participantGets,0,'Inactive identity must not consult private data');await chooseWorkspaceView(page,'participant-title');for(let attempt=0;!current.destinationHeldProfile?.length&&attempt<100;attempt++)await pause(20);assert.equal(current.destinationHeldProfile?.length,1);await chooseWorkspaceView(page,'worker-channel-title');const beforeProfileGeometry=await destinationGeometry(page,'worker-channel-title');current.destinationHoldProfile=false;current.destinationHeldProfile.shift()();await page.waitForFunction(()=>document.querySelector('[aria-labelledby="participant-title"]')?.textContent.includes('Persona de ensayo'));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const geometry=await destinationGeometry(page,'worker-channel-title'),profileRead={heldBeforeNavigation:true,releasedAfterNavigation:true,beforeGeometry:beforeProfileGeometry,afterGeometry:geometry},activationControls=await noDestinationActivation(page),network=destinationNetwork(current);assert.equal(network.workspaceGets,2);assert.equal(network.participantGets,1);const screenshot=await destinationScreenshot(page,'delayed',width);
  destinationChecks.push({name:destinationNames[0],width,status:'PASS',trigger:'INITIAL_HASH_AND_CANONICAL_PROJECT_HINT',initialPath:destinationEntry,beforeRelease,geometry,profileRead,activationControls,...network,screenshot});await context.close();
 }
 async function destinationOperationalAppend(page,current){
@@ -474,10 +508,10 @@ async function destinationOperationalAppend(page,current){
 }
 
 async function destinationPrivateDraft(page,current){
- await chooseWorkspaceView(page,'participant-title');await prepareOwn(page,{consult:false});const original=await page.$('[aria-labelledby="participant-title"] form'),images=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));assert.equal(images.length,2);
- const observe=async()=>{const facts=await page.evaluate(form=>{const capture=form.querySelector('[data-kyc-capture-step]'),choice=[...capture.querySelectorAll('label')].find(node=>node.textContent.includes('Leí el aviso y autorizo presentar estas imágenes'))?.querySelector('input');return {step:Number(capture.dataset.kycCaptureStep),consent:choice?.checked===true,formMounted:form.isConnected,formVisible:form.getClientRects().length>0,sameForm:form===document.querySelector('[aria-labelledby="participant-title"] form'),imageCount:form.querySelectorAll('fieldset img').length};},original);const next=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));return {...facts,sameImages:JSON.stringify(next)===JSON.stringify(images)};};
+ await chooseWorkspaceView(page,'participant-title');await prepareOwn(page,{consult:false,current});const original=await page.$('[aria-labelledby="participant-title"] form'),images=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));assert.equal(images.length,2);
+ const observe=async()=>{const facts=await page.evaluate(form=>{const capture=form.querySelector('[data-kyc-capture-step]'),labels=['Enviar para verificar','Solicitar revisión sin comparación facial'];return {step:Number(capture.dataset.kycCaptureStep),requiredChecks:capture.querySelectorAll('input[type=checkbox][required]').length,radios:capture.querySelectorAll('input[type=radio]').length,finalActions:labels.map(label=>{const button=[...capture.querySelectorAll('button')].find(node=>node.textContent.trim()===label);return button?{label,type:button.type,disabled:button.disabled}:null;}),formMounted:form.isConnected,formVisible:form.getClientRects().length>0,sameForm:form===document.querySelector('[aria-labelledby="participant-title"] form'),imageCount:form.querySelectorAll('fieldset img').length};},original);const next=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));return {...facts,sameImages:JSON.stringify(next)===JSON.stringify(images)};};
  const before=await observe();await chooseWorkspaceView(page,'worker-channel-title');const hidden=await observe();await chooseWorkspaceView(page,'participant-title');const after=await observe();
- for(const row of [before,hidden,after]){assert.equal(row.step,3);assert.equal(row.consent,true);assert.equal(row.formMounted,true);assert.equal(row.sameForm,true);assert.equal(row.imageCount,2);assert.equal(row.sameImages,true);}assert.equal(before.formVisible,true);assert.equal(hidden.formVisible,false);assert.equal(after.formVisible,true);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);await click(page,'Cancelar');await original.dispose();await chooseWorkspaceView(page,'worker-channel-title');return {syntheticImagesOnly:true,submitted:false,before,hidden,after};
+ for(const row of [before,hidden,after]){assert.equal(row.step,3);assert.equal(row.requiredChecks,0);assert.equal(row.radios,0);assert.deepEqual(row.finalActions,['Enviar para verificar','Solicitar revisión sin comparación facial'].map(label=>({label,type:'button',disabled:false})));assert.equal(row.formMounted,true);assert.equal(row.sameForm,true);assert.equal(row.imageCount,2);assert.equal(row.sameImages,true);}assert.equal(before.formVisible,true);assert.equal(hidden.formVisible,false);assert.equal(after.formVisible,true);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);await click(page,'Cancelar');await original.dispose();await chooseWorkspaceView(page,'worker-channel-title');return {syntheticImagesOnly:true,submitted:false,before,hidden,after};
 }
 async function destinationGuideHistory(width){
  const {current,context,page}=await startPrivacy(width,'NOT_SUBMITTED');const before=destinationNetwork(current);await privacyDisclosure(page,false);

@@ -2,13 +2,24 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
+import {createLocalJWKSet,exportJWK,generateKeyPair,SignJWT} from 'jose';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createCompanyOnboardingStore} from '../src/lib/company-onboarding-store.mjs';
+import {createCompanyOnboardingHandlers} from '../src/lib/company-onboarding-http.mjs';
+import {createBootstrapProfileVerifier} from '../src/lib/company-onboarding-identity.mjs';
+import {BOOTSTRAP_PROFILE_AUDIENCE} from '../src/lib/company-onboarding-policy.mjs';
 import {createCompanyBilling} from '../src/lib/company-billing.mjs';
+import {createParticipantStore} from '../src/lib/participant-store.mjs';
+import {IDENTITY_ISSUER,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {executeCompanyContactAdoption} from './lib/company-contact-migration.mjs';
+const args=process.argv.slice(2);assert.ok(args.length===0||args.length===1&&args[0]==='--connect-whatsapp');
+const connectWhatsApp=args.length===1;
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'https://not-configured.invalid');
 assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);assert.ok(['localhost','127.0.0.1'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');
+if(connectWhatsApp){
+ assert.ok(['postgres:','postgresql:'].includes(url.protocol));assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'6549');assert.equal(url.username,'cutover_test');assert.equal(url.password,'');assert.equal(url.hash,'');
+}
 const db='obrasaas_bootstrap_'+randomUUID().replaceAll('-','');assert.match(db,/^obrasaas_bootstrap_[a-f0-9]{32}$/);
 const admin=new Client({connectionString:url.toString()}),checks=[];let pool,created=false;
 const identity=(suffix='A')=>({authenticated:true,verification:'clerk-production-jwt',userId:'user_Bootstrap'+suffix,organizationId:'org_Bootstrap'+suffix,organizationRole:'org:admin'});
@@ -181,6 +192,9 @@ try{
  // DTOs must describe the stored value, including historical fourteen-day trials.
  const nonUtcPool=trackDisposablePool(new Pool({connectionString:url.toString(),max:2,options:'-c timezone=Pacific/Auckland'}));
  const originalTimezone=process.env.TZ;
+ // On Windows removing TZ can leave Node's last explicit runtime zone active.
+ // The opt-in signed inbox fixture needs the original runtime zone explicitly.
+ const originalRuntimeTimezone=connectWhatsApp?Intl.DateTimeFormat().resolvedOptions().timeZone:null;
  try{
   process.env.TZ='Pacific/Honolulu';
   assert.equal(new Date('2026-10-21T01:57:51.718Z').getTimezoneOffset(),600);
@@ -210,9 +224,94 @@ try{
   assert.deepEqual(await trialWindow(companyB.organizationId),existingTrial);
   checks.push('null-historical-trial-remains-unconfirmed-in-both-dtos-and-does-not-grant-entitlement');
  }finally{
-  if(originalTimezone===undefined)delete process.env.TZ;else process.env.TZ=originalTimezone;
+  if(originalTimezone!==undefined||originalRuntimeTimezone)process.env.TZ=originalTimezone??originalRuntimeTimezone;
+  else delete process.env.TZ;
   await closeDisposablePool(nonUtcPool);
  }
- const report={status:'PASS',environment:'disposable-local-postgresql',databaseServerVersion:(await pool.query('SHOW server_version')).rows[0].server_version,checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false};
- mkdirSync('.vercel/company-onboarding-evidence',{recursive:true});writeFileSync('.vercel/company-onboarding-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ // Join the real bootstrap and office assignment stores in one new tenant.
+ // The Clerk session and membership lookup remain controlled test inputs.
+ await pool.query('ALTER TABLE "PlatformUser" ADD COLUMN "fullName" text');
+ const newOwner=identity('ComposedOwner'),newDirector={...identity('ComposedDirector'),organizationId:newOwner.organizationId,organizationRole:'org:member'};
+ const now=new Date(),epoch=Math.floor(now.getTime()/1000),keyPair=await generateKeyPair('RS256');
+ const publicKey={...await exportJWK(keyPair.publicKey),kid:'synthetic-bootstrap',alg:'RS256',use:'sig'};
+ const bootstrapProfile=await new SignJWT({
+  iss:IDENTITY_ISSUER,aud:BOOTSTRAP_PROFILE_AUDIENCE,sub:newOwner.userId,jti:randomUUID(),iat:epoch,nbf:epoch,exp:epoch+60,azp:IDENTITY_ORIGIN,
+  purpose:'new-constructor-profile',profile_version:1,email:'composed-owner@example.invalid',email_verified:true,
+ }).setProtectedHeader({alg:'RS256',typ:'JWT',kid:publicKey.kid}).sign(keyPair.privateKey);
+ const bootstrapHandler=createCompanyOnboardingHandlers({verifySession:async()=>newOwner,verifyProfile:createBootstrapProfileVerifier(createLocalJWKSet({keys:[publicKey]}),{now:()=>now}),store});
+ const bootstrapBody={...command(newOwner),initialTasks:[{title:'Replanteo del piloto sintético',startsOn:'2026-12-01',endsOn:'2026-12-04'}]};
+ const bootstrapUrl=IDENTITY_ORIGIN+'/api/identity/company-onboarding';
+ const bootstrapRequest=()=>new Request(bootstrapUrl,{method:'POST',headers:{origin:IDENTITY_ORIGIN,'content-type':'application/json','x-obrasaas-bootstrap-profile':bootstrapProfile},body:JSON.stringify(bootstrapBody)});
+ const bootstrapResponse=await bootstrapHandler.POST(bootstrapRequest()),bootstrap=await bootstrapResponse.json();
+ assert.equal(bootstrapResponse.status,200,bootstrap.code);
+ assert.equal(bootstrap.created,true);
+ const bootstrapReplay=await bootstrapHandler.POST(bootstrapRequest());
+ assert.equal(bootstrapReplay.status,200);
+ const repeatedBootstrap=await bootstrapReplay.json();
+ assert.equal(repeatedBootstrap.replayed,true);
+ assert.equal(repeatedBootstrap.receiptId,bootstrap.receiptId);
+ const ownerList=await workspace.list(newOwner),newContext={projectId:bootstrap.projectId,scope:ownerList.scope};
+ assert.equal(ownerList.role,'ADMIN');
+ assert.deepEqual(ownerList.projects.map(project=>project.id),[bootstrap.projectId]);
+ await assert.rejects(workspace.list(newDirector),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+
+ const directorEmail='composed-director@example.invalid';
+ let acceptedProviderMembership=false,officeProviderReads=0;
+ const officeIdentity={async findVerifiedOfficeAccount(input){
+  assert.deepEqual(input,{organizationId:newOwner.organizationId,email:directorEmail});
+  officeProviderReads++;
+  if(!acceptedProviderMembership)return {state:'NOT_READY',code:'PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED',account:null};
+  return {state:'READY',code:null,account:{
+   clerkUserId:newDirector.userId,name:'Directora sintética',email:directorEmail,primaryEmail:directorEmail,clerkRole:'org:member',
+   providerMembershipId:'orgmem_ComposedDirector',providerMembershipUpdatedAt:now.getTime(),userUpdatedAt:now.getTime(),
+   emailAddressId:'idn_ComposedDirector',primaryEmailAddressId:'idn_ComposedDirector',
+  }};
+ }};
+ const officeStore=createParticipantStore({workspace,connect:()=>pool.connect(),identity:officeIdentity});
+ const lookupDirector=()=>officeStore.verifiedOfficeAccount(newOwner,{...newContext,email:directorEmail});
+ assert.equal((await lookupDirector()).verifiedOfficeAccount.state,'NOT_READY');
+ await assert.rejects(workspace.list(newDirector),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+ acceptedProviderMembership=true;
+ const officeLookup=(await lookupDirector()).verifiedOfficeAccount;
+ assert.equal(officeLookup.state,'READY');
+ const officeCommand={...newContext,operationId:randomUUID(),action:'ASSIGN_VERIFIED_OFFICE',payload:{
+  email:directorEmail,clerkUserId:newDirector.userId,expectedProofDigest:officeLookup.account.proofDigest,role:'DIRECTOR',
+  reason:'Asignación de Dirección en una empresa sintética recién creada.',confirmOfficePermissions:true,
+ }};
+ const assignment=await officeStore.save(newOwner,officeCommand),readsAfterAssignment=officeProviderReads;
+ assert.equal(assignment.saved,true);
+ assert.equal(assignment.account.role,'DIRECTOR');
+ const assignmentReplay=await officeStore.save(newOwner,officeCommand);
+ assert.equal(assignmentReplay.replayed,true);
+ assert.equal(assignmentReplay.receiptId,assignment.receiptId);
+ const assignmentStatus=await officeStore.officeAssignmentStatus(newOwner,{...newContext,operationId:officeCommand.operationId,action:officeCommand.action});
+ assert.equal(assignmentStatus.receiptId,assignment.receiptId);
+ assert.equal(officeProviderReads,readsAfterAssignment);
+
+ const directorList=await workspace.list(newDirector),directorContext={projectId:bootstrap.projectId,scope:directorList.scope};
+ assert.equal(directorList.role,'DIRECTOR');
+ assert.deepEqual(directorList.projects.map(project=>project.id),[bootstrap.projectId]);
+ const {tasks:[initialTask]}=await workspace.read(newDirector,directorContext);
+ assert.equal(initialTask.title,bootstrapBody.initialTasks[0].title);
+ const planned=await workspace.schedule(newDirector,{...directorContext,operationId:randomUUID(),taskId:initialTask.id,expectedRevision:initialTask.revision,startsOn:'2026-12-02',endsOn:'2026-12-05',reason:'Replanificación de Dirección'});
+ assert.equal(planned.saved,true);
+ const {tasks:[updatedByDirector]}=await workspace.read(newOwner,newContext);
+ assert.equal(updatedByDirector.id,initialTask.id);
+ assert.equal(updatedByDirector.startsOn,'2026-12-02');
+ assert.equal(updatedByDirector.progress,0);
+ await assert.rejects(workspace.read(newDirector,{...directorContext,projectId:companyB.projectId}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
+ assert.deepEqual((await pool.query(`SELECT action,count(*)::int AS count FROM "AuditLog" WHERE "organizationId"=$1 AND (action='company.self_service.created' OR metadata->>'kind'='VERIFIED_OFFICE_ASSIGNED') GROUP BY action ORDER BY action`,[bootstrap.organizationId])).rows,[
+  {action:'company.self_service.created',count:1},{action:'participant.operation.recorded',count:1},
+ ]);
+ assert.equal((await pool.query(`SELECT count(*)::int AS count FROM "Worker" WHERE "projectId"=$1`,[bootstrap.projectId])).rows[0].count,0);
+ checks.push('local-signed-profile-bootstrap-and-distinct-verified-DIRECTOR-compose-in-the-new-tenant-with-replay-isolation-and-shared-Gantt');
+ let bootstrappedWhatsApp=null;
+ if(connectWhatsApp){
+  const databaseClock=(await pool.query("SELECT EXTRACT(timezone FROM clock_timestamp())::int AS offset")).rows[0];
+  assert.equal(databaseClock.offset,-new Date().getTimezoneOffset()*60,'Synthetic Node and PostgreSQL clocks must use matching zones');
+  const {verifyBootstrappedWhatsApp}=await import('./lib/verify-bootstrapped-whatsapp-composition.mjs');
+  bootstrappedWhatsApp=await verifyBootstrappedWhatsApp({pool,workspace,store,identity,command,checks});
+ }
+ const report={status:'PASS',environment:'disposable-local-postgresql',databaseServerVersion:(await pool.query('SHOW server_version')).rows[0].server_version,checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false,...(connectWhatsApp?{bootstrappedWhatsApp}:{})};
+ mkdirSync('.vercel/company-onboarding-evidence',{recursive:true});writeFileSync('.vercel/company-onboarding-evidence/'+(connectWhatsApp?'bootstrap-whatsapp-postgres.json':'postgres.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${db}"`);}finally{await admin.end();}}

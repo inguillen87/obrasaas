@@ -1,13 +1,15 @@
 'use client';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation} from './workspace-live-refresh-controller.mjs';
+import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from './workspace-live-refresh-controller.mjs';
 
 // Existing authenticated GETs; canonical authority and data commits use separate fences.
-export function useWorksiteLiveRefresh({contextKey,viewKey='',enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected}){
+// canonicalRead: reserve initial live spacing for this canonical context. The controller seeds
+// it only when the context becomes eligible; request/loading time is not a fresh live observation.
+export function useWorksiteLiveRefresh({contextKey,viewKey='',enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected,canonicalRead=false}){
  const latest=useRef(null),control=useRef(null),[status,setStatus]=useState({state:'IDLE',checkedAt:null,updates:false});
- useLayoutEffect(()=>{latest.current={contextKey,viewKey,enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected};},[contextKey,viewKey,enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected]);
+ useLayoutEffect(()=>{latest.current={contextKey,viewKey,enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected,canonicalRead};},[contextKey,viewKey,enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected,canonicalRead]);
  useEffect(()=>{
-  const controller=createWorksiteLiveRefreshController({contextKey,getCurrent:()=>latest.current,onState:setStatus,isVisible:()=>document.visibilityState==='visible',isOnline:()=>navigator.onLine!==false});
+  const controller=createWorksiteLiveRefreshController({contextKey,getCurrent:()=>latest.current,onState:setStatus,isVisible:()=>document.visibilityState==='visible',isOnline:()=>navigator.onLine!==false,observedAt:latest.current?.canonicalRead===true?Date.now():null});
   control.current=controller;controller.start();
   const changed=()=>controller.environmentChanged();
   window.addEventListener('online',changed);window.addEventListener('offline',changed);window.addEventListener('focus',changed);document.addEventListener('visibilitychange',changed);
@@ -26,6 +28,6 @@ export function WorksiteLiveRefreshStatus({refresh,paused=false,label='Consulta'
  status.state==='HIDDEN'?'La consulta automática está en pausa mientras esta pestaña no está visible.':
  ['STALE','LIMITED'].includes(status.state)?status.message:
  status.updates?status.message||'Hay registros nuevos para consultar. Las páginas abiertas siguen conservadas.':
- status.checkedAt?label+' comprobada a las '+new Date(status.checkedAt).toLocaleTimeString('es-AR')+'.':'Se comprobarán los cambios de esta obra cuando no haya una operación en curso.';
+ status.checkedAt!==null&&status.checkedAt!==undefined?label+' · última comprobación: '+worksiteLiveCheckedAtLabel(status.checkedAt)+'.':'Se comprobarán los cambios de esta obra cuando no haya una operación en curso.';
  return <div data-worksite-live-refresh={status.state==='ACCESS'?'ACCESS':paused?'PAUSED':status.state}><p role="status">{text}</p>{!paused&&status.state!=='CONSULTING'&&status.state!=='ACCESS'&&<button type="button" onClick={refresh.check}>Comprobar cambios</button>}{!paused&&status.updates&&manual&&<button type="button" onClick={manual}>{manualLabel||'Consultar registros nuevos'}</button>}</div>;
 }

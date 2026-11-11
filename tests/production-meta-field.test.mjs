@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {planMetaFieldConversation} from '../src/lib/meta-field-conversation.mjs';
+import {planMetaFieldConversation,metaFieldConversationAction,metaFieldPlanDisclosure} from '../src/lib/meta-field-conversation.mjs';
+import {isMetaGreeting} from '../src/lib/meta-greeting.mjs';
 import {metaFieldOperationId} from '../src/lib/meta-field-bridge.mjs';
 import {operationId} from '../src/lib/workspace-policy.mjs';
 import {fieldTransition,FIELD_ACTIONS} from '../src/lib/field-operations-policy.mjs';
@@ -92,7 +93,7 @@ test('HOLA reads current journey and permissions with no draft or from a menu',(
 test('GANTT and CRONOGRAMA consult current registered dates and progress without an import role',()=>{
  const current={...facts,projectId:'project-a',planImportRole:'AUDITOR',permissions:{attendance:true,report:false},tasks:[{...facts.tasks[0],status:'IN_PROGRESS',progress:37,startsOn:'2026-10-13',endsOn:'2026-10-21',budgetAmount:'PRIVATE_FINANCIAL_AMOUNT'}]};
  for(const body of ['GANTT','CRONOGRAMA','TAREAS']){
-  const read=say(body,null,{facts:current});assert.equal(read.state.purpose,'TASKS');assert.match(read.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.reply.body,/37%/);assert.match(read.reply.body,/https:\/\/obrasaas.com\/cuenta\?obra=project-a#schedule-gantt-title/);assert.doesNotMatch(read.reply.body,/PRIVATE_FINANCIAL_AMOUNT/);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.planImport,undefined);
+  const read=say(body,null,{facts:current});assert.equal(read.state.purpose,'TASKS');assert.match(read.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.reply.body,/37%/);assert.match(read.reply.body,/https:\/\/obrasaas.com\/cuenta\?seccion=cronograma&obra=project-a#schedule-gantt-title/);assert.doesNotMatch(read.reply.body,/PRIVATE_FINANCIAL_AMOUNT/);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.planImport,undefined);
   const detail=pickValue(read,'task-a',{facts:current});assert.match(detail.reply.body,/Estado registrado: En curso/);assert.match(detail.reply.body,/Avance registrado: 37%/);assert.equal(detail.state.taskId,undefined);assert.equal(detail.command,undefined);
  }
 });
@@ -300,4 +301,37 @@ test('invalid text and material amount preserve selected context and ask for a s
  const unit=say('2.5',quantity.state),reason=pick(unit,6),invalid=say('corto',reason.state);assert.deepEqual(invalid.state,reason.state);assert.match(invalid.reply.body,/8.*2000/);
  const saved=pick(say('Para la mezcla de la obra.',invalid.state));assert.equal(saved.command.payload.name,'Cemento');assert.equal(saved.command.payload.quantity,'2.5');assert.equal(saved.command.payload.sectorId,'sector-a');
  const incident=pick(pick(say('INCIDENCIA'),0));const short=say('ab',incident.state);assert.deepEqual(short.state,incident.state);assert.match(short.reply.body,/3.*160/);
+});
+
+
+// UX414 regression proposal: language classification is not a command/name parser.
+test('greeting variants are a bounded whole-message vocabulary, not prefix or command normalization',()=>{
+ for(const body of ['HOLA','Hola!','¡¡hola!!','hola buenas','Hola, buenas!','BUENAS','¡Buen día!','Buen dia','Buenos días.','Buenos dias','Buenas tardes','Buenas noches','  hola   buenas  ']){assert.equal(isMetaGreeting(body),true,body);assert.equal(metaFieldConversationAction(body),'MENU',body);}
+ for(const body of ['hola Juan','Hola, soy Juan','Holanda','Buen Díaz','holaaa','Hola 👋','hola buenas 2','IDENTIDAD synthetic-code','ESTADO IDENTIDAD','Frente 2, avance 10%','Nota: hola buenas','CANCELAR!','ENTRADA!',null,23,{},['HOLA']])assert.equal(isMetaGreeting(body),false,String(body));
+ assert.equal(metaFieldConversationAction('CANCELAR!'),null);assert.equal(metaFieldConversationAction('ENTRADA!'),null);assert.equal(metaFieldConversationAction('ESTADO IDENTIDAD'),null);assert.equal(metaFieldConversationAction('IDENTIDAD synthetic-code'),null);assert.equal(metaFieldConversationAction('CANCELAR'),'MENU');assert.equal(metaFieldConversationAction('ENTRADA'),'ATTEND_IN');
+});
+
+test('bounded greeting menus still derive their choices only from current capabilities',()=>{
+ for(const body of ['Hola!','hola buenas','¡Buen día!']){
+  const report=say(body,null,{facts:{...facts,permissions:{attendance:false,report:true}}});assert.equal(report.state.purpose,'MENU');assert.ok(report.state.choices.every(c=>!c.value.startsWith('ATTEND_')));assert.ok(report.state.choices.some(c=>c.value==='MEDIA'));assert.equal(report.command,undefined);assert.equal(report.media,undefined);
+  const attendance=say(body,null,{facts:{...facts,permissions:{attendance:true,report:false}}});assert.ok(attendance.state.choices.every(c=>!['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(c.value)));assert.equal(attendance.command,undefined);assert.equal(attendance.media,undefined);
+ }
+});
+
+test('bounded greetings preserve the exact live draft, source, nonce, expiry and revoked-permission refusal',()=>{
+ for(const command of ['ENTRADA','EVIDENCIA','MATERIALES'])for(const body of ['Hola!','hola buenas','¡Buen día!']){
+  const initial=say(command),state=Object.freeze({...initial.state,lastEventId:'durable-original-event',lastReceivedAt:'2026-10-01T11:59:59.900Z',lastMessageTimestamp:1790855999,expiresAt:'2026-10-01T12:01:00.000Z'}),before=JSON.stringify(state);
+  const greeting=planMetaFieldConversation({message:{type:'text',text:{body}},state,eventId:'synthetic-variant-greeting',facts,now});assert.equal(greeting.state,state);assert.equal(JSON.stringify(state),before);assert.equal(greeting.preserveConversation,true);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);assert.equal(metaFieldPlanDisclosure(greeting),'GENERIC');
+  const foreign=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:'obra:'+'f'.repeat(20)+':0',title:body}}},state,eventId:'synthetic-foreign-choice',facts,now});assert.equal(foreign.state,state);assert.equal(foreign.command,undefined);assert.equal(foreign.media,undefined);assert.match(foreign.reply.body,/paso anterior/);
+  const changed={...facts,permissions:command==='ENTRADA'?{attendance:false,report:true}:{attendance:true,report:false}},denied=planMetaFieldConversation({message:{type:'text',text:{body}},state,eventId:'synthetic-variant-revoked',facts:changed,now});assert.equal(denied.state,state);assert.equal(denied.preserveConversation,true);assert.equal(denied.command,undefined);assert.equal(denied.media,undefined);assert.match(denied.reply.body,/permisos/);
+  const cancelled=say('CANCELAR',state);assert.equal(cancelled.state.purpose,'MENU');assert.equal(cancelled.command,undefined);assert.equal(cancelled.media,undefined);
+ }
+});
+
+test('a bounded greeting cannot renew an expired field draft or authorize its old interactive choice',()=>{
+ const initial=say('ENTRADA'),expired=Object.freeze({...initial.state,expiresAt:now.toISOString(),lastEventId:'expired-original-event'}),before=JSON.stringify(expired);
+ for(const body of ['Hola!','hola buenas']){
+  const greeting=planMetaFieldConversation({message:{type:'text',text:{body}},state:expired,eventId:'synthetic-variant-expired',facts,now});assert.equal(JSON.stringify(expired),before);assert.notEqual(greeting.state,expired);assert.equal(greeting.state.step,'MENU');assert.equal(greeting.preserveConversation,undefined);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);
+  const stale=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:initial.reply.sections[0].rows[0].id}}},state:{...greeting.state,version:1,expiresAt:'2026-10-01T12:15:00.000Z'},eventId:'synthetic-old-expired-choice',facts,now});assert.equal(stale.command,undefined);assert.equal(stale.media,undefined);assert.match(stale.reply.body,/paso anterior/);
+ }
 });

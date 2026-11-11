@@ -1,3 +1,5 @@
+import {createOfficeChatBridge} from './office-chat-store.mjs';
+import {OFFICE_CHAT_AUTHORIZATION_CODES} from './office-chat-policy.mjs';
 import {createPrivateCaptureQuality} from './private-capture-quality.mjs';
 import {createPrivateBiometricAnalyzer} from './private-biometric-analyzer.mjs';
 import {get,put} from '@vercel/blob';
@@ -27,6 +29,7 @@ import {createCompanyChannelBridge,resolveCompanyEnvelope,resolveCompanyOutbound
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
 import {createParticipantOnboardingDelivery} from './participant-onboarding-delivery.mjs';
 const provider=createMetaCustomerProvider();
+const officeBridge=createOfficeChatBridge({connect:connectWorkspace,provider});
 export const productionParticipantOnboardingDelivery=createParticipantOnboardingDelivery({connect:connectWorkspace,provider});
 const onboardingDelivery=productionParticipantOnboardingDelivery;
 const analyzer=createPilotMediaAnalyzer();
@@ -46,4 +49,4 @@ const kycExpiryFeedback=createMetaKycExpiryFeedback({connect:connectWorkspace,pr
 const kycContextFeedback=createMetaKycContextFeedback({connect:connectWorkspace,provider});
 const appProjection=createMetaCustomerAppProjection({connect:connectWorkspace,provider});
 export const productionMetaCustomerOutbound=createMetaCustomerOutbound({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider});
-export const productionMetaCustomerProcessor=createMetaCustomerProductionProcessor({connect:connectWorkspace,onboarding:onboardingDelivery,fieldBridge:bridge,kycBridge,kycOutbound,appProjection,companyBridge,fieldOutbound:productionMetaCustomerOutbound,companyOutbound,isCompany,rejectedKyc:kycRejection,expiredKyc:kycExpiryFeedback,contextKyc:kycContextFeedback,deferAuthorization:async(client,context)=>await companyPreparedMediaRecovery(client,context)||await metaPreparedPlanRecovery(client,context),authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,...EMPLOYEE_INTAKE_AUTHORIZATION_CODES,...META_OWN_COMPANY_AUTHORIZATION_CODES,'META_KYC_EXPIRY_FEEDBACK_DENIED','META_KYC_CONTEXT_FEEDBACK_DENIED','META_DEVELOPMENT_PILOT_UNAVAILABLE','META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE','COMPANY_CHANNEL_SOURCE_REQUIRED','COMPANY_CHANNEL_SUSPENDED','COMPANY_CHANNEL_CONTEXT_CHANGED','COMPANY_CHANNEL_IDENTITY_AMBIGUOUS','COMPANY_CHANNEL_CATALOG_REQUIRED','PLAN_IMPORT_PERMISSION_REQUIRED','META_PLAN_IMPORT_SOURCE_CONTEXT_CHANGED']});
+export const productionMetaCustomerProcessor=createMetaCustomerProductionProcessor({connect:connectWorkspace,onboarding:onboardingDelivery,fieldBridge:bridge,kycBridge,kycOutbound,appProjection,companyBridge,fieldOutbound:productionMetaCustomerOutbound,companyOutbound,isCompany,officeBridge,rejectedKyc:kycRejection,expiredKyc:kycExpiryFeedback,contextKyc:kycContextFeedback,deferAuthorization:async(client,context)=>await companyPreparedMediaRecovery(client,context)||await metaPreparedPlanRecovery(client,context),authorizationCodes:[...OFFICE_CHAT_AUTHORIZATION_CODES,...META_KYC_AUTHORIZATION_CODES,...EMPLOYEE_INTAKE_AUTHORIZATION_CODES,...META_OWN_COMPANY_AUTHORIZATION_CODES,'META_KYC_EXPIRY_FEEDBACK_DENIED','META_KYC_CONTEXT_FEEDBACK_DENIED','META_DEVELOPMENT_PILOT_UNAVAILABLE','META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE','COMPANY_CHANNEL_SOURCE_REQUIRED','COMPANY_CHANNEL_SUSPENDED','COMPANY_CHANNEL_CONTEXT_CHANGED','COMPANY_CHANNEL_IDENTITY_AMBIGUOUS','COMPANY_CHANNEL_CATALOG_REQUIRED','PLAN_IMPORT_PERMISSION_REQUIRED','META_PLAN_IMPORT_SOURCE_CONTEXT_CHANGED']});

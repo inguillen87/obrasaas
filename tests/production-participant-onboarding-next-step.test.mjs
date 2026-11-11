@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {participantOnboardingNextStep,participantKycChatCapabilities} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
+import {participantOnboardingNextStep,participantPendingIdentityReviews,participantKycChatCapabilities} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
 
 const now=Date.parse('2026-10-07T00:50:00.000Z');
 const context=()=>({scope:'a'.repeat(64),projectId:'project-a',verified:true,now});
@@ -65,13 +65,36 @@ test('the unscoped Clerk join DTO cannot be used as a participants projection',(
  const input=fixture();input.snapshot={invitationId:'invite-a',state:'INVITED',canAccept:true,projectName:'Same display name'};assert.equal(action(input),'CONSULT_ACCESS');
 });
 test('own new or rejected identity uses the web submission, not reviewer authority',()=>{
- for(const status of ['NOT_SUBMITTED','REJECTED']){const input=fixture();input.snapshot.records[0].kyc.status=status;assert.equal(action(input),'SUBMIT_KYC');assert.equal(participantOnboardingNextStep(input).optionalBank,null);}
+ for(const [status,label] of [['NOT_SUBMITTED','Presentar mi identidad'],['REJECTED','Volver a presentar mi identidad']]){
+  const input=fixture();input.snapshot.records[0].kyc.status=status;
+  const next=participantOnboardingNextStep(input);assert.equal(next.state,'OWN_IDENTITY');assert.deepEqual(next.primary,{action:'SUBMIT_KYC',label});assert.equal(next.optionalBank,null);
+ }
 });
 test('only a different manager can prepare a human review with two images',()=>{
  const input=manager();input.snapshot.records[0].kyc.status='PENDING_REVIEW';assert.equal(action(input),'REVIEW_KYC');
  input.snapshot.records[0].self=true;assert.equal(action(input),'CONSULT_PARTICIPANTS');assert.equal(participantOnboardingNextStep(input).state,'WAIT_REVIEW');
  input.snapshot.records[0].self=false;input.snapshot.records[0].kyc.images=[];assert.equal(action(input),'CONSULT_PARTICIPANTS');
  input.snapshot.canManage=false;input.snapshot.canInvite=false;assert.equal(participantOnboardingNextStep(input).primary,null);
+});
+test('the current worksite review queue points a Director to the eligible profile outside their own',()=>{
+ const input=fixture();
+ input.snapshot.canManage=true;
+ const kyc={...participant().kyc,status:'PENDING_REVIEW'};
+ const eligible={...participant(),id:'worker-pending',self:false,kyc};
+ input.snapshot.records=[{...participant(),kyc},
+  {...eligible,id:'worker-empty',kyc:{status:'NOT_SUBMITTED'}},eligible,
+  {...eligible,id:'worker-unlinked',accountLinked:false},
+  {...eligible,id:'worker-inactive',active:false},
+  {...eligible,id:'worker-incomplete',kyc:{...kyc,images:[]}}];
+ assert.deepEqual(participantPendingIdentityReviews(input.context,input.snapshot).map(row=>row.id),['worker-pending']);
+ assert.equal(action(input),'CONSULT_PARTICIPANTS');
+ assert.equal(action({...input,workerId:eligible.id}),'REVIEW_KYC');
+ for(const value of [{...input.context,projectId:'project-b'},{...input.context,scope:'b'.repeat(64)},{...input.context,verified:false}]){
+  assert.deepEqual(participantPendingIdentityReviews(value,input.snapshot),[]);
+ }
+ assert.deepEqual(participantPendingIdentityReviews(input.context,{...input.snapshot,canManage:false}),[]);
+ assert.deepEqual(participantPendingIdentityReviews(input.context,{...input.snapshot,participantFocus:{workerId:eligible.id}}),[]);
+ assert.deepEqual(participantPendingIdentityReviews(input.context,{...input.snapshot,records:[{...eligible,kyc:{...kyc,status:'APPROVED'}}]}),[]);
 });
 test('APPROVED for another person never lets an ADMIN claim their channel or bank',()=>{
  const input=manager();input.channelSnapshot=channel();assert.equal(action(input),'CONSULT_PARTICIPANTS');assert.equal(participantOnboardingNextStep(input).optionalBank,null);

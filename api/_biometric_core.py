@@ -253,10 +253,18 @@ def _document_capture(image, require_portrait=False, detector=None):
         candidates.append((area, x, y, box_w, box_h, polygon))
     if not candidates:
         return "UNCERTAIN", ["DOCUMENT_FRAME_UNCONFIRMED"]
-    area, x, y, box_w, box_h, polygon = max(candidates, key=lambda value: value[0])
+    margin_x, margin_y = max(3, round(width * 0.015)), max(3, round(height * 0.015))
+    # A background frame may be larger than the complete card inside it.
+    # Select among candidates that meet the existing size and frame gates;
+    # if none qualify, preserve the original largest-candidate rejection.
+    framed_candidates = [candidate for candidate in candidates
+                         if candidate[0] >= width * height * 0.18
+                         and candidate[1] > margin_x and candidate[2] > margin_y
+                         and candidate[1] + candidate[3] < width - margin_x
+                         and candidate[2] + candidate[4] < height - margin_y]
+    area, x, y, box_w, box_h, polygon = max(framed_candidates or candidates, key=lambda value: value[0])
     if area < width * height * 0.18:
         return "RETAKE_REQUIRED", ["DOCUMENT_TOO_SMALL"]
-    margin_x, margin_y = max(3, round(width * 0.015)), max(3, round(height * 0.015))
     if x <= margin_x or y <= margin_y or x + box_w >= width - margin_x or y + box_h >= height - margin_y:
         return "RETAKE_REQUIRED", ["DOCUMENT_OUT_OF_FRAME"]
     inset = max(2, round(min(box_w, box_h) * 0.025))

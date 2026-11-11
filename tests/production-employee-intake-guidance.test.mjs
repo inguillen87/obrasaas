@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {employeeIntakeFixture} from './fixtures/employee-intake-memory.mjs';
+import {planEmployeeIntakeConversation} from '../src/lib/meta-kyc-conversation.mjs';
+import {identityAccountReturnPath} from '../src/lib/identity-return-path.mjs';
 
 async function registeredParticipant() {
  const f=employeeIntakeFixture(),application=await f.submit();
@@ -15,13 +17,50 @@ for(const index of [0,1])test('registered participant chooses guidance '+index+'
  const {f,worker}=await registeredParticipant(),before=structuredClone(worker),auditBefore=structuredClone([...f.audits]),providers=f.controls.providerCalls;
  const menu=(await f.execute('HOLA')).result.reply;
  assert.equal(menu.type,'interactive');assert.equal(menu.sections[0].rows.length,2);
- const result=(await f.execute(choice(menu,index))).result;
+ const {context,result}=await f.execute(choice(menu,index));
  assert.equal(result.businessApplied,false);assert.equal(result.reply.type,'text');
  if(index===0){assert.match(result.reply.body,/https:\/\/obrasaas\.com\/cuenta\n/);assert.doesNotMatch(result.reply.body,/IDENTIDAD|dni|selfie/i);}
- else {assert.match(result.reply.body,/cuenta\?seccion=identidad#participant-title/);assert.match(result.reply.body,/mensaje IDENTIDAD vigente/);assert.match(result.reply.body,/Esperá las indicaciones antes de enviar documentos/);assert.match(result.reply.body,/no habilita permisos/);}
+ else {
+  const link=new URL(result.reply.body.split('\n')[1]);
+  assert.notEqual(f.project.id,f.target.id);
+  assert.equal(link.origin,'https://obrasaas.com');
+  assert.equal(link.pathname,'/cuenta');
+  assert.equal(link.searchParams.get('seccion'),'identidad');
+  assert.equal(link.searchParams.get('obra'),f.target.id);
+  assert.equal(link.hash,'#participant-title');
+  const returnPath=new URL(identityAccountReturnPath(link.searchParams),link.origin);
+  assert.equal(returnPath.searchParams.get('obra'),f.target.id);
+  assert.equal(returnPath.searchParams.get('seccion'),'identidad');
+  assert.match(result.reply.body,/mensaje IDENTIDAD vigente/);
+  assert.match(result.reply.body,/Esperá las indicaciones antes de enviar documentos/);
+  assert.match(result.reply.body,/no habilita permisos/);
+ }
+ const sends=f.controls.sends;
+ assert.deepEqual(await f.bridge.execute(context),result);
+ assert.equal((await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'})).replayed,true);
+ assert.equal(f.controls.sends,sends);
  assert.doesNotMatch(result.reply.body,/(?:IDENTIDAD|VINCULAR) [A-Za-z0-9_-]{43}/);
  assert.deepEqual(worker,before);assert.deepEqual([...f.audits],auditBefore);assert.equal(f.controls.providerCalls,providers);
  assert.equal(f.state().step,'ADMITTED');assert.equal(f.state().nonce,undefined);assert.equal(f.state().choices,undefined);
+});
+
+test('identity guidance preserves the selector when a scoped admission is unavailable',async()=>{
+ const {f}=await registeredParticipant();
+ const menu=(await f.execute('HOLA')).result.reply;
+ const state=f.state(),admission=state.admission;
+ for(const unscoped of [
+  {...state,admission:undefined},
+  {...state,admission:{...admission,version:2}},
+  {...state,admission:{...admission,applicationId:'different-application'}},
+  {...state,admission:{...admission,projectId:'unsafe&seccion=cronograma'}},
+  {...state,admission:{...admission,workerId:null}},
+  {...state,consent:false},
+ ]){
+  const result=planEmployeeIntakeConversation({message:choice(menu,1),state:unscoped,eventId:'synthetic-legacy-reply',promptConfirmed:true});
+  const link=new URL(result.reply.body.split('\n')[1]);
+  assert.equal(link.toString(),'https://obrasaas.com/cuenta?seccion=identidad#participant-title');
+  assert.match(result.reply.body,/elegí la que corresponde a tu participación/i);
+ }
 });
 
 for(const kind of ['no-context','wrong-context','stale-choice','invalid-choice','plain-text'])test('registered guidance rejects '+kind+' and returns a fresh menu without changing participation',async()=>{

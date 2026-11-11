@@ -102,16 +102,15 @@ export function createControlledLifecycleGraph(environment=lifecycleEnvironment)
    await beforeRequest(asset,endpoint,body);
    if(endpoint===asset.wabaId+'/phone_numbers'&&method==='GET'){
     assert.deepEqual(url.searchParams.get('fields')?.split(',').sort(),['id','display_phone_number','verified_name','code_verification_status','status','is_on_biz_app','platform_type'].sort());asset.phoneInspections++;
-    // These controlled assets are dedicated numbers. Code verification alone
-    // never proves Cloud API registration; only the observed register outcome
-    // changes their platform/status from provisioning to connected.
-    return Response.json({data:[{id:asset.phoneNumberId,display_phone_number:asset.displayNumber,verified_name:'Synthetic company '+asset.key,code_verification_status:'VERIFIED',is_on_biz_app:false,platform_type:asset.registered?'CLOUD_API':'NOT_APPLICABLE',status:asset.registered?'CONNECTED':'PENDING'}]});
+    // Code verification alone never proves Cloud API registration.
+    return Response.json({data:[{id:asset.phoneNumberId,display_phone_number:asset.displayNumber,verified_name:'Synthetic company '+asset.key,code_verification_status:'VERIFIED',is_on_biz_app:asset.isOnBizApp===true,platform_type:asset.registered?'CLOUD_API':'NOT_APPLICABLE',status:asset.registered?'CONNECTED':'PENDING'}]});
    }
    if(endpoint===asset.wabaId+'/subscribed_apps'){
     if(method==='POST'){assert.equal(body.override_callback_uri,'https://obrasaas.com/api/meta/customer-callback');assert.equal(body.verify_token,environment.META_CUSTOMER_VERIFY_TOKEN);asset.subscribed=true;asset.subscriptionOverride=body.override_callback_uri;asset.subscriptions++;return Response.json({success:true});}
     assert.equal(method,'GET');return Response.json({data:asset.subscribed?[{whatsapp_business_api_data:{id:environment.NEXT_PUBLIC_META_APP_ID},override_callback_uri:asset.subscriptionOverride}]:[]});
    }
    if(endpoint===asset.phoneNumberId+'/register'&&method==='POST'){
+    assert.notEqual(asset.isOnBizApp,true,'Coexistence must preserve the number without a register POST');
     assert.equal(body.messaging_product,'whatsapp');assert.match(body.pin,/^\d{6}$/);asset.registrations++;
     if(asset.registerRejectedOnce){asset.registerRejectedOnce=false;return Response.json({error:{code:100,message:'Synthetic invalid PIN'}},{status:400});}
     if(asset.registerPendingOnce){asset.registerPendingOnce=false;return Response.json({error:{code:2,message:'Synthetic temporarily unconfirmed registration'}},{status:503});}

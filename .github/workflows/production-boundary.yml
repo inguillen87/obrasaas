@@ -41,12 +41,15 @@ jobs:
       - name: Production unit shard ${{ matrix.shard }}/16
         env:
           SHARD: ${{ matrix.shard }}
+          OBRASAAS_UNIT_FILE_LIFECYCLE_DIAGNOSTICS: ${{ matrix.shard == 9 && '1' || '0' }}
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import {readdirSync,lstatSync,readFileSync} from 'node:fs';
           import {createHash} from 'node:crypto';
           import {spawnSync} from 'node:child_process';
+          import {resolve} from 'node:path';
+          import {pathToFileURL} from 'node:url';
 
           const rawShard=process.env.SHARD||'';
           assert.match(rawShard,/^(?:[1-9]|1[0-6])$/,'SHARD must be an integer from 1 through 16');
@@ -58,15 +61,42 @@ jobs:
           const universe=discover();
           assert.ok(universe.length>0,'The production test universe must not be empty');
           assert.equal(new Set(universe).size,universe.length,'Production tests must be distinct');
-          const selected=universe.filter((_,index)=>index%shardCount===shard-1);
+          const reviewedOwners=new Map([
+            ['tests/production-plan-measurement-ci.test.mjs',1],
+            ['tests/production-focused-workspace-ci.test.mjs',4],
+            ['tests/production-organization-usage-ci.test.mjs',3],
+          ]);
+          assert.equal(reviewedOwners.size,3,'Exactly three reviewed ownership changes are required');
+          for(const [file,owner] of reviewedOwners){
+            assert.ok(universe.includes(file),'Every reviewed ownership source must be present: '+file);
+            assert.ok(Number.isInteger(owner)&&owner>=1&&owner<=shardCount,'The reviewed target owner must be a configured shard: '+file);
+          }
+          const ownerOf=(file,index)=>reviewedOwners.get(file)??index%shardCount+1;
+          const partitions=Array.from({length:shardCount},(_,slot)=>universe.filter((file,index)=>ownerOf(file,index)===slot+1));
+          const assigned=partitions.flat();
+          assert.equal(new Set(assigned).size,universe.length,'Every production file must have exactly one owner');
+          assert.deepEqual([...assigned].sort(),universe,'The complete production universe must be assigned exactly once');
+          assert.ok(partitions.every(files=>files.length>0),'Every configured shard must contain a production test');
+          const selected=partitions[shard-1];
           assert.ok(selected.length>0,'Every configured shard must contain a production test');
           const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
           const sourcePins=files=>files.map(file=>{const stat=lstatSync(file);assert.ok(stat.isFile()&&!stat.isSymbolicLink(),'Production test must remain a regular file: '+file);return {path:file,sha256:createHash('sha256').update(readFileSync(file)).digest('hex')};});
           const before=sourcePins(universe);
           console.log(JSON.stringify({kind:'production-test-shard-v1',shard,shardCount,universe:{count:universe.length,files:universe,sha256:hash(universe),sourceSha256:hash(before)},selected:{count:selected.length,files:selected,sha256:hash(selected)}}));
-          const child=spawnSync(process.execPath,['--test',...selected],{stdio:'inherit'});
+          const lifecycleEnabled=process.env.OBRASAAS_UNIT_FILE_LIFECYCLE_DIAGNOSTICS==='1';
+          const lifecycleHelper='.github/scripts/production-unit-file-lifecycle-preload.mjs';
+          let lifecyclePins=null,lifecycleEnv;
+          if(lifecycleEnabled){
+            assert.equal(shard,9,'Diagnostic opt-in is restricted to unit shard 9');
+            lifecyclePins=sourcePins([lifecycleHelper]);
+            assert.equal(lifecyclePins[0].sha256,'6fcd4f778a02e3cc3dfc106d6ebb623b684e04f1405313eff65c4af455fc50a6','Exact reviewed diagnostic helper required');
+            const byFile=new Map(before.map(row=>[row.path,row.sha256]));
+            lifecycleEnv={...process.env,OBRASAAS_UNIT_FILE_LIFECYCLE:JSON.stringify({version:1,root:process.cwd(),selected:selected.map(file=>({path:file,sha256:byFile.get(file)}))})};
+            lifecycleEnv.NODE_OPTIONS=[process.env.NODE_OPTIONS||'','--import='+pathToFileURL(resolve(lifecycleHelper)).href].filter(Boolean).join(' ');
+          }
+          const child=spawnSync(process.execPath,['--test',...selected],{stdio:'inherit',...(lifecycleEnabled?{env:lifecycleEnv}:{})});
           let sourceChanged=false;
-          try{assert.deepEqual(discover(),universe,'Production test universe changed during the shard');assert.deepEqual(sourcePins(universe),before,'Production test source changed during the shard');}
+          try{assert.deepEqual(discover(),universe,'Production test universe changed during the shard');assert.deepEqual(sourcePins(universe),before,'Production test source changed during the shard');if(lifecyclePins)assert.deepEqual(sourcePins([lifecycleHelper]),lifecyclePins,'Diagnostic helper changed during the shard');}
           catch(error){sourceChanged=true;console.error(error);}
           if(child.error)throw child.error;
           if(child.signal){console.error('Production test child terminated by signal: '+child.signal);process.kill(process.pid,child.signal);process.exitCode=1;}
@@ -195,6 +225,16 @@ jobs:
         run: |
           npx eslint src/lib/company-phone-format.mjs scripts/verify-company-phone-ui.mjs --max-warnings 0
           node scripts/verify-company-phone-ui.mjs
+      - name: Budget CSV import browser scenarios
+        run: node scripts/verify-plan-budget-csv-ui.mjs
+      - name: Attendance review pagination browser scenarios
+        env:
+          FIELD_UI_FOCUS: attendance-review-pages
+        run: node scripts/verify-field-operations-ui.mjs
+      - name: Consumption evidence pagination browser scenarios
+        env:
+          MATERIAL_INVENTORY_UI_FOCUS: evidence-pages
+        run: node scripts/verify-material-inventory-ui.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -220,6 +260,11 @@ jobs:
             .vercel/verified-office-onboarding-evidence/
             .vercel/office-review-evidence/
             .vercel/onboarding-guide-evidence/
+            .vercel/field-operations-evidence/
+            .vercel/material-inventory-evidence/
+            .vercel/private/plan-budget-csv-browser-*/validation.json
+            .vercel/private/plan-budget-csv-browser-*/*.png
+            .vercel/private/plan-budget-csv-browser-*/server.log
             .vercel/private/company-channel-postgres-proof.json
             .vercel/private/reactive-onboarding-postgres-*.json
           include-hidden-files: true

@@ -225,10 +225,10 @@ try{
  })}});
  captureReviewSql=true;try{
   for(const [actor,context] of [[owner,reviewOwnerContext],[director,reviewDirectorContext]]){
-   const summary=await homeStatus.read(actor,{...context,view:'decisions'});assert.deepEqual(Object.keys(summary).sort(),['inventory','observedAt','projectId','proposals','scope','view']);assert.equal(summary.scope,context.scope);assert.equal(summary.projectId,reviewProjectId);assert.equal(summary.view,'decisions');assert.equal(new Date(summary.observedAt).toISOString(),summary.observedAt);assert.deepEqual(summary.proposals,{pending:2});assert.deepEqual(summary.inventory,{canManage:true,pendingCounts:{consumptions:202,adjustments:202}});
-   const full=await nativeStatus.read(actor,context);assert.deepEqual(summary.proposals,full.proposals);assert.deepEqual(summary.inventory,full.inventory);
+   const summary=await homeStatus.read(actor,{...context,view:'decisions'});assert.deepEqual(Object.keys(summary).sort(),['evidence','inventory','observedAt','projectId','proposals','scope','view']);assert.deepEqual(summary.evidence,{pending:0});assert.equal(summary.scope,context.scope);assert.equal(summary.projectId,reviewProjectId);assert.equal(summary.view,'decisions');assert.equal(new Date(summary.observedAt).toISOString(),summary.observedAt);assert.deepEqual(summary.proposals,{pending:2});assert.deepEqual(summary.inventory,{canManage:true,pendingCounts:{consumptions:202,adjustments:202}});
+   const full=await nativeStatus.read(actor,context);assert.deepEqual(summary.proposals,full.proposals);assert.deepEqual(summary.inventory,full.inventory);assert.equal(summary.evidence.pending,full.reports.evidencePending);
   }
-  const other=await homeStatus.read(foreign,{...foreignContext,view:'decisions'});assert.deepEqual(other.proposals,{pending:1});assert.deepEqual(other.inventory.pendingCounts,{consumptions:2,adjustments:1});
+  const other=await homeStatus.read(foreign,{...foreignContext,view:'decisions'});assert.deepEqual(other.proposals,{pending:1});assert.deepEqual(other.inventory.pendingCounts,{consumptions:2,adjustments:1});assert.deepEqual(other.evidence,{pending:0});
   for(const [actor,context] of [[worker,reviewWorkerContext],[siteReviewer,reviewSiteContext]])await assert.rejects(homeStatus.read(actor,{...context,view:'decisions'}),{code:'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'});
   await assert.rejects(homeStatus.read(foreign,{projectId:reviewProjectId,scope:foreignContext.scope,view:'decisions'}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
   await assert.rejects(homeStatus.read(owner,{...reviewOwnerContext,scope:foreignContext.scope,view:'decisions'}),{code:'WORKSPACE_CONTEXT_CHANGED'});

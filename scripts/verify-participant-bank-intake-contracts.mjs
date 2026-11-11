@@ -26,6 +26,12 @@ export const EXPECTED_SUITE_COUNTS=Object.freeze({
  'tests/production-employee-intake-assignment-continuity.test.mjs':25
 });
 export const EXPECTED_TOTAL_TESTS=289;
+
+// Historical95/289 exports above stay immutable for predecessor consumers.
+// Current UNIT extends only the five reviewed UX420 intake case declarations.
+export const CURRENT_INTAKE_GREETING_TEST_NAMES=Object.freeze(["bounded greetings cannot become a name through either confirmed NAME text path","the signed bridge retains an unverified NAME and expiry for greeting replies and fresh plain greetings","a greeting never makes a stale or malformed NAME context valid","a bounded signed welcome remains unprivileged and cannot resend an unknown greeting delivery","a bounded signed greeting restarts only an expired incomplete intake and preserves its source envelope"]);
+export const CURRENT_EXPECTED_SUITE_COUNTS=Object.freeze({...EXPECTED_SUITE_COUNTS,'tests/production-employee-intake.test.mjs':EXPECTED_SUITE_COUNTS['tests/production-employee-intake.test.mjs']+CURRENT_INTAKE_GREETING_TEST_NAMES.length});
+export const CURRENT_EXPECTED_TOTAL_TESTS=EXPECTED_TOTAL_TESTS+CURRENT_INTAKE_GREETING_TEST_NAMES.length;
 export const RECOVERY_CASES=[
  ...['bank','intake'].flatMap(kind=>['lost-response','http403'].map(failure=>kind+' '+failure+' persists its typed reference across reload and rejects the sibling receipt before exact GET recovery')),
  ...['bank','intake'].map(kind=>kind+' nonterminal and cross-context responses retain unknown and never use the generic participant fallback'),
@@ -48,13 +54,14 @@ export function sourceFiles(root){
 }
 function identity(root,expected){assert.match(expected,/^[a-f0-9]{40}$/);const head=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();assert.equal(head,expected,'Exact source HEAD');assert.equal(execFileSync('git',['diff','--name-only','HEAD','--'],{cwd:root,encoding:'utf8'}).trim(),'','No tracked modifications');return head;}
 function main(){
+ assert.equal(CURRENT_INTAKE_GREETING_TEST_NAMES.length,5,'Only the five reviewed greeting cases extend current UNIT');assert.equal(EXPECTED_SUITE_COUNTS['tests/production-employee-intake.test.mjs'],95);assert.equal(EXPECTED_TOTAL_TESTS,289);assert.equal(CURRENT_EXPECTED_SUITE_COUNTS['tests/production-employee-intake.test.mjs'],100);assert.equal(CURRENT_EXPECTED_TOTAL_TESTS,294);
  assert.deepEqual(process.argv.slice(2,3),['--expected-head']);assert.equal(process.argv.length,4);assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV&&!process.env.VERCEL_TARGET);
  const root=realpathSync(process.cwd()),sourceRevision=identity(root,process.argv[3]),out='.vercel/participant-bank-intake-contract-evidence',files=sourceFiles(root),sourceManifest=files.map(file=>({path:file,sha256:hash(readFileSync(path.join(root,file)))})),harnessSha256=hash(readFileSync(fileURLToPath(import.meta.url)));mkdirSync(out,{recursive:true});assert.equal(existsSync(path.join(out,'proof.json')),false,'Fresh main proof required');const suites=[];
  try{for(const [index,file] of TEST_SUITES.entries()){
   let bytes;try{bytes=execFileSync(process.execPath,['--test','--test-reporter=tap',file],{cwd:root,timeout:120000,maxBuffer:8*1024*1024});}catch(error){if(Buffer.isBuffer(error.stdout))writeFileSync(path.join(out,'failed-'+index+'.tap'),error.stdout,{flag:'wx'});throw error;}
-  const parsed=parseTap(bytes,{recovery:file===TEST_SUITES[4],expectedTests:EXPECTED_SUITE_COUNTS[file]??null}),tapPath=out+'/suite-'+index+'.tap';writeFileSync(tapPath,bytes,{flag:'wx'});suites.push({file,exitCode:0,...parsed,tap:{path:tapPath,bytes:bytes.length,sha256:hash(bytes)}});
+  const parsed=parseTap(bytes,{recovery:file===TEST_SUITES[4],expectedTests:CURRENT_EXPECTED_SUITE_COUNTS[file]??null}),tapPath=out+'/suite-'+index+'.tap';writeFileSync(tapPath,bytes,{flag:'wx'});suites.push({file,exitCode:0,...parsed,tap:{path:tapPath,bytes:bytes.length,sha256:hash(bytes)}});
  }
- assert.equal(suites.reduce((total,suite)=>total+suite.tests,0),EXPECTED_TOTAL_TESTS,'Exact canonical suite total');
+ assert.equal(suites.reduce((total,suite)=>total+suite.tests,0),CURRENT_EXPECTED_TOTAL_TESTS,'Exact canonical suite total');
  identity(root,sourceRevision);for(const item of sourceManifest)assert.equal(hash(readFileSync(path.join(root,item.path))),item.sha256,'Source stable during unit proof');assert.equal(hash(readFileSync(fileURLToPath(import.meta.url))),harnessSha256);
  const proof={version:1,status:'PASS',sourceRevision,sourceState:'committed exact Git HEAD',trackedClean:true,sourceManifest,harnessSha256,suites,postgresExecuted:false,productionDataWritten:false,coverageBoundary:'canonical unit assertions with synthetic fixtures; no database, UI or provider acceptance'};writeFileSync(path.join(out,'proof.json'),JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:'PASS',sourceRevision,suites:suites.length,recoveryChecks:7,tests:suites.reduce((n,s)=>n+s.tests,0)}));
  }catch(error){writeFileSync(path.join(out,'failure.json'),JSON.stringify({status:'FAIL',sourceRevision,message:error.message,suites},null,2)+'\n',{flag:'wx'});throw error;}

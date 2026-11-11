@@ -2130,7 +2130,7 @@ export function validateIntegratedCompanyCurrentNative(proof,contract,readSource
  const native=proof?.currentImageNative;facts(native,value.companyCurrentSummary,'COMPANY CURRENT');
  requireLineage(Array.isArray(native.cases)&&same(native.cases.map(row=>row?.name),value.companyCurrentCaseNames),'All seventeen actual COMPANY CURRENT cases are required in order');
  requireLineage(value.companyCurrentCaseFacts.length===17,'Exact current COMPANY case fact matrix required');native.cases.forEach((row,index)=>facts(row,value.companyCurrentCaseFacts[index],'COMPANY CURRENT '+index));
- const local=['scripts/lib/kyc-current-image-native.mjs','scripts/verify-company-channel-kyc-postgres.mjs','package.json','package-lock.json'].map(file=>({path:file,sha256:sha(readSource(file))}));requireLineage(same(native.sourceManifest,local),'Original CURRENT helper and parent native RAW source references required');
+ const local=['scripts/lib/kyc-current-image-native.mjs','scripts/lib/synthetic-capture-quality.mjs','scripts/verify-company-channel-kyc-postgres.mjs','package.json','package-lock.json'].map(file=>({path:file,sha256:sha(readSource(file))}));requireLineage(same(native.sourceManifest,local),'Original CURRENT helper and parent native RAW source references required');
  requireLineage(native.identityCertified===false&&native.permissionsGranted===false&&native.humanAccepted===false&&native.realProviderCalls===0,'CURRENT capture cannot certify identity or grant permissions');
  return{version:1,cases:17,postgresExecuted:true,proofRewritten:false,realIdentityCertified:false};
 }
@@ -2147,7 +2147,7 @@ export function validateIntegratedOwnCurrentNative(proof,contract,readSource){
 // emitted as native/browser evidence and do not claim a PostgreSQL execution.
 export function integratedCompanyCurrentShadowFixture(contract,readSource){
  const value=revision(contract);if(!value)return null;
- return{...structuredClone(value.companyCurrentSummary),cases:structuredClone(value.companyCurrentCaseFacts),sourceManifest:['scripts/lib/kyc-current-image-native.mjs','scripts/verify-company-channel-kyc-postgres.mjs','package.json','package-lock.json'].map(file=>({path:file,sha256:sha(readSource(file))})),sqlStatements:1};
+ return{...structuredClone(value.companyCurrentSummary),cases:structuredClone(value.companyCurrentCaseFacts),sourceManifest:['scripts/lib/kyc-current-image-native.mjs','scripts/lib/synthetic-capture-quality.mjs','scripts/verify-company-channel-kyc-postgres.mjs','package.json','package-lock.json'].map(file=>({path:file,sha256:sha(readSource(file))})),sqlStatements:1};
 }
 export function integratedOwnCurrentShadowFixture(contract){
  const value=revision(contract);if(!value)return null;

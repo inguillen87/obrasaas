@@ -17,6 +17,7 @@ function fixture({untrustedCompactOptIn=false}={}){
  let clock=Date.parse('2026-10-15T13:00:00.000Z'),serial=0,currentEvent,message,hook=null,allowed=true,open=0,external=0,attendance=[],owned=null;const snapshots=new Map();
  const rows=values=>({rows:values,rowCount:values.length}),snapshot=()=>structuredClone({worker:worker.metadata,project:project.metadata,records,audits:[...audits]});
  function restore(s){worker.metadata=structuredClone(s.worker);project.metadata=structuredClone(s.project);records.splice(0,records.length,...structuredClone(s.records));audits.clear();for(const [key,value]of s.audits)audits.set(key,structuredClone(value));}
+ const attendanceShiftIds=()=>[...new Set(attendance.map(row=>row.metadata?.fieldOperations?.shiftId).filter(Boolean))];
  function perform(sql,args){
   if(sql==='BEGIN'){open++;snapshots.clear();snapshots.set('transaction',snapshot());return rows([]);}if(sql==='COMMIT'){open--;return rows([]);}if(sql==='ROLLBACK'){restore(snapshots.get('transaction'));open--;return rows([]);}
   if(sql.startsWith('SET LOCAL'))return rows([]);
@@ -24,16 +25,19 @@ function fixture({untrustedCompactOptIn=false}={}){
   if(sql==='SELECT clock_timestamp() AS now')return rows([{now:new Date(clock)}]);
   if(sql.includes('SELECT "eventType"'))return rows([{eventType:'message'}]);
   if(sql.includes("'REVIEW_KYC'"))return rows([{id:'review',metadata:{}}]);if(sql.includes("'KYC_SUBMITTED'"))return rows([{id:'submission',metadata:{contentHash:worker.metadata.participant.kyc.contentHash}}]);
+  if(sql.includes('FROM public."AuditLog"')&&sql.includes("action='field.attendance.corrected'")){assert.deepEqual(args,[identity.organizationId,project.id,[worker.id],attendanceShiftIds()]);return rows([]);}
   if(sql.includes('FROM public."AuditLog"')){const value=audits.get(args[0]);return rows(value?[value]:[]);}
   if(sql.startsWith('INSERT INTO public."AuditLog"')){assert.ok(!audits.has(args[0]),'Duplicate audit '+args[0]);const action=/VALUES\(\$1,\$2,\$3,'([^']+)'/.exec(sql)?.[1];assert.ok(action,sql);audits.set(args[0],{id:args[0],action,metadata:JSON.parse(args[4])});return rows([]);}
   if(sql.startsWith('UPDATE public."Worker"')){assert.deepEqual(args.slice(0,2),[worker.id,project.id]);worker.metadata=JSON.parse(args[2]);return {rows:[],rowCount:1};}
   if(sql.includes('FROM public."Worker"'))return rows(sql.includes("metadata->'participant'->>'clerkUserId'")&&owned!==null?owned:[{...worker,revision:'2026-10-15T12:00:00.123456'}]);
   if(sql.startsWith('SELECT id,metadata,')&&sql.includes('FROM public."Project"'))return rows([{...project,revision:'2026-10-15T12:00:00.123456'}]);
   if(sql.includes('FROM public."Project"')&&!sql.includes('JOIN'))return rows([{revision:'2026-10-15T12:00:00.123456'}]);
+  if(sql.startsWith('SELECT DISTINCT ON ("workerId") id,"projectId","workerId",metadata FROM public."AttendanceEntry"')){assert.deepEqual(args,[project.id,[worker.id]]);return rows(attendance.map(({id,projectId,workerId,metadata})=>({id,projectId,workerId,metadata:structuredClone(metadata)})));}
   if(sql.includes('FROM public."AttendanceEntry"'))return rows(attendance);
   if(sql.includes('FROM public."Task"')||sql.includes('FROM public."OperationalProposal"'))return rows([]);
   if(sql.startsWith('INSERT INTO public."Incident"')){records.push({id:args[0],projectId:args[1],organizationId:identity.organizationId,title:args[2],metadata:JSON.parse(args[5]),revision:'2026-10-15T12:00:00.123456',createdAt:clock});return {rows:[],rowCount:1};}
   if(sql.startsWith('SELECT id,metadata')&&sql.includes('FROM public."Incident"'))return rows(records.filter(r=>r.id===args[0]&&r.projectId===args[1]));
+  if(sql.startsWith('SELECT i.id,i.metadata FROM public."Incident" i')&&sql.includes('attendanceCorrection')){assert.deepEqual(args,[project.id,[worker.id],attendanceShiftIds()]);return rows([]);}
   if(sql.includes('FROM public."Incident"')){if(sql.includes("kind'='CONSUMPTION'"))return rows(records);return rows([]);}
   throw Error('Unexpected recovery fixture SQL: '+sql);
  }
@@ -95,7 +99,7 @@ for(const body of ['MENU','AYUDA','HOLA','CANCELAR'])test('legacy signed '+body+
  const f=fixture();f.worker.metadata.participant.permissions.attendance=false;const sent=await f.send(body),row=[...f.audits.values()].find(value=>value.metadata.eventId===sent.context.eventId);delete row.metadata.replyAuthority;delete row.metadata.replyAuthorityCommitment;const before=structuredClone(row);assert.deepEqual(await f.bridge.execute(sent.context),sent.result);assert.deepEqual(row,before);assert.doesNotMatch(sent.result.reply.body,/Primero registrá una entrada|jornada abierta|en pausa/);
 });
 for(const source of ['INTERACTIVE','AMBIGUOUS_TEXT'])test('legacy next MENU from '+source+' requires a fresh signed command before private replay',async()=>{
- const f=fixture();let sent;if(source==='INTERACTIVE'){await f.send('MENU');f.setAttendance([{id:'entry-sensitive',workerId:f.worker.id,recordedAt:new Date(f.clock()-1000).toISOString(),metadata:{fieldOperations:{version:1,sequence:1,eventType:'CHECK_IN',phase:'WORKING',recordedBy:f.identity.actorId}}}]);sent=await f.pick('ATTEND_IN');assert.match(sent.result.reply.body,/Ya tenés una jornada abierta/);}else sent=await f.send('texto sin una acción inequívoca');
+ const f=fixture();let sent;if(source==='INTERACTIVE'){await f.send('MENU');const recordedAt=new Date(f.clock()-1000).toISOString();f.setAttendance([{id:'entry-sensitive',projectId:f.project.id,workerId:f.worker.id,recordedAt,metadata:{fieldOperations:{version:1,shiftId:'entry-sensitive-shift',previousEventId:null,sequence:1,eventType:'CHECK_IN',phase:'WORKING',recordedBy:f.identity.actorId,recordedAt,verificationStatus:'REVIEW_REQUIRED'}}}]);sent=await f.pick('ATTEND_IN');assert.match(sent.result.reply.body,/Ya tenés una jornada abierta/);}else sent=await f.send('texto sin una acción inequívoca');
  const row=[...f.audits.values()].find(value=>value.metadata.eventId===sent.context.eventId);assert.equal(f.conversation().purpose,'MENU');delete row.metadata.replyAuthority;delete row.metadata.replyAuthorityCommitment;row.metadata.encryptedResult='corrupt-private-reply-must-not-be-opened';const before=structuredClone(row);f.worker.metadata.participant.permissions.attendance=false;await assert.rejects(f.bridge.execute(sent.context),{code:'WORKER_CHANNEL_PERMISSION_REQUIRED'});assert.deepEqual(row,before);
 });
 test('legacy matching attendance and safe withdrawal remain available after report revocation',async()=>{
@@ -306,4 +310,22 @@ test('a canonical recovery crossing its deadline during the catalog callback kee
 });
 test('a canonical recovery crossing its source lease during the catalog callback rolls back before receipt or prompt persistence',async()=>{
  let crossed=false;const f=canonicalFenceFixture({afterQuery:(sql,_args,{advanceClockTo})=>{if(!crossed&&sql.startsWith('SELECT id,metadata,')&&sql.includes('FROM public."Project"')){crossed=true;advanceClockTo(Date.parse(f.deadline));}}});await assert.rejects(f.send('CONSUMO'),{code:'META_CUSTOMER_INBOX_LEASE_CHANGED'});assert.equal(crossed,true);assert.deepEqual(f.worker.metadata,f.original);assert.deepEqual(f.writes.map(write=>write.kind),[]);assert.equal(f.external(),0);
+});
+
+
+// UX414 regression proposal: the real bridge must preserve the same greeting scope.
+test('bounded greeting bridge receipts retain the live private draft and generic disclosure without a provider call',async()=>{
+ for(const body of ['Hola!','hola buenas','¡Buen día!']){
+  const f=fixture();await f.send('MATERIALES');const state=f.conversation(),envelope=f.envelope(),records=structuredClone(f.records);
+  const exchange=await f.send(body),receipt=[...f.audits.values()].find(row=>row.metadata.eventId===exchange.context.eventId);
+  assert.deepEqual(f.conversation(),state);assert.deepEqual(f.envelope(),envelope);assert.deepEqual(f.records,records);assert.equal(receipt.metadata.replyAuthority.disclosure,'GENERIC');assert.deepEqual(receipt.metadata.replyAuthority.requiredPermissions,[]);assert.doesNotMatch(exchange.result.reply.body,/PRIVATE_REASON|PRIVATE_MATERIAL/);assert.equal(f.external(),0);
+  assert.deepEqual(await f.bridge.execute(exchange.context),exchange.result);assert.deepEqual(f.envelope(),envelope);assert.deepEqual(f.records,records);assert.equal(f.external(),0);
+ }
+});
+
+test('bounded greeting replay cannot borrow another actor or organization for its original sealed authority',async()=>{
+ for(const change of [f=>{f.identity.actorId='foreign-actor';},f=>{f.identity.organizationId='foreign-organization';}]){
+  const f=fixture(),exchange=await f.send('Hola!'),row=[...f.audits.values()].find(value=>value.metadata.eventId===exchange.context.eventId),before=structuredClone(row),r=resolved(f,exchange.context.eventId);
+  change(f);await assert.rejects(readMetaFieldOutboundAuthority({query:async()=>({rows:[row]})},r,exchange.result.reply,{environment:f.environment}));assert.deepEqual(row,before);assert.equal(f.records.length,0);assert.equal(f.external(),0);
+ }
 });

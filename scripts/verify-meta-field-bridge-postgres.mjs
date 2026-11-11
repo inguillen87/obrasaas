@@ -12,14 +12,18 @@ import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createWorkerChannelStore} from '../src/lib/worker-channel-identity.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
 import {createFieldOperations} from '../src/lib/field-operations-store.mjs';
+import {createFieldHandlers} from '../src/lib/field-operations-http.mjs';
 import {createFieldMedia} from '../src/lib/field-media.mjs';
+import {createPlanImport} from '../src/lib/plan-import-store.mjs';
+import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
+import {PLAN_IMPORT_CONSENT} from '../src/lib/plan-import-policy.mjs';
 import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers,splitMetaCustomerEvents} from '../src/lib/meta-customer-callback.mjs';
 import {createMetaFieldBridge,readMetaFieldTaskCatalog,readMetaFieldEvidenceCatalog} from '../src/lib/meta-field-bridge.mjs';
 
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
 import {decryptCustomerSecret,encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'http://not-configured');assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');
-const database='obrasaas_meta_field_'+randomUUID().replaceAll('-',''),admin=new Client({connectionString:url.toString()}),checks=[],cleanup={poolClosed:false,ownConnectionsClosed:false,databaseRemoved:false,adminClosed:false};let report,pool,created=false,failAudit=false,loseCommit=false,downloadHook=null,putHook=null,afterMediaCommit=null,progressWaitCatalogHook=null,progressWaitProposalHook=null,downloads=0,puts=0,analyses=0;
+const database='obrasaas_meta_field_'+randomUUID().replaceAll('-',''),admin=new Client({connectionString:url.toString()}),checks=[],cleanup={poolClosed:false,ownConnectionsClosed:false,databaseRemoved:false,adminClosed:false};let report,composition,pool,created=false,failAudit=false,loseCommit=false,downloadHook=null,putHook=null,afterMediaCommit=null,progressWaitCatalogHook=null,progressWaitProposalHook=null,downloads=0,puts=0,analyses=0;
 const environment={META_APP_SECRET:'synthetic-meta-secret-for-controlled-hmac-only',META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,9).toString('base64'),PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-private-fixture'};
 const session=(user,org='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:org,organizationRole:role}),person=session('user_Person'),owner=session('user_Owner','org_A','org:admin'),foreign=session('user_Foreign','org_B','org:admin');
 try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));await pool.query(`
@@ -48,7 +52,7 @@ try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);cre
  await pool.query(`UPDATE public."Worker" SET metadata=jsonb_set(metadata,'{participant,permissions,report}','false'::jsonb) WHERE id='worker-a'`);
  const registeredSchedule=(await pool.query(`SELECT row_to_json(t) AS row FROM public."Task" t WHERE id='task-a'`)).rows[0].row,scheduleIo={downloads,puts,analyses,videoAnalyses,audioAnalyses};
  for(const command of ['GANTT','CRONOGRAMA']){
-  const read=await execute(command);assert.equal(read.result.businessApplied,false);assert.equal(read.result.reply.type,'interactive');assert.match(read.result.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.result.reply.body,/37%/);assert.match(read.result.reply.body,/cuenta\?obra=project-a#schedule-gantt-title/);assert.equal(read.result.reply.sections[0].rows.length,1);
+  const read=await execute(command);assert.equal(read.result.businessApplied,false);assert.equal(read.result.reply.type,'interactive');assert.match(read.result.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.result.reply.body,/37%/);assert.match(read.result.reply.body,/cuenta\?seccion=cronograma&obra=project-a#schedule-gantt-title/);assert.equal(read.result.reply.sections[0].rows.length,1);
   const detail=await choose(read.result,'Tarea local');assert.match(detail.result.reply.body,/Estado registrado: En curso/);assert.match(detail.result.reply.body,/Avance registrado: 37%/);assert.match(detail.result.reply.body,/2026-10-13 → 2026-10-21/);assert.equal(detail.result.businessApplied,false);
   await pool.query(`UPDATE public."Task" SET progress=38 WHERE id='task-a'`);assert.deepEqual(await bridge.execute(read.ctx),read.result);await pool.query(`UPDATE public."Task" SET progress=37 WHERE id='task-a'`);
  }
@@ -383,6 +387,133 @@ const correctedKyc=createParticipantStore({assessCaptureQuality:assessFixtureCap
  const rollbackResult=await restartedWaitBridge.execute(rollbackContext);assert.equal(rollbackHookObserved,true);assert.equal(rollbackResult.kind,'INPUT_REVIEW');assert.equal(rollbackResult.code,'META_CHANNEL_PROGRESS_DRAFT_EXPIRED');assert.equal(rollbackResult.businessApplied,false);assert.match(rollbackResult.reply.body,/Venció el plazo/);assert.deepEqual(await waitEnvelope(),rollbackHeader);assert.deepEqual(await readConversation(),rollbackState);assert.deepEqual(await waitBusinessSnapshot(),beforeWaitRollback);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM public."OperationalProposal" WHERE action->>'taskId'='wait-measured-task'`)).rows[0].n,0);assert.equal((await pool.query(`SELECT progress FROM public."Task" WHERE id='wait-measured-task'`)).rows[0].progress,0);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM public."AuditLog" WHERE action='meta.field.dispatched' AND metadata->>'eventId'=$1`,[rollbackContext.eventId])).rows[0].n,1);assert.deepEqual(await restartedWaitBridge.execute(rollbackContext),rollbackResult);assert.deepEqual(await waitEnvelope(),rollbackHeader);assert.deepEqual(await waitBusinessSnapshot(),beforeWaitRollback);
  checks.push('progress-evidence-wait-real-SQL-expiry-after-proposal-INSERT-rolls-back-business-Task-Incident-Proposal-Audit-and-retains-exact-encrypted-confirmation-for-one-expiry-replay');
 
+ // The legacy receipt has a pinned shape and check sequence. Keep the
+ // composition receipt separate while running both in the same native gate.
+ await execute('CANCELAR');
+ await pool.query(`INSERT INTO public."PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('composed-director','user_ComposedDirector','composed-director@example.invalid');
+  INSERT INTO public."TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES('composed-director-m','composed-director','org-a','DIRECTOR','org:member','ACTIVE');`);
+ const composedDirector=session('user_ComposedDirector'),directorScope=await workspace.list(composedDirector),directorContext={projectId:'project-a',scope:directorScope.scope};
+ assert.equal(directorScope.role,'DIRECTOR');
+ const directorCommand=(action,payload)=>({...directorContext,operationId:randomUUID(),action,payload});
+ const pdf=readFileSync(new URL('./fixtures/plan-import-synthetic-v1.pdf',import.meta.url));
+ const pdfSha=createHash('sha256').update(pdf).digest('hex');
+ assert.equal(pdfSha,'88254bd24823b0d6d8da46d0f2dfe4494f92f3d92fe7fc92080519e554dc5f12');
+ const extractionRows=JSON.parse(readFileSync(new URL('./fixtures/plan-import-synthetic-v1.json',import.meta.url),'utf8')).expectedRows;
+ let extractionCalls=0;
+ const imports=createPlanImport({workspace,put,get,environment:()=>environment,analyzer:{async analyze(source){
+  assert.equal(source.contentType,'application/pdf');
+  assert.equal(source.sha256,pdfSha);
+  extractionCalls++;
+  const rows=extractionRows.map((row,index)=>({...row,evidence:'Fila '+(index+1)+' del PDF sintético.',uncertainty:''}));
+  return {success:true,rows,warnings:[],provider:'synthetic-openai-adapter',model:'synthetic'};
+ }}});
+ const planApi=createPlanImportHandlers({verify:async()=>composedDirector,imports}),planUrl='https://obrasaas.com/api/identity/plan-import';
+ const form=new FormData();
+ for(const [key,value] of Object.entries({...directorContext,operationId:randomUUID(),consent:PLAN_IMPORT_CONSENT}))form.set(key,value);
+ form.set('file',new Blob([pdf],{type:'application/pdf'}),'plan-import-synthetic-v1.pdf');
+ const planResponse=await planApi.POST(new Request(planUrl,{method:'POST',headers:{origin:'https://obrasaas.com'},body:form})),plan=await planResponse.json();
+ assert.equal(planResponse.status,200,JSON.stringify(plan));
+ assert.equal(plan.draft.status,'READY');
+ const planDecision={...directorContext,operationId:randomUUID(),draftId:plan.draft.id,expectedRevision:plan.draft.revision,action:'APPLY',rows:plan.draft.rows,reason:'Dirección revisó las filas del PDF sintético.'};
+ const applyRequest=()=>planApi.POST(new Request(planUrl,{method:'POST',headers:{origin:'https://obrasaas.com','content-type':'application/json'},body:JSON.stringify(planDecision)}));
+ const appliedResponse=await applyRequest(),applied=await appliedResponse.json();
+ assert.equal(appliedResponse.status,200,JSON.stringify(applied));
+ assert.equal(applied.saved,true);
+ assert.equal(applied.draft.status,'APPLIED');
+ const applyReplay=await (await applyRequest()).json();
+ assert.equal(applyReplay.replayed,true);
+ assert.equal(applyReplay.receiptId,applied.receiptId);
+ assert.equal(extractionCalls,1);
+ const [targetRow]=extractionRows,importedTask=applied.tasks.find(task=>task.title===targetRow.title);
+ assert.ok(importedTask);
+ assert.equal(applied.tasks.length,extractionRows.length);
+ const importedState=async()=>(await pool.query(`SELECT progress,metadata FROM public."Task" WHERE id=$1 AND "projectId"='project-a'`,[importedTask.id])).rows[0];
+ assert.equal((await importedState()).progress,0);
+ const importProvenance=(await importedState()).metadata.planImport;
+ assert.equal(importProvenance.receiptId,applied.receiptId);
+ const chooseImportedTask=async action=>{
+  let selected=await execute(action);
+  const title=importedTask.title.slice(0,24);
+  for(let page=0;!replyRows(selected.result).some(row=>row.title===title);page++){
+   assert.ok(page<32);
+   selected=await choose(selected.result,'Más tareas');
+  }
+  selected=await choose(selected.result,title);
+  assert.equal((await readConversation()).taskId,importedTask.id);
+  return choose(selected.result,'Sector local');
+ };
+ await chooseImportedTask('EVIDENCIA');
+ const photoContext=await authorizeMediaReference({type:'image',image:{id:'150000491',mime_type:'image/png',caption:'Foto sintética de la tarea importada.'}},{analysis:false});
+ const photo=await bridge.execute(photoContext);
+ assert.equal(photo.kind,'EVIDENCE');
+ const photoPuts=puts;
+ assert.deepEqual(await bridge.execute(photoContext),photo);
+ assert.equal(puts,photoPuts);
+ const fieldRead=()=>operations.read(composedDirector,directorContext);
+ const importedEvidence=(await fieldRead()).evidence.find(row=>row.taskId===importedTask.id);
+ assert.ok(importedEvidence);
+ assert.equal(importedEvidence.status,'PENDING');
+ await operations.save(composedDirector,directorCommand('REVIEW_EVIDENCE',{evidenceId:importedEvidence.id,revision:importedEvidence.revision,decision:'APPROVE',reason:'Dirección confirmó la foto de la tarea importada.'}));
+ await chooseImportedTask('AVANCE');
+ let progressStep=await execute('25%');
+ progressStep=await choose(progressStep.result,'Fotografía de obra');
+ progressStep=await execute('Medición sintética de la tarea importada respaldada por su foto.');
+ const savedProgress=await choose(progressStep.result,'Guardar');
+ assert.equal(savedProgress.result.kind,'PROGRESS_PROPOSAL');
+ assert.deepEqual(await bridge.execute(savedProgress.ctx),savedProgress.result);
+ const importedProposal=(await fieldRead()).proposals.find(row=>row.taskId===importedTask.id);
+ assert.ok(importedProposal);
+ assert.deepEqual(importedProposal.evidenceIds,[importedEvidence.id]);
+ assert.equal((await importedState()).progress,0);
+ const approveProgress=directorCommand('DECIDE_PROGRESS',{proposalId:importedProposal.id,revision:importedProposal.revision,decision:'APPROVE',reason:'Dirección aprobó el avance sintético de la tarea importada.'});
+ const progressApproved=await operations.save(composedDirector,approveProgress);
+ assert.equal(progressApproved.task.progress,25);
+ assert.equal((await operations.save(composedDirector,approveProgress)).receiptId,progressApproved.receiptId);
+ const fieldApi=createFieldHandlers({verify:async()=>composedDirector,operations});
+ const curveRequest=()=>fieldApi.GET(new Request('https://obrasaas.com/api/identity/field-operations?'+new URLSearchParams({...directorContext,progressCurveTaskId:importedTask.id})));
+ const curveResponse=await curveRequest(),curve=await curveResponse.json();
+ assert.equal(curveResponse.status,200);
+ assert.equal(curve.state,'CONFIRMED',JSON.stringify(curve));
+ assert.equal(curve.total,1);
+ assert.equal(curve.rows[0].origin,'HUMAN_APPROVAL');
+ assert.equal(curve.rows[0].progress,25);
+ assert.equal(curve.rows[0].receiptId,progressApproved.receiptId);
+
+ const catalog=(await fieldRead()).inventory,material=catalog.materials.find(row=>row.name==='Cemento para menú de consumo sintético');
+ assert.ok(material);
+ const opening=(await operations.save(owner,command('PROPOSE_STOCK_ADJUSTMENT',{materialId:material.id,catalogHash:catalog.catalogHash,quantity:'3.000',direction:'IN',source:{type:'OPENING',reference:'PILOTO-PDF-001'},reason:'Saldo inicial sintético comprobado.'}))).adjustment;
+ await operations.save(composedDirector,directorCommand('DECIDE_STOCK_ADJUSTMENT',{proposalId:opening.id,revision:opening.revision,catalogHash:catalog.catalogHash,decision:'APPROVE',reason:'Dirección comprobó saldo y unidad de apertura.'}));
+ const balance=async()=>(await fieldRead()).inventory.materials.find(row=>row.id===material.id).balance;
+ assert.equal(await balance(),'3.000');
+ let consumptionStep=await chooseImportedTask('CONSUMO');
+ consumptionStep=await choose(consumptionStep.result,(material.name+' · '+material.unit).slice(0,24));
+ await execute('1.000');
+ consumptionStep=await execute('Se consumió una bolsa sintética en la tarea importada.');
+ const savedConsumption=await choose(consumptionStep.result,'Guardar');
+ assert.equal(savedConsumption.result.kind,'CONSUMPTION_PROPOSAL');
+ assert.deepEqual(await bridge.execute(savedConsumption.ctx),savedConsumption.result);
+ assert.equal(await balance(),'3.000');
+ const consumption=(await fieldRead()).inventory.consumptions.find(row=>row.taskId===importedTask.id);
+ assert.ok(consumption);
+ assert.equal(consumption.state,'PENDING');
+ assert.equal(consumption.workerId,'worker-a');
+ assert.equal(consumption.quantity,'1.000');
+ const decideConsumption=directorCommand('DECIDE_CONSUMPTION',{proposalId:consumption.id,revision:consumption.revision,catalogHash:catalog.catalogHash,decision:'APPROVE',reason:'Dirección comprobó el consumo de la tarea importada.'});
+ const approvedConsumption=await operations.save(composedDirector,decideConsumption);
+ assert.equal(approvedConsumption.consumption.state,'APPROVED');
+ assert.equal((await operations.save(composedDirector,decideConsumption)).receiptId,approvedConsumption.receiptId);
+ assert.equal(await balance(),'2.000');
+ assert.equal((await pool.query(`SELECT count(*)::int AS n FROM public."AuditLog" WHERE action='material.inventory.moved' AND metadata->>'proposalId'=$1`,[consumption.id])).rows[0].n,1);
+ assert.deepEqual(await (await curveRequest()).json(),curve);
+ assert.deepEqual((await importedState()).metadata.planImport,importProvenance);
+ let workspacePage=await workspace.read(composedDirector,directorContext);
+ while(workspacePage.nextCursor&&!workspacePage.tasks.some(task=>task.id===importedTask.id))workspacePage=await workspace.read(composedDirector,{...directorContext,afterTask:workspacePage.nextCursor});
+ const currentImported=workspacePage.tasks.find(task=>task.id===importedTask.id);
+ assert.ok(currentImported);
+ assert.deepEqual([currentImported.startsOn,currentImported.endsOn,currentImported.progress],[targetRow.startsOn,targetRow.endsOn,25]);
+ composition={status:'PASS',syntheticOnly:true,source:{contentType:'application/pdf',sha256:pdfSha,controlledExtractions:extractionCalls},task:{id:importedTask.id,startsOn:currentImported.startsOn,endsOn:currentImported.endsOn,approvedProgress:25},importReceiptId:applied.receiptId,privateEvidenceId:importedEvidence.id,progressReceiptId:progressApproved.receiptId,curvePoints:1,consumption:{id:consumption.id,approvalReceiptId:approvedConsumption.receiptId,balanceBefore:'3.000',balancePending:'3.000',balanceApproved:'2.000',movements:1},productionDataWritten:false,realProviderRequests:0};
+
   report={status:'PASS',environment:'disposable-local-postgresql-actual-HMAC-and-real-canonical-bridge',checks,provider:'controlled-synthetic-media-only',blob:'controlled-private-byte-store',outbound:'controlled-no-send-result-only',productionDataWritten:false,realMetaRequests:0,physicalAttendanceAccepted:false,realHumanIdentityAccepted:false};
 }finally{try{await closeDisposablePool(pool);cleanup.poolClosed=true;if(created){assert.equal((await admin.query('SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=$1',[database])).rows[0].n,0);cleanup.ownConnectionsClosed=true;await admin.query(`DROP DATABASE "${database}"`);assert.equal((await admin.query('SELECT count(*)::int AS n FROM pg_database WHERE datname=$1',[database])).rows[0].n,0);cleanup.databaseRemoved=true;}}finally{await admin.end();cleanup.adminClosed=true;}}
 assert.deepEqual(cleanup,{poolClosed:true,ownConnectionsClosed:true,databaseRemoved:true,adminClosed:true});report={...report,cleanup};mkdirSync('.vercel/meta-field-evidence',{recursive:true});writeFileSync('.vercel/meta-field-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+writeFileSync('.vercel/meta-field-evidence/imported-task-composition.json',JSON.stringify({...composition,cleanup},null,2));

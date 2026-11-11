@@ -4,16 +4,28 @@ const shape=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&
 const timestamp=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
 const contextKeys=['scope','projectId','organizationId','actorId','connectionId','channelRevision','credentialExpiresAt','sequence','reference'];
 const resultKeys=['version','kind','readOnly','canManage','codeVerificationPresent','codeVerificationState','registered','platformState','displayComparable','displayMatchesExpected','observedAt','checkedAt','inspectionState','operationalCheck','denialStage','accepted','roundTrip'];
+const businessAssetKeys=['systemUserAssigned','appOwned','wabaOwned','phoneInWaba','checkedAt'];
 const fail=()=>{throw Object.assign(new Error('No se pudo comprobar el estado actual en Meta.'),{code:'META_OWN_COMPANY_DIAGNOSTIC_UNCONFIRMED'});};
 
 // This DTO is an observation only. It never enters the setup snapshot or any
 // command builder, and cannot enable connection, activation or templates.
 export function ownCompanyRuntimeDiagnostic(value){
- if(!shape(value,resultKeys)||value.version!==1||value.kind!=='OWN_COMPANY_RUNTIME_DIAGNOSTIC'||value.readOnly!==true||value.canManage!==false||value.accepted!==false||value.roundTrip!=='NOT_VERIFIED'||value.inspectionState!=='CURRENT'||!['PASSED','REJECTED'].includes(value.operationalCheck)||!['NONE','VERIFICATION_STATUS','DISPLAY_PHONE_MATCH'].includes(value.denialStage)||!['VERIFIED','NOT_VERIFIED','EXPIRED','OTHER','MISSING'].includes(value.codeVerificationState)||!['CLOUD_API','NOT_APPLICABLE','OTHER','MISSING'].includes(value.platformState)||['codeVerificationPresent','registered','displayComparable','displayMatchesExpected'].some(key=>typeof value[key]!=='boolean')||!timestamp(value.observedAt)||!timestamp(value.checkedAt)||Date.parse(value.checkedAt)<Date.parse(value.observedAt)||Date.parse(value.checkedAt)-Date.parse(value.observedAt)>=60000)fail();
+ const hasBusinessAssets=Boolean(value&&typeof value==='object'&&Object.hasOwn(value,'businessAssets'));
+ if(!shape(value,[...resultKeys,...(hasBusinessAssets?['businessAssets']:[])])||value.version!==1||value.kind!=='OWN_COMPANY_RUNTIME_DIAGNOSTIC'||value.readOnly!==true||value.canManage!==false||value.accepted!==false||value.roundTrip!=='NOT_VERIFIED'||value.inspectionState!=='CURRENT'||!['PASSED','REJECTED'].includes(value.operationalCheck)||!['NONE','VERIFICATION_STATUS','DISPLAY_PHONE_MATCH'].includes(value.denialStage)||!['VERIFIED','NOT_VERIFIED','EXPIRED','OTHER','MISSING'].includes(value.codeVerificationState)||!['CLOUD_API','NOT_APPLICABLE','OTHER','MISSING'].includes(value.platformState)||['codeVerificationPresent','registered','displayComparable','displayMatchesExpected'].some(key=>typeof value[key]!=='boolean')||!timestamp(value.observedAt)||!timestamp(value.checkedAt)||Date.parse(value.checkedAt)<Date.parse(value.observedAt)||Date.parse(value.checkedAt)-Date.parse(value.observedAt)>=60000)fail();
  if(value.codeVerificationPresent!==(value.codeVerificationState!=='MISSING')||value.registered&&value.platformState!=='CLOUD_API'||value.displayMatchesExpected&&!value.displayComparable)fail();
  if(value.operationalCheck==='PASSED'&&(value.denialStage!=='NONE'||!['VERIFIED','EXPIRED'].includes(value.codeVerificationState)||!value.registered||value.platformState!=='CLOUD_API'||!value.displayMatchesExpected))fail();
  if(value.operationalCheck==='REJECTED'&&(value.denialStage==='NONE'||value.denialStage==='VERIFICATION_STATUS'&&value.codeVerificationState==='VERIFIED'||value.denialStage==='DISPLAY_PHONE_MATCH'&&(!['VERIFIED','EXPIRED'].includes(value.codeVerificationState)||value.codeVerificationState==='EXPIRED'&&(!value.registered||value.platformState!=='CLOUD_API')||value.displayMatchesExpected)))fail();
- return Object.freeze(Object.fromEntries(resultKeys.map(key=>[key,value[key]])));
+ if(hasBusinessAssets&&(!shape(value.businessAssets,businessAssetKeys)||!timestamp(value.businessAssets.checkedAt)||value.businessAssets.checkedAt!==value.observedAt||businessAssetKeys.slice(0,-1).some(key=>typeof value.businessAssets[key]!=='boolean')||value.operationalCheck==='PASSED'&&businessAssetKeys.slice(0,-1).some(key=>value.businessAssets[key]!==true)))fail();
+ return Object.freeze({...Object.fromEntries(resultKeys.map(key=>[key,value[key]])),...(hasBusinessAssets?{businessAssets:Object.freeze(Object.fromEntries(businessAssetKeys.map(key=>[key,value.businessAssets[key]])))}:{})});
+}
+
+// A legacy observation or stored ACTIVE grant remains consultable, but cannot
+// produce this short-lived business confirmation. It never authorizes an action.
+export function ownCompanyRuntimeBusinessEvidence(value,{now=Date.now()}={}){
+ let current;try{current=ownCompanyRuntimeDiagnostic(value);}catch{return null;}
+ const evidence=current.businessAssets,checkedAt=Date.parse(evidence?.checkedAt);
+ if(current.operationalCheck!=='PASSED'||!evidence||!Number.isSafeInteger(now)||now<Date.parse(current.checkedAt)||now-checkedAt>=60000||businessAssetKeys.slice(0,-1).some(key=>evidence[key]!==true))return null;
+ return evidence;
 }
 
 export function ownCompanyRuntimeDiagnosticContext(snapshot,expected,{sequence,reference=null,now=Date.now()}={}){

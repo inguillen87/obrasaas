@@ -1,4 +1,5 @@
-import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {createSyntheticCurrent85FixtureFromSource,optionalCurrent85UnitSourceReader} from '../../tests/fixtures/focused-workspace-current85-fixture.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,planBudgetProofSourceAdditions,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePilotCompletionPreviousFieldProof,restorePilotCompletionPreviousProofSpec,restorePilotCompletionPreviousContract} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_BUDGET_UI_MATRIX,validatePlanBudgetUiProofBytes,planBudgetUiSourceBinding,planBudgetUiRetainedScreenshotPath} from '../../scripts/lib/plan-budget-ui-contract.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -13,18 +14,20 @@ import {FIELD_TASK_PAGINATION_CI_KIND,validateFieldTaskPaginationCi,fieldTaskPag
 import {WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWorkspaceContinuityPreviousContract,verifyWorkspaceContinuityCurrentSources} from '../../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256,restoreDocumentTaskAssociationPreviousContract,verifyDocumentTaskAssociationCurrentSources} from '../../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import {createHash,randomUUID} from 'node:crypto';
+import {encodeWorkspaceProvenance,decodeWorkspaceProvenance} from './workspace-provenance-transport.mjs';
 import {INTEGRATED_IDENTITY_CURRENT_REVISION,integratedIdentityCurrentSourcePin,restoreIntegratedIdentityPreviousContract,validateIntegratedIdentityWorkspaceContract,verifyIntegratedIdentityCurrentSources,validateIntegratedCompanyCurrentNative,integratedCompanyCurrentShadowFixture,integratedIdentityCurrentSelftest,integratedIdentityPreviousProofChecks} from '../../scripts/lib/integrated-identity-current-ci-lineage.mjs';
+import {CURRENT85_CI_KIND,validateFocusedWorkspaceCurrent85Ci,focusedWorkspaceCurrent85CiSourceClosure} from '../../scripts/verify-focused-workspace-current85-ci.mjs';
 import {FOCUSED_WORKSPACE_CI_KIND,validateFocusedWorkspaceCi,focusedWorkspaceCiSourceClosure} from '../../scripts/verify-focused-workspace-ci.mjs';
 import {PARTICIPANT_PREANALYSIS_KIND,restoreParticipantPreanalysisPreviousContract,validateParticipantPreanalysisWorkspaceContract,participantPreanalysisProofSourceAdditions,restoreParticipantPreanalysisSourceSet} from '../../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {validateParticipantKycPreanalysisCi,participantPreanalysisCiSourceClosure} from '../../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {execFileSync,fork} from 'node:child_process';
-import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,realpathSync,mkdtempSync,rmSync,existsSync} from 'node:fs';
+import {readFileSync,writeFileSync,writeSync,mkdirSync,readdirSync,lstatSync,realpathSync,mkdtempSync,rmSync,existsSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import yaml from 'js-yaml';
 import {parse} from '@babel/parser';
-import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
+import {parseTap,TEST_SUITES,RECOVERY_CASES,CURRENT_EXPECTED_SUITE_COUNTS as EXPECTED_SUITE_COUNTS,CURRENT_EXPECTED_TOTAL_TESTS as EXPECTED_TOTAL_TESTS,EXPECTED_SUITE_COUNTS as HISTORICAL_UNIT_SUITE_COUNTS,EXPECTED_TOTAL_TESTS as HISTORICAL_UNIT_TOTAL_TESTS,CURRENT_INTAKE_GREETING_TEST_NAMES,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
@@ -410,6 +413,7 @@ const isPortfolioEvidence=filename=>PORTFOLIO_ARTIFACTS.some(pattern=>matches(fi
 const preparationDependenciesFor=kind=>['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC'].includes(kind)?['src/lib/participant-kyc-image-set.mjs',...(kind==='PG_COMPANY_KYC'?['src/lib/project-preparation-http.mjs','src/lib/project-preparation-policy.mjs','src/lib/project-preparation-store.mjs']:[])]:[];
 const planImportDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?['src/lib/plan-import-ooxml.mjs']:[];
 export const LANES=['contracts','plans','people','field','meta','channels','business','workspace-ui'];
+const CONTRACTS_CI_LIMITS=Object.freeze({jobTimeoutMinutes:135,selftestBudgetMs:105*60*1000});
 // Keep each serialized lane below Linux's 128 KiB per-environment-string limit.
 // Leave room for the environment key and GitHub's outer JSON formatting while
 // retaining every screenshot, source digest and proof binding in the artifact.
@@ -450,7 +454,13 @@ const EXTENSION_PROOFS=[
  ['document-curve-ui','plans',62,'.vercel/private/plan-document-curve-evidence/current-browser.json','UI_DOCUMENT_CURVE']
 ];
 function sourcePath(value){if(typeof value!=='string'||value.length>500||/[\\\x00-\x1f]/.test(value)||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'))deny('UNSAFE_SOURCE_PATH');return value;}
-function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const cache=new Map();return filename=>{sourcePath(filename);if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:8*1024*1024}));return cache.get(filename);};}
+function gitSource(root,expectedHead){
+ if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');
+ // Import closures probe an exact path before its .js/.mjs alternatives.
+ // Only absence from this immutable Git tree is optional; Git errors propagate.
+ const committed=new Set(execFileSync('git',['ls-tree','-r','--name-only','-z',expectedHead],{cwd:root,encoding:'utf8',maxBuffer:40*1024*1024}).split('\0').filter(Boolean)),cache=new Map();
+ return filename=>{sourcePath(filename);if(!committed.has(filename))return null;if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:40*1024*1024}));return cache.get(filename);};
+}
 function manifestDigest(references){return hash(canonical([...references].sort((a,b)=>a.path.localeCompare(b.path))));}
 function expectedSourceDigest(spec,readSource){if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');return manifestDigest(spec.sourceFiles.map(file=>{const bytes=readSource(file);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');return {path:file,sha256:hash(bytes)};}));}
 const utf8=bytes=>{if(!Buffer.isBuffer(bytes))deny('PROOF_BYTES');const text=bytes.toString('utf8');if(!bytes.equals(Buffer.from(text)))deny('PROOF_ENCODING');return text;};
@@ -459,7 +469,7 @@ function budgetScreenshotSummary(files){
  if(!Array.isArray(files))deny('PROOF_BUDGET_UI_SCREENSHOT_BINDING');const selected=PLAN_BUDGET_UI_MATRIX.map(row=>{const path=planBudgetUiRetainedScreenshotPath(row),matches=files.filter(file=>file.path===path);if(matches.length!==1||!sha(matches[0].sha256)||!Number.isSafeInteger(matches[0].bytes)||matches[0].bytes<=45)deny('PROOF_BUDGET_UI_SCREENSHOT_BINDING');return {path,sha256:matches[0].sha256,bytes:matches[0].bytes};});
  return {cases:23,screenshots:23,screenshotManifestSha256:hash(canonical(selected))};
 }
-function summary(spec,files=null){if(spec.kind===PLAN_BUDGET_CI_KIND)return budgetScreenshotSummary(files);return spec.kind===FIELD_TASK_PAGINATION_CI_KIND?spec.checkNames.length:spec.kind===FOCUSED_WORKSPACE_CI_KIND?spec.checkNames.length:spec.kind===PARTICIPANT_PREANALYSIS_KIND?spec.checkNames.length:spec.kind==='UI_DOCUMENT_CURVE'?DOCUMENT_CURVE_UI_CHECKS.length:spec.kind==='PG_PLAN_BASELINE'?spec.checkNames.length:isCanonicalField(spec)?spec.checkNames.length:isIdentity(spec)?IDENTITY_ONLY_CHECK_COUNT:spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:TEST_SUITES.length,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:['PG_COMPANY_KYC','PG_INTAKE'].includes(spec.kind)?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind==='UI_INTAKE'?4*INTAKE_UI_MODES.length:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
+function summary(spec,files=null){if(spec.kind===PLAN_BUDGET_CI_KIND)return budgetScreenshotSummary(files);return spec.kind===FIELD_TASK_PAGINATION_CI_KIND?spec.checkNames.length:(spec.kind===FOCUSED_WORKSPACE_CI_KIND||spec.kind===CURRENT85_CI_KIND)?spec.checkNames.length:spec.kind===PARTICIPANT_PREANALYSIS_KIND?spec.checkNames.length:spec.kind==='UI_DOCUMENT_CURVE'?DOCUMENT_CURVE_UI_CHECKS.length:spec.kind==='PG_PLAN_BASELINE'?spec.checkNames.length:isCanonicalField(spec)?spec.checkNames.length:isIdentity(spec)?IDENTITY_ONLY_CHECK_COUNT:spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:TEST_SUITES.length,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:['PG_COMPANY_KYC','PG_INTAKE'].includes(spec.kind)?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind==='UI_INTAKE'?4*INTAKE_UI_MODES.length:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
 function validateExtension(contract){
  const extension=contract.extension;exactKeys(extension,['baseHead','baselineBlocksSha256','baselineOwnershipSha256','baselineProducersSha256','proofs'],'EXTENSION_SHAPE');
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
@@ -600,7 +610,18 @@ function validateFieldHistoryPrivacy(spec,proof){
  }else if(value.sameWorkerReassigned!==true||value.newAuthorOwnShiftWithForeignPredecessorReadable!==true)deny('PROOF_FIELD_HISTORY_PRIVACY');
  return revision;
 }
+function normalizePilotCanonicalFieldProof(spec,proof){
+ try{return restorePilotCompletionPreviousFieldProof(spec,proof);}
+ catch(error){
+  if(error?.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'){
+   if(error.reason==='PILOT_FIELD_ATTENDANCE_PROOF')deny('PROOF_CHECK_NAMES');
+   if(error.reason==='PILOT_FIELD_ATTENDANCE_PROVIDER')deny('PROOF_PROVIDER_IO');
+  }
+  throw error;
+ }
+}
 function validateCanonicalFieldProof(spec,proof,readSource){
+ proof=normalizePilotCanonicalFieldProof(spec,proof);
  const fixture=proof.participantKycFixture;validateCanonicalFieldKycFixture(fixture,spec.kind==='PG_FIELD');if(proof.providerCalls!==0)deny('PROOF_PROVIDER_IO');
  const revision=validateFieldHistoryPrivacy(spec,proof),sets=canonicalFieldSourceSets(spec,readSource);
  if(spec.kind==='PG_OVERTIME'){
@@ -788,11 +809,25 @@ function documentCurveUiSelftest(workflow,contract,root){
  const validate=(value,options={})=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,expectedTree,readSource,readEvidence:file=>evidence.get(file),...options}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(name,code,()=>validate(value));};
  good('complete-shadow-contract-not-browser-evidence',()=>assert.equal(validate(proof).checks,10));good('exact-current-browser23-retains-frozen22-and-fixture-combined-prior9-and33',()=>{
   const beforeBudget=restorePlanBudgetPreviousContract(contract),budget=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===spec.kind),partida=beforeBudget[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===spec.kind),native=PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES.find(row=>row.kind===spec.kind),nativeAdditions=planMeasurementCurrentDependencies(spec.kind),outerAdditions=participantPreanalysisProofSourceAdditions(spec),additions=[...new Set([...nativeAdditions,...outerAdditions])].sort(),cyp='src/lib/plan-import-cyp-curve.mjs';
-  equal(partida,PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.sourceSetDeltas.find(row=>row.family===spec.kind),'PROOF_SOURCE_MANIFEST');equal(nativeAdditions,native.sourceAdditions,'PROOF_SOURCE_MANIFEST');equal([...outerAdditions].sort(),[...partida.additions,...budget.additions].sort(),'PROOF_SOURCE_MANIFEST');assert.equal(additions.length,nativeAdditions.length+outerAdditions.length);
-  equal(sets.combined,spec.sourceFiles,'PROOF_SOURCE_MANIFEST');assert.equal(sets.combined.length,budget.currentCount);assert.equal(hash(canonical(sets.combined)),budget.currentPathsSha256);
-  const beforeBudgetSources=sets.combined.filter(file=>!budget.additions.includes(file)),beforePartidaSources=beforeBudgetSources.filter(file=>!partida.additions.includes(file));equal(beforeBudgetSources,beforeBudget.extension.proofs.find(row=>row.kind===spec.kind).sourceFiles,'PROOF_SOURCE_MANIFEST');assert.equal(beforeBudgetSources.length,budget.previousCount);assert.equal(hash(canonical(beforeBudgetSources)),budget.previousPathsSha256);assert.equal(beforeBudgetSources.length,partida.currentCount);assert.equal(hash(canonical(beforeBudgetSources)),partida.currentPathsSha256);assert.equal(beforePartidaSources.length,partida.previousCount);assert.equal(hash(canonical(beforePartidaSources)),partida.previousPathsSha256);assert.equal(beforePartidaSources.length,native.currentSourceCount);assert.equal(hash(canonical(beforePartidaSources)),native.currentSourcePathsSha256);
-  const renderedAdditions=[...partida.additions,...budget.additions.filter(file=>file.startsWith('src/app/'))].sort(),previousRendered=sets.rendered.filter(file=>!renderedAdditions.includes(file)),frozenRendered=previousRendered.filter(file=>file!==cyp);equal(sets.rendered.filter(file=>outerAdditions.includes(file)),renderedAdditions,'PROOF_SOURCE_MANIFEST');assert.equal(renderedAdditions.length,7);assert.equal(sets.rendered.length,23+renderedAdditions.length);assert.equal(previousRendered.length,23);assert.equal(previousRendered.filter(file=>file===cyp).length,1);assert.equal(frozenRendered.length,22);assert.equal(hash(canonical(frozenRendered)),'0f5221bb8af053c18d8387492141378df09a9780845539b5bdd6fa3206e06efa');
-  const fixtureOuterAdditions=budget.additions.filter(file=>!renderedAdditions.includes(file)),previousCombined=sets.combined.filter(file=>!additions.includes(file));equal(sets.fixture.filter(file=>outerAdditions.includes(file)),fixtureOuterAdditions,'PROOF_SOURCE_MANIFEST');assert.equal(sets.fixture.length,9+nativeAdditions.length+fixtureOuterAdditions.length);assert.equal(sets.fixture.filter(file=>!additions.includes(file)).length,9);assert.equal(sets.combined.length,33+additions.length);assert.equal(previousCombined.length,33);assert.equal(previousCombined.length,native.previousSourceCount);assert.equal(hash(canonical(previousCombined)),native.previousSourcePathsSha256);
+  const laterRendered=[
+   'src/app/(identity)/cuenta/attendance-closure-view.mjs',
+   'src/app/(identity)/cuenta/plan-import-csv-budget-view.mjs'
+  ];
+  const laterFixture=['src/lib/plan-budget-csv-source.mjs'];
+  const laterAdditions=[...laterRendered,...laterFixture];
+  equal(planBudgetProofSourceAdditions(spec),[...budget.additions,...laterAdditions].sort(),'PROOF_SOURCE_MANIFEST');
+  equal(sets.rendered.filter(file=>laterAdditions.includes(file)),laterRendered,'PROOF_SOURCE_MANIFEST');
+  equal(sets.fixture.filter(file=>laterAdditions.includes(file)),laterFixture,'PROOF_SOURCE_MANIFEST');
+  // Project the independently checked current graph onto the historical budget layer.
+  const beforeLater=files=>files.filter(file=>!laterAdditions.includes(file));
+  const budgetCombined=beforeLater(sets.combined);
+  const budgetRendered=beforeLater(sets.rendered);
+  const budgetFixture=beforeLater(sets.fixture);
+  equal(partida,PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.sourceSetDeltas.find(row=>row.family===spec.kind),'PROOF_SOURCE_MANIFEST');equal(nativeAdditions,native.sourceAdditions,'PROOF_SOURCE_MANIFEST');equal([...outerAdditions].sort(),[...partida.additions,...budget.additions,...laterAdditions].sort(),'PROOF_SOURCE_MANIFEST');assert.equal(additions.length,nativeAdditions.length+outerAdditions.length);
+  equal(sets.combined,spec.sourceFiles,'PROOF_SOURCE_MANIFEST');assert.equal(budgetCombined.length,budget.currentCount);assert.equal(hash(canonical(budgetCombined)),budget.currentPathsSha256);
+  const beforeBudgetSources=budgetCombined.filter(file=>!budget.additions.includes(file)),beforePartidaSources=beforeBudgetSources.filter(file=>!partida.additions.includes(file));equal(beforeBudgetSources,beforeBudget.extension.proofs.find(row=>row.kind===spec.kind).sourceFiles,'PROOF_SOURCE_MANIFEST');assert.equal(beforeBudgetSources.length,budget.previousCount);assert.equal(hash(canonical(beforeBudgetSources)),budget.previousPathsSha256);assert.equal(beforeBudgetSources.length,partida.currentCount);assert.equal(hash(canonical(beforeBudgetSources)),partida.currentPathsSha256);assert.equal(beforePartidaSources.length,partida.previousCount);assert.equal(hash(canonical(beforePartidaSources)),partida.previousPathsSha256);assert.equal(beforePartidaSources.length,native.currentSourceCount);assert.equal(hash(canonical(beforePartidaSources)),native.currentSourcePathsSha256);
+  const renderedAdditions=[...partida.additions,...budget.additions.filter(file=>file.startsWith('src/app/'))].sort(),previousRendered=budgetRendered.filter(file=>!renderedAdditions.includes(file)),frozenRendered=previousRendered.filter(file=>file!==cyp);equal(budgetRendered.filter(file=>outerAdditions.includes(file)),renderedAdditions,'PROOF_SOURCE_MANIFEST');assert.equal(renderedAdditions.length,7);assert.equal(budgetRendered.length,23+renderedAdditions.length);assert.equal(previousRendered.length,23);assert.equal(previousRendered.filter(file=>file===cyp).length,1);assert.equal(frozenRendered.length,22);assert.equal(hash(canonical(frozenRendered)),'0f5221bb8af053c18d8387492141378df09a9780845539b5bdd6fa3206e06efa');
+  const fixtureOuterAdditions=budget.additions.filter(file=>!renderedAdditions.includes(file)),previousCombined=sets.combined.filter(file=>!additions.includes(file));equal(budgetFixture.filter(file=>outerAdditions.includes(file)),fixtureOuterAdditions,'PROOF_SOURCE_MANIFEST');assert.equal(budgetFixture.length,9+nativeAdditions.length+fixtureOuterAdditions.length);assert.equal(sets.fixture.filter(file=>!additions.includes(file)).length,9);assert.equal(sets.combined.length,33+additions.length);assert.equal(previousCombined.length,33);assert.equal(previousCombined.length,native.previousSourceCount);assert.equal(hash(canonical(previousCombined)),native.previousSourcePathsSha256);
  });good('eighteenth-binding-command-and-retained-artifact',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).extension.proofs.length,18);equal(workflow.jobs.plans.steps.find(step=>step.name===DOCUMENT_CURVE_UI_STEP.name),DOCUMENT_CURVE_UI_STEP,'WORKFLOW_NOT_EQUIVALENT');assert.ok(contract.lanes.plans.requiredRetainedEvidence.includes(spec.path));assert.ok(contract.lanes.plans.artifacts.includes(DOCUMENT_CURVE_UI_ARTIFACTS[0]));});
  bad('missing-tree','PROOF_SOURCE_TREE_RESOLVER',()=>validate(proof,{expectedTree:undefined}));bad('missing-screenshot-reader','PROOF_SCREENSHOT_RESOLVER',()=>validate(proof,{readEvidence:undefined}));bad('invalid-json','PROOF_JSON',()=>validateExtensionProof(spec,Buffer.from('{'),{expectedHead,expectedTree,readSource}));
  for(const [key,files] of [['sourceManifest',sets.rendered],['fixtureSourceManifest',sets.fixture],['dependencyManifest',sets.dependencies]])for(const file of files){mutate('missing-'+key+'-'+file,'PROOF_SOURCE_MANIFEST',p=>{p[key]=p[key].filter(ref=>ref.path!==file);});mutate('substituted-'+key+'-'+file,'PROOF_SOURCE_MANIFEST',p=>{p[key].find(ref=>ref.path===file).path='src/lib/foreign-document-curve.mjs';});mutate('stale-'+key+'-'+file,'PROOF_SOURCE_HASH',p=>{p[key].find(ref=>ref.path===file).sha256='f'.repeat(64);});mutate('wrong-GitOID-'+key+'-'+file,'PROOF_SOURCE_GIT_BLOB',p=>{p[key].find(ref=>ref.path===file).gitBlobOid='f'.repeat(40);});}
@@ -819,23 +854,121 @@ function documentCurveCopyShadow(readSource){
  for(const dependency of WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.dependencies){const needle='../../../lib/'+path.posix.basename(dependency);if(text.split(needle).length!==2)deny('PROOF_DOCUMENT_CURVE_COPY');const before=generated;generated=Buffer.from(utf8(before).replace(needle,'./'+path.posix.basename(dependency)));fixtureTransforms.push({path:view,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(before),fixtureSha256:hash(generated),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:dependency,dependencyFixturePath:'app/'+path.posix.basename(dependency)});}
  return {documentCurveSourceManifest:[view,DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER,'src/lib/plan-import-cyp-curve.mjs'].map(file=>({path:file,sha256:hash(readSource(file))})),fixtureTransforms};
 }
+// Only this exact reviewed producer emits the two additional KYC relocations.
+// Its source bytes and every dependency below are already authenticated by the
+// original harness/source-manifest gates before this expected-set comparison.
+function intakeKycFixtureCopyShadow(spec,readSource){
+ if(!(spec.id==='intake-ui'&&spec.kind==='UI_INTAKE'&&spec.lane==='people'&&spec.blockId===55&&spec.path==='.vercel/private/employee-intake-ui/browser.json'&&spec.producer==='scripts/verify-employee-intake-ui.mjs'))return [];
+ const dependency='src/lib/capture-quality-policy.mjs',sources=['src/app/(identity)/cuenta/participant-panel.js','src/app/(identity)/cuenta/participant-kyc-capture.js'];
+ if(!Array.isArray(spec.sourceFiles)||[dependency,...sources].some(file=>!spec.sourceFiles.includes(file)))deny('PROOF_DOCUMENT_CURVE_COPY');
+ if(!Buffer.isBuffer(readSource(dependency)))deny('PROOF_DOCUMENT_CURVE_COPY');
+ return sources.map(file=>{
+  const original=readSource(file);if(!Buffer.isBuffer(original))deny('PROOF_DOCUMENT_CURVE_COPY');
+  const source=utf8(original),needle='../../../lib/capture-quality-policy.mjs';
+  if(!original.equals(Buffer.from(source))||source.split(needle).length!==2)deny('PROOF_DOCUMENT_CURVE_COPY');
+  const generated=Buffer.from(source.replace(needle,'./capture-quality-policy.mjs'));
+  return {path:file,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(original),fixtureSha256:hash(generated),fixtureRelativePath:'app/'+path.posix.basename(file),dependencySourcePath:dependency,dependencyFixturePath:'app/capture-quality-policy.mjs'};
+ });
+}
+// The two exact joint modes preserve app/(identity)/cuenta and fixture/lib.
+// Their authenticated current producer/helper executes zero import relocations;
+// an empty caller array is never evidence that an arbitrary copier did so.
+function isHierarchicalJointFixture(spec){
+ return spec.lane==='people'&&spec.blockId===56&&spec.producer==='scripts/verify-participant-bank-intake-ui.mjs'&&(
+  spec.id==='joint-ui'&&spec.kind==='UI_JOINT'&&spec.path==='.vercel/private/participant-bank-intake-integration/current/browser.json'||
+  spec.id==='joint-causal'&&spec.kind==='UI_CAUSAL'&&spec.path==='.vercel/private/participant-bank-intake-integration/bad-resolution/browser.json');
+}
+function hierarchicalJointFixtureCopyShadow(spec,document,readSource){
+ if(!isHierarchicalJointFixture(spec))return null;
+ const producer=readSource(spec.producer),layout="const fixture=mkdtempSync(path.join(scratch,'participant-bank-intake-ui-')),app=path.join(fixture,'app'),components=path.join(app,'(identity)/cuenta');mkdirSync(components,{recursive:true});";
+ if(!Buffer.isBuffer(producer)||hash(producer)!==spec.producerSha256)deny('PROOF_DOCUMENT_CURVE_COPY');
+ const source=utf8(producer),paths=['src/app/(identity)/cuenta/plan-source-curve.mjs',DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER,'src/lib/plan-import-cyp-curve.mjs'];
+ if(!producer.equals(Buffer.from(source))||source.split(layout).length!==2||!Array.isArray(spec.sourceFiles)||paths.some(file=>!spec.sourceFiles.includes(file))||document.fixtureTransforms.length!==2)deny('PROOF_DOCUMENT_CURVE_COPY');
+ equal(document.documentCurveSourceManifest.map(ref=>ref.path),paths,'PROOF_DOCUMENT_CURVE_COPY');
+ return {...document,fixtureTransforms:[]};
+}
+function fixtureCopyShadowForProducer(spec,readSource){
+ const document=documentCurveCopyShadow(readSource),hierarchical=hierarchicalJointFixtureCopyShadow(spec,document,readSource);
+ return hierarchical||{...document,fixtureTransforms:[...document.fixtureTransforms,...intakeKycFixtureCopyShadow(spec,readSource)]};
+}
 function validateDocumentCurveCopyProof(spec,proof,readSource){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return;
- const expected=documentCurveCopyShadow(readSource);
+ const expected=fixtureCopyShadowForProducer(spec,readSource);
  if(!Array.isArray(proof.documentCurveSourceManifest)||!Array.isArray(proof.fixtureTransforms))deny('PROOF_DOCUMENT_CURVE_COPY');
  for(const ref of proof.documentCurveSourceManifest)exactKeys(ref,['path','sha256'],'PROOF_DOCUMENT_CURVE_COPY');
  equal([...proof.documentCurveSourceManifest].sort((a,b)=>a.path.localeCompare(b.path)),expected.documentCurveSourceManifest.sort((a,b)=>a.path.localeCompare(b.path)),'PROOF_DOCUMENT_CURVE_COPY');
  if(proof.fixtureTransforms.length!==expected.fixtureTransforms.length)deny('PROOF_DOCUMENT_CURVE_COPY');proof.fixtureTransforms.forEach((row,index)=>exactKeys(row,Object.keys(expected.fixtureTransforms[index]),'PROOF_DOCUMENT_CURVE_COPY'));equal(proof.fixtureTransforms,expected.fixtureTransforms,'PROOF_DOCUMENT_CURVE_COPY');
 }
-function documentCurveCopySelftest(spec,proof,validate){
+function documentCurveCopySelftest(spec,proof,validate,readSource){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return [];
  const checks=[],bad=(name,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');checks.push({name:spec.id+'-document-copy-'+name,result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure source/relocation shadow; no UI execution'});};
- bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});bad('relocation-missing',p=>{p.fixtureTransforms=[];});
+ bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});
+ if(isHierarchicalJointFixture(spec)){
+  const flattened=documentCurveCopyShadow(readSource);
+  bad('hierarchical-source-hash-missing',p=>{delete p.documentCurveSourceManifest[0].sha256;});
+  bad('hierarchical-relocations-missing',p=>{delete p.fixtureTransforms;});
+  bad('hierarchical-relocations-not-array',p=>{p.fixtureTransforms=null;});
+  bad('hierarchical-spurious-relocation',p=>{p.fixtureTransforms=[clone(flattened.fixtureTransforms[0])];});
+  bad('hierarchical-flattened-pair-not-executed',p=>{p.fixtureTransforms=clone(flattened.fixtureTransforms);});
+  bad('hierarchical-spurious-fixture-hash-missing',p=>{p.fixtureTransforms=[clone(flattened.fixtureTransforms[0])];delete p.fixtureTransforms[0].fixtureSha256;});
+  for(const [name,edit]of [['id',{id:'intake-ui'}],['kind',{kind:spec.kind==='UI_JOINT'?'UI_CAUSAL':'UI_JOINT'}],['lane',{lane:'workspace-ui'}],['block',{blockId:55}],['path',{path:spec.kind==='UI_JOINT'?'.vercel/private/participant-bank-intake-integration/bad-resolution/browser.json':'.vercel/private/participant-bank-intake-integration/current/browser.json'}],['producer',{producer:'scripts/verify-employee-intake-ui.mjs'}]]){
+   assert.throws(()=>validateDocumentCurveCopyProof({...spec,...edit},clone(proof),readSource),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');
+   checks.push({name:spec.id+'-document-copy-hierarchical-foreign-'+name+'-denied',result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure exact producer/mode shadow; no UI execution'});
+  }
+  for(const [name,file]of [['helper',DOCUMENT_CURVE_COPY_HELPER],['producer',spec.producer]]){
+   assert.throws(()=>validateDocumentCurveCopyProof(spec,clone(proof),candidate=>candidate===file?Buffer.from('foreign source bytes'):readSource(candidate)),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');
+   checks.push({name:spec.id+'-document-copy-hierarchical-altered-'+name+'-denied',result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure authenticated current-source shadow'});
+  }
+  const intake=JSON.parse(utf8(readSource('.github/workspace-acceptance-contract.json'))).extension.proofs.find(row=>row.id==='intake-ui');
+  assert.ok(intake);assert.throws(()=>validateDocumentCurveCopyProof(intake,clone(proof),readSource),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');
+  checks.push({name:spec.id+'-document-copy-hierarchical-zero-cannot-certify-intake-denied',result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure canonical intake descriptor; no UI execution'});
+  return checks;
+ }
+ bad('relocation-missing',p=>{p.fixtureTransforms=[];});
  for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('relocation-'+key,p=>{p.fixtureTransforms[0][key]='f'.repeat(64);});bad('relocation-foreign-root',p=>{p.fixtureTransforms[0].fixtureRelativePath='../foreign.mjs';});bad('relocation-wrong-module',p=>{p.fixtureTransforms[0].dependencySourcePath='src/lib/foreign-document-curve.mjs';});bad('relocation-untracked-fields',p=>{p.fixtureTransforms[0].exactCopied=true;});
- if(proof.fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.pop();});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}
+ if(documentCurveCopyShadow(readSource).fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.splice(1,1);});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}
+ if(spec.kind==='UI_INTAKE'){
+  for(const index of [2,3])bad('kyc-relocation-'+index+'-omitted',p=>{p.fixtureTransforms.splice(index,1);});
+  bad('kyc-relocation-source-substituted',p=>{p.fixtureTransforms[2].path='src/app/(identity)/cuenta/foreign-panel.js';});
+  bad('kyc-relocation-extra',p=>{p.fixtureTransforms.push(clone(p.fixtureTransforms[2]));});
+  bad('kyc-relocation-duplicate',p=>{p.fixtureTransforms[3]=clone(p.fixtureTransforms[2]);});
+  bad('kyc-relocations-reordered',p=>{[p.fixtureTransforms[2],p.fixtureTransforms[3]]=[p.fixtureTransforms[3],p.fixtureTransforms[2]];});
+  bad('kyc-relocation-original-hash-forged',p=>{p.fixtureTransforms[2].sourceSha256='f'.repeat(64);});
+  bad('kyc-relocation-generated-hash-forged',p=>{p.fixtureTransforms[3].fixtureSha256='f'.repeat(64);});
+  for(const [name,edit]of [['another-producer',{producer:'scripts/verify-participant-bank-intake-ui.mjs'}],['another-kind',{kind:'UI_JOINT'}]]){
+   assert.throws(()=>validateDocumentCurveCopyProof({...spec,...edit},clone(proof),readSource),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');
+   checks.push({name:spec.id+'-document-copy-kyc-'+name+'-denied',result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure exact producer-set shadow; no UI execution'});
+  }
+ }
  return checks;
 }
-export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,readSource,readEvidence,runId,runAttempt,expectedRoot}){
+// This explicit dependency port belongs to the Node verifier API, never to a
+// proof, contract, environment variable or CLI option. The ordinary exports and
+// CLI keep the real Git authority. Unit models must opt in by constructing this
+// factory and passing its authority functions outside the evidence payload.
+export function createWorkspaceCiVerifier(dependencies={}){
+ if(dependencies===null||typeof dependencies!=='object'||Array.isArray(dependencies))deny('CURRENT85_VERIFIER_DEPENDENCY_INVALID');
+ exactKeys(dependencies,Object.hasOwn(dependencies,'current85GitAuthority')?['current85GitAuthority']:[],'CURRENT85_VERIFIER_DEPENDENCY_INVALID');
+ let current85GitAuthority;
+ if(dependencies.current85GitAuthority!==undefined){
+  const source=dependencies.current85GitAuthority;
+  exactKeys(source,['resolveGitTree','readGitBlob','readWorkingSource'],'CURRENT85_VERIFIER_DEPENDENCY_INVALID');
+  for(const key of ['resolveGitTree','readGitBlob','readWorkingSource'])if(typeof source[key]!=='function')deny('CURRENT85_VERIFIER_DEPENDENCY_INVALID');
+  current85GitAuthority=Object.freeze(Object.fromEntries(['resolveGitTree','readGitBlob','readWorkingSource'].map(key=>[key,source[key].bind(source)])));
+ }
+ const ports=Object.freeze({current85GitAuthority});
+ return Object.freeze({
+  validateExtensionProof:(spec,bytes,options)=>validateExtensionProofWithDependencies(spec,bytes,options,ports),
+  expectedNeeds:(contract,expectedHead,workflowSha256,readSource,fixture)=>expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture,ports),
+  gate:input=>gate(input),
+ });
+}
+
+export function validateExtensionProof(spec,bytes,options){
+ return validateExtensionProofWithDependencies(spec,bytes,options);
+}
+
+function validateExtensionProofWithDependencies(spec,bytes,{expectedHead,expectedTree,readSource,readEvidence,runId,runAttempt,expectedRoot},dependencies){
  if(spec.kind===PLAN_BUDGET_CI_KIND){
   const contract=JSON.parse(utf8(readSource('.github/workspace-acceptance-contract.json')));try{verifyPlanBudgetCurrentSources(contract,readSource);}catch{deny('PROOF_BINDING_SOURCE');}equal(spec,planBudgetCompiledProof(contract),'PROOF_BUDGET_UI_SPEC');if(hash(readSource(spec.producer))!==spec.producerSha256)deny('PROOF_HARNESS_SOURCE');
   const binding=planBudgetUiSourceBinding(readSource);equal(binding.sourceManifest.map(row=>row.path),spec.sourceFiles,'PROOF_SOURCE_MANIFEST');let result;try{result=validatePlanBudgetUiProofBytes(bytes,readSource,{expectedHead,expectedTree,expectedRoot,readEvidence});}catch(error){if(error.code==='PLAN_BUDGET_UI_REJECTED'||error.code==='PLAN_PARTIDA_PREVIEW_UI_PROOF_REJECTED')deny('PROOF_BUDGET_UI_BOUNDARY');throw error;}
@@ -846,6 +979,11 @@ export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,rea
  if(spec.kind===FIELD_TASK_PAGINATION_CI_KIND){
   let proof;try{proof=JSON.parse(utf8(bytes));}catch{deny('PROOF_JSON');}
   const result=validateFieldTaskPaginationCi(proof,{expectedHead,expectedTree,readSource,readEvidence,spec,runId,runAttempt});
+  return {id:spec.id,path:spec.path,producer:spec.producer,kind:spec.kind,result:result.status,sourceRevision:expectedHead,harnessSha256:spec.producerSha256,sourceManifestSha256:manifestDigest(proof.sourceManifest),sourceReferences:spec.sourceFiles.length,proofSha256:hash(bytes),bytes:bytes.length,checks:spec.checkNames.length};
+ }
+ if(spec.kind===CURRENT85_CI_KIND){
+  let proof;try{proof=JSON.parse(utf8(bytes));}catch{deny('PROOF_JSON');}
+  const result=validateFocusedWorkspaceCurrent85Ci(proof,{expectedHead,expectedTree,readSource,readEvidence,spec,runId,runAttempt,expectedRoot,gitAuthority:dependencies?.current85GitAuthority});
   return {id:spec.id,path:spec.path,producer:spec.producer,kind:spec.kind,result:result.status,sourceRevision:expectedHead,harnessSha256:spec.producerSha256,sourceManifestSha256:manifestDigest(proof.sourceManifest),sourceReferences:spec.sourceFiles.length,proofSha256:hash(bytes),bytes:bytes.length,checks:spec.checkNames.length};
  }
  if(spec.kind===FOCUSED_WORKSPACE_CI_KIND){
@@ -1022,6 +1160,23 @@ function planBaselineSelftest(workflow,contract,root){
  }
  return checks;
 }
+// Only the authenticated complete current identity spec may select its predecessor's metadata.
+// The caller still enumerates and hashes the actual current producer and fixture graph.
+export function identityProducerPredecessorSpec(spec,readSource){
+ if(typeof readSource!=='function'||!isIdentity(spec)||spec.id!=='identity-only-ui'||spec.producer!=='scripts/verify-workspace-identity-only-ui.mjs')deny('PROOF_IDENTITY_CURRENT_SPEC');
+ const rawMetadata=readSource(contractPath),rawProducer=readSource(spec.producer);
+ if(!Buffer.isBuffer(rawMetadata)||!Buffer.isBuffer(rawProducer))deny('PROOF_IDENTITY_CURRENT_SOURCE');
+ const metadata=Buffer.from(rawMetadata),producer=Buffer.from(rawProducer),before=canonical(spec);
+ let contract;try{contract=JSON.parse(metadata.toString('utf8'));}catch{deny('PROOF_IDENTITY_CURRENT_SPEC');}
+ const current=contract.extension?.proofs?.find(row=>row.id===spec.id&&row.kind===spec.kind);
+ equal(spec,current,'PROOF_IDENTITY_CURRENT_SPEC');
+ verifyPlanBudgetCurrentSources(contract,readSource);
+ const previous=restorePilotCompletionPreviousProofSpec(spec);
+ if(canonical(spec)!==before)deny('PROOF_IDENTITY_CURRENT_SPEC');
+ const afterMetadata=readSource(contractPath),afterProducer=readSource(spec.producer);
+ if(!Buffer.isBuffer(afterMetadata)||!Buffer.isBuffer(afterProducer)||!afterMetadata.equals(metadata)||!afterProducer.equals(producer))deny('PROOF_IDENTITY_CURRENT_SOURCE');
+ return previous;
+}
 export function currentProducerSourceFiles(spec,root){
  if(spec.kind===PLAN_BUDGET_CI_KIND)return planBudgetUiSourceBinding(file=>readFileSync(path.join(root,file))).sourceManifest.map(row=>row.path);
  if(spec.kind==='PG_COMPANY_KYC'){
@@ -1029,6 +1184,7 @@ export function currentProducerSourceFiles(spec,root){
   if(contract.whatsappFieldContinuityCurrentRevision){const scan=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?scan(relative+'/'+entry.name):[relative+'/'+entry.name]);return whatsappFieldCompanyNativeSourceFiles(file=>readFileSync(path.join(root,file)),scan('src/lib').sort());}
  }
  if(spec.kind===FIELD_TASK_PAGINATION_CI_KIND)return fieldTaskPaginationCiSourceClosure(file=>{try{const target=path.join(root,file);return lstatSync(target).isFile()?readFileSync(target):null;}catch{return null;}});
+ if(spec.kind===CURRENT85_CI_KIND)return focusedWorkspaceCurrent85CiSourceClosure(file=>{try{const target=path.join(root,file);return lstatSync(target).isFile()?readFileSync(target):null;}catch{return null;}});
  if(spec.kind===FOCUSED_WORKSPACE_CI_KIND)return focusedWorkspaceCiSourceClosure(file=>{try{const target=path.join(root,file);return lstatSync(target).isFile()?readFileSync(target):null;}catch{return null;}});
  if(spec.kind===PARTICIPANT_PREANALYSIS_KIND)return participantPreanalysisCiSourceClosure(file=>{try{const target=path.join(root,file);return lstatSync(target).isFile()?readFileSync(target):null;}catch{return null;}});
  if(spec.kind==='UI_DOCUMENT_CURVE')return documentCurveUiSourceSets(file=>readFileSync(path.join(root,file))).combined;
@@ -1044,10 +1200,15 @@ export function currentProducerSourceFiles(spec,root){
  };
  if(spec.kind==='UNIT')return bankUnitSourceFiles(root);
  if(isIdentity(spec)){
-  const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);const destination=spec.producerSha256===IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.producerDelta.currentProducerSha256;equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs',...(destination?IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.copyGraphAdditions:[])],'PROOF_IDENTITY_SOURCE_ROOTS');
+  const readCurrent=file=>readFileSync(path.join(root,file)),previousSpec=identityProducerPredecessorSpec(spec,readCurrent);
+  if(readCurrent(spec.producer).toString('utf8')!==text)deny('PROOF_IDENTITY_CURRENT_SOURCE');
+  const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);const destination=previousSpec.producerSha256===IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.producerDelta.currentProducerSha256;equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs',...(destination?IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.copyGraphAdditions:[])],'PROOF_IDENTITY_SOURCE_ROOTS');
   assert.equal(text.split("import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';").length,2,'One explicit closed subscription fixture import');
   assert.equal(text.split("pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');").length,2,'One exact closed subscription fixture dependency graph');
-  return walk([...seeds,COMPANY_SUBSCRIPTION_UI_FIXTURE]);
+  const files=walk([...seeds,COMPANY_SUBSCRIPTION_UI_FIXTURE]);
+  identityProducerPredecessorSpec(spec,readCurrent);
+  if(readCurrent(spec.producer).toString('utf8')!==text)deny('PROOF_IDENTITY_CURRENT_SOURCE');
+  return files;
  }
  if(spec.kind==='PORTFOLIO_UNIT')return portfolioUnitSourceFiles(root);
  if(['UI_PORTFOLIO','UI_PREPARATION','UI_INTAKE'].includes(spec.kind)){assert.equal(text.split("from './lib/plan-document-curve-fixture-copy.mjs'").length,2,'One actual reviewed copier helper import');assert.equal(text.split('copyPlanDocumentCurveFixture({').length,2,'One actual reviewed copier call');}
@@ -1249,7 +1410,7 @@ function monthlyCurveContractSelftest(workflow,contract,root){
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure contract and source read; no PG/UI/provider execution'});};
  const bad=(name,code,edit)=>{const changed=clone(restoreParticipantPreanalysisPreviousContract(contract));edit(changed);assert.throws(()=>validateContract(changed),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure contract fixture'});};
  good('historical-block-and-current-command-both-pinned',()=>{
-  assert.equal(hash(canonical(contract.blocks.slice(0,46))),BASELINE_BLOCKS_SHA256);
+  assert.equal(hash(canonical(restoreParticipantPreanalysisPreviousContract(contract).blocks.slice(0,46))),BASELINE_BLOCKS_SHA256);
   assert.notEqual(currentCommandBlock(contract,12).commandSha256,contract.blocks.find(block=>block.id===12).commandSha256);
   equal(currentCommandBlock(contract,12).step,workflow.jobs.plans.steps.find(step=>step.name===contract.monthlySourceCurve.step.name),'WORKFLOW_NOT_EQUIVALENT');
  });
@@ -1476,21 +1637,21 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
  // Normalize only these shadow source fixtures to Linux Git text. The actual proof validator never normalizes bytes.
  const readSource=file=>{const bytes=readFileSync(path.join(root,sourcePath(file))),text=bytes.toString('utf8');assert.ok(bytes.equals(Buffer.from(text)));return Buffer.from(text.replaceAll('\r\n','\n'));};
  const tap=names=>Buffer.from('TAP version 13\n'+names.map((name,i)=>'ok '+(i+1)+' - '+name+'\n').join('')+'1..'+names.length+'\n# tests '+names.length+'\n# pass '+names.length+'\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n');
- for(const spec of contract.extension.proofs.filter(spec=>!['PG_PLAN_BASELINE','UI_DOCUMENT_CURVE',PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
+ for(const spec of contract.extension.proofs.filter(spec=>!['PG_PLAN_BASELINE','UI_DOCUMENT_CURVE',PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
    const originalCheckCount=checks.length;
   const evidence=new Map(),base={status:spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',productionDataWritten:false,sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256};
   let proof={...base};
   if(spec.kind.startsWith('PG_')){Object.assign(proof,{schemaRemoved:true,checks:[...spec.checkNames],realProviderCalls:0,providerCalls:0,unexpectedNetworkCalls:0,sqlFailures:[],...(spec.kind==='PG_COMPANY_KYC'?{productionDataTouched:false,databaseCreated:false,environment:'schema-only-localhost-postgresql-corporate-KYC',realClerkLogin:false,realMetaAccepted:false,humanAccepted:false,poolClosed:true,adminClosed:true,ownConnectionsClosed:true,expiryFeedbackNative:companyKycExpiryNativeShadowFixture(),contextFeedbackNative:companyKycContextNativeShadowFixture()}:{})});
 if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proof.currentImageNative=integratedCompanyCurrentShadowFixture(contract,readSource);if(spec.kind==='PG_COMPANY_KYC'&&contract.whatsappFieldContinuityCurrentRevision)proof.neutralStepGuidanceNative=whatsappFieldNeutralStepShadowFixture('COMPANY');}
-  else if(spec.kind==='UNIT'){Object.assign(proof,{sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,postgresExecuted:false,suites:TEST_SUITES.map((file,index)=>{const bytes=tap(index===4?RECOVERY_CASES:Array.from({length:EXPECTED_SUITE_COUNTS[file]||1},(_,i)=>'shadow fixture '+index+' case '+i)),filename='.vercel/participant-bank-intake-contract-evidence/suite-'+index+'.tap';evidence.set(filename,bytes);return {file,exitCode:0,...parseTap(bytes,{recovery:index===4,expectedTests:EXPECTED_SUITE_COUNTS[file]??null}),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};})});}
+  else if(spec.kind==='UNIT'){Object.assign(proof,{sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,postgresExecuted:false,suites:TEST_SUITES.map((file,index)=>{const bytes=tap(index===4?RECOVERY_CASES:Array.from({length:EXPECTED_SUITE_COUNTS[file]||1},(_,i)=>file==='tests/production-employee-intake.test.mjs'&&i>=HISTORICAL_UNIT_SUITE_COUNTS[file]?CURRENT_INTAKE_GREETING_TEST_NAMES[i-HISTORICAL_UNIT_SUITE_COUNTS[file]]:'shadow fixture '+index+' case '+i)),filename='.vercel/participant-bank-intake-contract-evidence/suite-'+index+'.tap';evidence.set(filename,bytes);return {file,exitCode:0,...parseTap(bytes,{recovery:index===4,expectedTests:EXPECTED_SUITE_COUNTS[file]??null}),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};})});}
   else{Object.assign(proof,{errors:[],realProviderCalls:0,providerCalls:0,postgresExecuted:false,realIdentityAccepted:false,widths:[320,390,768,1280],sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,dirtyTrackedPaths:[],fullSuite:true,badTransform:null,causalFailure:null});const modes=spec.kind==='UI_BANK'?['normal','invalid-cancel','lost-reload','unknown-close-reload','same-retry','stale','denied-forged','integrated']:spec.kind==='UI_INTAKE'?INTAKE_UI_MODES:['bank','intake'];proof.checks=proof.widths.flatMap(width=>modes.map(mode=>({width,mode,parentAndSiblingBlocked:true,ownRecoveryAndLocalCloseEnabled:true,noFeedbackDeadlock:true,automaticPost:false,storagePrivate:true,...(spec.kind==='UI_INTAKE'?{posts:intakeUiExpectedPosts(mode),...intakeUiExistingGuards(mode),privateStored:false,canonicalInvitationPrepared:true,scopeIsolated:true,canonicalInvitationConfirmed:true,focusRetainedAfterInvite:true,focusedRefresh:true,fullListExplicit:true,...(INTAKE_UI_FOCUSED_404_MODES.includes(mode)?{focused404Cleared:true,explicitListReconsulted:true,confirmedReceiptRetained:mode!=='continuation-missing'}:{})}:{})})));
    if(spec.kind==='UI_CAUSAL'){const source='src/app/(identity)/cuenta/participant-panel.js',original=readSource(source),needle=CIVIL_CURRENT_BANK_LOCK,replacement=CIVIL_CURRENT_CAUSAL_BANK_LOCK;Object.assign(proof,{widths:[320],checks:[],badTransform:{source,originalSha256:hash(original),fixtureSha256:hash(Buffer.from(original.toString().replace(needle,replacement))),needle,replacement,runtimeSourceEdited:false},causalFailure:{stage:'own-bank-save',message:'own bank save must remain enabled while its own pending gates siblings (shadow fixture)',expectedFailure:true}});}
   }
    if(spec.kind==='PG_PREPARATION')Object.assign(proof,{ok:true,sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,databaseRemoved:true,fixture:'disposable-local-postgres-canonical-workspace-with-synthetic-sessions',totalCheckCount:spec.checkNames.length});
    if(spec.kind==='UI_PREPARATION')Object.assign(proof,{validated:true,synthetic:true,realProviderCalls:false,sourceState:'EXACT_CI_SOURCE',fixtureRemoved:true,totalCheckCount:24,checks:proof.widths.flatMap(width=>PREPARATION_MODES.map(mode=>({width,mode,posts:mode==='cancel'?2:1,recoveryReads:0,currentSessionToken:true,placeholdersOnly:true,tasksUnchanged:true,noPayloadPersistence:true,horizontalOverflow:false})))});
    const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
-  if(['UI_INTAKE','UI_PREPARATION','UI_JOINT','UI_CAUSAL'].includes(spec.kind))Object.assign(proof,documentCurveCopyShadow(readSource));
-  good(spec.id+'-complete-proof',()=>validate(proof));checks.push(...documentCurveCopySelftest(spec,proof,validate));
+  if(['UI_INTAKE','UI_PREPARATION','UI_JOINT','UI_CAUSAL'].includes(spec.kind))Object.assign(proof,fixtureCopyShadowForProducer(spec,readSource));
+  good(spec.id+'-complete-proof',()=>validate(proof));checks.push(...documentCurveCopySelftest(spec,proof,validate,readSource));
   if(['UI_JOINT','UI_CAUSAL'].includes(spec.kind))mutate('pre-document-relocation-harness-cannot-certify-current-source','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256=JOINT_DOCUMENT_RELOCATION_PREVIOUS_PRODUCER_SHA256;});
   if(spec.kind==='PG_BANK')checks.push(...organizationUsageClosureSelftest(spec,proof,root,validate));
   checks.push(...companyKycCurrentSourceClosureSelftest(spec,proof,root,validate));
@@ -1571,6 +1732,9 @@ if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proo
    const previousGuidanceSpec={...spec,producerSha256:ADMITTED_GUIDANCE_PREVIOUS_UNIT_PRODUCER_SHA256};bad('bank-intake-units-previous-current-pin-cannot-certify-admitted-guidance-count','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(previousGuidanceSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:previousGuidanceSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
    const changed=clone(restoreParticipantPreanalysisPreviousContract(contract));changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('bank-intake-units-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
    const intakeIndex=TEST_SUITES.indexOf('tests/production-employee-intake.test.mjs'),intakePath=proof.suites[intakeIndex].tap.path,intakeOriginal=evidence.get(intakePath),legacyIntakeTap=tap(Array.from({length:65},(_,i)=>'historical employee intake suite '+i));evidence.set(intakePath,legacyIntakeTap);mutate('plain-text-intake-legacy-sixty-five-tests','PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(legacyIntakeTap),tap:{path:intakePath,bytes:legacyIntakeTap.length,sha256:hash(legacyIntakeTap)}};});evidence.set(intakePath,intakeOriginal);
+    good('ux420-current-unit-is-only-five-cases-beyond-frozen-ninety-five-and-289',()=>{assert.equal(HISTORICAL_UNIT_SUITE_COUNTS[TEST_SUITES[intakeIndex]],95);assert.equal(HISTORICAL_UNIT_TOTAL_TESTS,289);assert.equal(CURRENT_INTAKE_GREETING_TEST_NAMES.length,5);assert.equal(EXPECTED_SUITE_COUNTS[TEST_SUITES[intakeIndex]],100);assert.equal(EXPECTED_TOTAL_TESTS,294);});
+    const prior95Tap=tap(Array.from({length:HISTORICAL_UNIT_SUITE_COUNTS[TEST_SUITES[intakeIndex]]},(_,i)=>'historical8f7 intake '+i));evidence.set(intakePath,prior95Tap);
+    mutate('ux420-historical-ninety-five-and-289-cannot-certify-current-unit','PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(prior95Tap),tap:{path:intakePath,bytes:prior95Tap.length,sha256:hash(prior95Tap)}};assert.equal(p.suites.reduce((sum,suite)=>sum+suite.tests,0),HISTORICAL_UNIT_TOTAL_TESTS);});evidence.set(intakePath,intakeOriginal);
    const guidanceCount=EXPECTED_SUITE_COUNTS[TEST_SUITES[intakeIndex]];
    for(const size of [ADMITTED_GUIDANCE_PREVIOUS_UNIT_TEST_COUNTS.intake,guidanceCount-1,guidanceCount+1]){
     const bytes=tap(Array.from({length:size},(_,i)=>'admitted guidance suite '+i));evidence.set(intakePath,bytes);
@@ -1748,24 +1912,31 @@ if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proo
     const plainTextCheck='real-PG-signed-plain-name-email-current-sealed-outbox-time-fence-no-person-or-grant';
     const additions=['real-PG-canonical-additive-ASSIGN-retains-policy-digest-and-WAITING-signed-consent-bytes',...['nonnumeric','overflow','maximum-ten-digits'].map(name=>'real-PG-additive-proof-'+name+'-revision-fails-closed-without-SQL-cast-error'),'real-PG-additive-proof-missing-confirmed-baseline-denies-unchanged-WAITING','real-PG-additive-proof-duplicate-revision-denies-unchanged-WAITING','real-PG-old-signed-routing-revision-remains-rejected-after-only-addition','real-PG-canonical-SUSPEND-ACTIVATE-never-revives-policy-or-WAITING-consent','real-PG-canonical-REVOKE-ASSIGN-never-revives-policy-or-WAITING-consent','real-PG-anchor-REVOKE-denies-WAITING-admission-with-destination-still-ACTIVE'];
     const existingAdditions=["real-PG-existing-roster-candidate-current-snapshot-readonly-no-selection","real-PG-create-with-existing-contact-keeps-duplicate-denial","real-PG-existing-choice-snapshot-or-current-row-change-terminal-rejection","real-PG-existing-choice-registration-provenance-missing-foreign-duplicate-denial","real-PG-existing-choice-normalized-contact-ambiguity-denies-without-SQL-error","real-PG-existing-choice-stripped-participation-and-prior-admission-ledger-denial","real-PG-existing-choice-current-eligibility-markers-deny-preserving-source-consent","real-PG-existing-choice-preserves-roster-signed-consent-one-receipt-no-grant","real-PG-existing-choice-different-operations-one-admission-one-rejection","real-PG-existing-choice-audit-failure-rolls-back-worker-and-intake","real-PG-existing-choice-committed-ACK-loss-readback-without-write-repeat","real-PG-existing-roster-provenance-tamper-denies-accepted-permissions"];
-    const legacy=names=>names.filter(name=>!additions.includes(name)&&!existingAdditions.includes(name));
-    good('intake-postgres-current-thirty-three-SQL-checks-exact',()=>{
+    const withdrawalAdditions=["real-PG-signed-pending-withdrawal-preserves-original-envelope-replays-once-and-denies-old-and-current-admission-revisions","real-PG-admission-first-CANCELAR-preserves-person-and-reviewed-permissions-without-revocation"];
+    const legacy=names=>names.filter(name=>!additions.includes(name)&&!existingAdditions.includes(name)&&!withdrawalAdditions.includes(name));
+    good('intake-postgres-current-thirty-five-SQL-checks-exact',()=>{
      let source=readFileSync(path.join(root,spec.producer),'utf8');
      const loop="checks.push('real-PG-additive-proof-'+name+'-revision-fails-closed-without-SQL-cast-error');";
      assert.equal(source.split(loop).length,2);source=source.replace(loop,additions.slice(1,4).map(name=>"checks.push('"+name+"');").join(''));
-     assert.equal(spec.checkNames.length,33);equal([...source.matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');assert.equal(legacy(spec.checkNames).length,11);assert.equal(additions.length,10);assert.equal(existingAdditions.length,12);
+     assert.equal(spec.checkNames.length,35);equal([...source.matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');assert.equal(legacy(spec.checkNames).length,11);assert.equal(additions.length,10);assert.equal(existingAdditions.length,12);assert.equal(withdrawalAdditions.length,2);equal(spec.checkNames.slice(-2),withdrawalAdditions,'PROOF_CHECK_NAMES');
     });
     mutate('legacy-eight-checks','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks).filter(name=>!name.startsWith('real-PG-focused-')&&name!==plainTextCheck);assert.equal(p.checks.length,8);});
     mutate('legacy-ten-checks-without-plain-text-causal-fence','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks).filter(name=>name!==plainTextCheck);assert.equal(p.checks.length,10);});
     mutate('eleven-checks-duplicate','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);p.checks[4]=p.checks[3];assert.equal(p.checks.length,11);});
     mutate('eleven-checks-wrong-name','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);p.checks[4]='foreign focused check';assert.equal(p.checks.length,11);});
     mutate('eleven-checks-wrong-order','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);[p.checks[4],p.checks[5]]=[p.checks[5],p.checks[4]];});
-    mutate('legacy-twenty-one-checks-without-existing-profile','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>!existingAdditions.includes(value));assert.equal(p.checks.length,21);});
-    for(const name of [...additions,...existingAdditions])mutate('current-addition-omitted-'+name,'PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>value!==name);assert.equal(p.checks.length,32);});
-    mutate('current-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(additions[1])]=additions[0];assert.equal(p.checks.length,33);});
-    mutate('existing-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(existingAdditions[1])]=existingAdditions[0];assert.equal(p.checks.length,33);});
+    mutate('legacy-twenty-one-checks-without-existing-profile','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>!existingAdditions.includes(value)&&!withdrawalAdditions.includes(value));assert.equal(p.checks.length,21);});
+    for(const name of [...additions,...existingAdditions])mutate('current-addition-omitted-'+name,'PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>value!==name);assert.equal(p.checks.length,34);});
+    mutate('current-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(additions[1])]=additions[0];assert.equal(p.checks.length,35);});
+    mutate('existing-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(existingAdditions[1])]=existingAdditions[0];assert.equal(p.checks.length,35);});
     mutate('existing-addition-wrong-order','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(existingAdditions[1]);[p.checks[index],p.checks[index+1]]=[p.checks[index+1],p.checks[index]];});
     mutate('current-addition-wrong-order','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(additions[1]);[p.checks[index],p.checks[index+1]]=[p.checks[index+1],p.checks[index]];});
+    mutate('legacy-thirty-three-checks-without-withdrawal','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(name=>!withdrawalAdditions.includes(name));assert.equal(p.checks.length,33);});
+    for(const name of withdrawalAdditions)mutate('withdrawal-addition-omitted-'+name,'PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>value!==name);assert.equal(p.checks.length,34);});
+    mutate('withdrawal-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(withdrawalAdditions[1])]=withdrawalAdditions[0];assert.equal(p.checks.length,35);});
+    mutate('withdrawal-addition-wrong-name','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(withdrawalAdditions[0])]='foreign withdrawal check';assert.equal(p.checks.length,35);});
+    mutate('withdrawal-addition-wrong-order','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(withdrawalAdditions[0]);[p.checks[index],p.checks[index+1]]=[p.checks[index+1],p.checks[index]];assert.equal(p.checks.length,35);});
+    mutate('withdrawal-addition-relocated','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(withdrawalAdditions[0]),[check]=p.checks.splice(index,1);p.checks.splice(1,0,check);assert.equal(p.checks.length,35);});
    }
    return checks.splice(start);
   });
@@ -1802,6 +1973,30 @@ export function assertSourceIdentity({actualHead,expectedHead,dirtyTrackedPaths}
  if(!Array.isArray(dirtyTrackedPaths)||dirtyTrackedPaths.some(value=>typeof value!=='string'))deny('INVALID_TRACKED_SOURCE_STATE');
  if(dirtyTrackedPaths.length)deny('TRACKED_SOURCE_DIRTY');
  return actualHead;
+}
+// Only the authenticated current metadata inverse can move the complete UI39
+// to business. Historical assertions below still run on the genuine predecessor.
+function fieldUiAssignmentPreviousContract(contract,readSource){
+ const patches=contract?.planBudgetCurrentRevision?.pilotCompletionAdvance?.metadataInverse;
+ if(!Array.isArray(patches)||!patches.some(row=>row.pointer==='/lanes/field/blocks'))return contract;
+ const previous=restorePilotCompletionPreviousContract(contract,readSource),folder='.vercel/field-operations-evidence/',pg=folder+'postgres.json',ui=folder+'browser*.json',png=folder+'*.png';
+ const field=clone(previous.lanes.field),business=clone(previous.lanes.business),producer=previous.evidenceProducers[40];
+ equal(field.blocks,[20,39,40,52,65],'FIELD_UI_LANE_ASSIGNMENT');
+ equal(business.blocks,[13,21,31,32,34,43,44,45,58],'FIELD_UI_LANE_ASSIGNMENT');
+ if(producer?.producer!=='scripts/verify-field-operations-ui.mjs'||producer.blockId!==39||producer.lane!=='field'||producer.path!==folder+'browser.json'||producer.retained!==true||field.artifacts.filter(value=>value===folder).length!==1)deny('FIELD_UI_LANE_ASSIGNMENT');
+ field.blocks=field.blocks.filter(id=>id!==39);business.blocks.splice(1,0,39);
+ field.artifacts=field.artifacts.map(value=>value===folder?pg:value);field.requiredRetainedEvidence=field.requiredRetainedEvidence.filter(value=>value!==producer.path);
+ business.artifacts.splice(1,0,ui,png);business.optionalArtifactPatterns=business.artifacts.filter(value=>value.includes('*'));
+ business.requiredRetainedEvidence=previous.evidenceProducers.filter(row=>row.retained&&(row.lane==='business'||row.blockId===39)).map(row=>row.path);
+ equal(contract.lanes.field,field,'FIELD_UI_LANE_ASSIGNMENT');equal(contract.lanes.business,business,'FIELD_UI_LANE_ASSIGNMENT');
+ equal(contract.evidenceProducers[40],{...producer,lane:'business'},'FIELD_UI_LANE_ASSIGNMENT');
+ equal(contract.artifactPatterns.filter(value=>value.startsWith(folder)),[pg,ui,png],'FIELD_UI_LANE_ASSIGNMENT');
+ const at=(value,pointer)=>pointer.slice(1).split('/').reduce((owner,key)=>owner[key],value);
+ for(const pointer of ['/artifactPatterns','/evidenceProducers/40/lane','/lanes/business/artifacts','/lanes/business/blocks','/lanes/business/optionalArtifactPatterns','/lanes/business/requiredRetainedEvidence','/lanes/field/artifacts','/lanes/field/blocks','/lanes/field/requiredRetainedEvidence']){
+  const rows=patches.filter(row=>row.pointer===pointer);if(rows.length!==1)deny('FIELD_UI_LANE_ASSIGNMENT');
+  equal(rows[0].before,at(previous,pointer),'FIELD_UI_LANE_ASSIGNMENT');equal(rows[0].after,at(contract,pointer),'FIELD_UI_LANE_ASSIGNMENT');
+ }
+ return previous;
 }
 function validateEvidenceContract(contract){
  const infra=contract.infrastructureCheck;
@@ -1877,6 +2072,7 @@ export function loadContract(filename){
 export function buildWorkflow(contract){
  validateContract(contract);
  const base=contract.workflow;
+ const contractsTimeout=contract[PLAN_BUDGET_CURRENT_SECTION]?.pilotCompletionAdvance?CONTRACTS_CI_LIMITS.jobTimeoutMinutes:base.timeout;
  const jobs={};
  const setup=clone(contract.setup);
  setup[0].with.ref='${{ github.sha }}';
@@ -1884,7 +2080,7 @@ export function buildWorkflow(contract){
   const ownership=contract.lanes[lane];
   const manifest='.vercel/workspace-ci-evidence/lane-'+lane+'.json';
   jobs[lane]={
-   'runs-on':base.runner,'timeout-minutes':base.timeout,services:clone(base.services),env:clone(base.env),
+   'runs-on':base.runner,'timeout-minutes':lane==='contracts'?contractsTimeout:base.timeout,services:clone(base.services),env:clone(base.env),
    outputs:{provenance:'${{ steps.provenance.outputs.record }}',artifactId:'${{ steps.evidence.outputs.artifact-id }}',artifactDigest:'${{ steps.evidence.outputs.artifact-digest }}'},
    steps:[...clone(setup),
     {name:'Verify exact source, workflow and fresh evidence',run:`node ${script} preflight --lane ${lane} --expected-head "$GITHUB_SHA"`},
@@ -2010,7 +2206,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision){const raw=JSON.parse(readFileSync(path.join(root,'.vercel/workspace-identity-only-evidence/browser.json')));validateIdentityDestinationRetainedScreenshots(files,raw.destinationNavigation?.checks?.map(row=>row.screenshot));}
  const record=seal({version:2,proofBindings:extensionProofBindings,lane,head:actual,...clock,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
  if(Buffer.byteLength(JSON.stringify(record))>400*1024)deny('PROVENANCE_LIMIT');
- assertLaneOutputSize(JSON.stringify(record));
+ assertLaneOutputSize(encodeWorkspaceProvenance(JSON.stringify(record)));
  return record;
 }
 export function retainWeeklyCypImportUiScreenshots({root,bytes,readSource,expectedHead,expectedTree}){
@@ -2046,10 +2242,13 @@ export function validateIdentityDestinationRetainedScreenshots(files,expected=nu
  for(const[index,row]of declared.entries()){const matches=files.filter(file=>file.path===row.path);if(matches.length!==1||!sha(matches[0].sha256)||matches[0].bytes<24||expected&&matches[0].sha256!==expected[index].sha256)deny('PROOF_IDENTITY_DESTINATION_SCREENSHOT_BINDING');}
  return true;
 }
-export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource}){
+export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource,allowLegacyProvenance=false}){
  validateContract(contract);if(!head(expectedHead)||!sha(workflowSha256)||!positive(runId)||!positive(runAttempt))deny('EXPECTED_IDENTITY_INVALID');
  if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');
  try{verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);}catch(error){if(['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code))deny('PROOF_BINDING_SOURCE');throw error;}
+ return gateLaneResults({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource,allowLegacyProvenance});
+}
+function gateLaneResults({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource,allowLegacyProvenance}){
  exactKeys(needs,LANES,'MISSING_OR_EXTRA_LANE');
  const paths=new Set(),artifacts=new Set();let fileCount=0;
  const records=[];
@@ -2059,7 +2258,9 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   if(!positive(job.outputs.artifactId)||!sha(job.outputs.artifactDigest))deny('MISSING_ARTIFACT');
   if(artifacts.has(job.outputs.artifactId))deny('ARTIFACT_COLLISION');artifacts.add(job.outputs.artifactId);
   if(typeof job.outputs.provenance!=='string'||Buffer.byteLength(job.outputs.provenance)>400*1024)deny('PROVENANCE_LIMIT');
-  let record;try{record=JSON.parse(job.outputs.provenance);}catch{deny('INVALID_PROVENANCE_JSON');}
+  if(!allowLegacyProvenance||job.outputs.provenance.startsWith('wsp1.'))assertLaneOutputSize(job.outputs.provenance);
+  const provenanceText=decodeWorkspaceProvenance(job.outputs.provenance,{allowLegacyJson:allowLegacyProvenance});
+  let record;try{record=JSON.parse(provenanceText);}catch{deny('INVALID_PROVENANCE_JSON');}
   exactKeys(record,['version','lane','head','runId','runAttempt','workflowSha256','contractSha256','blockIds','commandDigests','artifactPatterns','requiredRetainedEvidence','requiredProducedEvidence','producedNotUploaded','verifierSha256','packageLockSha256','requirementsSha256','files','proofBindings','manifestSha256'],'INVALID_PROVENANCE_SHAPE');
   if(record.version!==2||record.lane!==lane||record.head!==expectedHead||record.runId!==runId||record.runAttempt!==runAttempt||record.workflowSha256!==workflowSha256||record.contractSha256!==EXPECTED_CONTRACT_SHA256||record.verifierSha256!==verifierSha256()||record.packageLockSha256!==contract.packageLockSha256||record.requirementsSha256!==contract.requirementsSha256)deny('PROVENANCE_IDENTITY');
   if(!sha(record.manifestSha256)||hash(JSON.stringify(unseal(record))+'\n')!==record.manifestSha256)deny('PROVENANCE_DIGEST');
@@ -2095,17 +2296,80 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
  equal(records.flatMap(record=>record.blockIds).sort((a,b)=>a-b),contract.blocks.map(block=>block.id),'TOTAL_BLOCK_COVERAGE');
  return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
 }
-function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
+// Explicit UNIT composition, separate from expectedNeeds' strict core. Only
+// selftest callers choose this model; public/CLI acceptance never reaches it.
+function expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,sourceReader){
+ const readSource=optionalCurrent85UnitSourceReader(sourceReader);
+ const active=contract.extension.proofs.filter(spec=>spec.kind===CURRENT85_CI_KIND);
+ if(!active.length)return expectedNeeds(contract,expectedHead,workflowSha256,readSource);
+ if(active.length!==1)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ const fixture=createSyntheticCurrent85FixtureFromSource({readSource,expectedHead,expectedTree:'b'.repeat(40),runId:100,runAttempt:1});
+ const verifier=createWorkspaceCiVerifier({current85GitAuthority:fixture.options.gitAuthority});
+ return verifier.expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture);
+}
+
+function expectedNeeds(contract,expectedHead,workflowSha256,readSource,suppliedFixture=null,suppliedPorts=null){
+ // This helper builds UNIT needs only; provenance()/CLI never calls it.
+ const active=contract.extension.proofs.filter(spec=>spec.kind===CURRENT85_CI_KIND);
+ if(active.length>1)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ if(active.length&&!suppliedFixture)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ if(active.length&&!suppliedPorts?.current85GitAuthority)deny('CURRENT85_TEST_GIT_AUTHORITY_REQUIRED');
+ const fixture=active.length?suppliedFixture:null;
+ if(fixture&&(!fixture.syntheticFixture||fixture.fixtureBoundary!=='UNIT_SCHEMA_MODEL_ONLY_NOT_ISSUED_CI_OR_BROWSER_EVIDENCE'))deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ const ports=active.length?suppliedPorts:undefined;
+ const typedBytes=fixture?Buffer.from(JSON.stringify(fixture.proof)):null;
+ const typedBinding=fixture?validateExtensionProofWithDependencies(active[0],typedBytes,{...fixture.options,expectedHead,readSource,runId:100,runAttempt:1},ports):null;
  return Object.fromEntries(LANES.map((lane,i)=>{
   const owner=contract.lanes[lane],file=filename=>({path:filename,sha256:'1'.repeat(64),bytes:128}),files=owner.requiredRetainedEvidence.map(file);
   if(lane==='plans'&&contract.weeklyCypCurrentRevision)files.push(...WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
   if(lane==='plans'&&contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION])files.push(...PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser.retainedTableScreenshots.map(row=>file(row.path)));
   if(lane==='plans'&&contract[PLAN_BUDGET_CURRENT_SECTION])files.push(...planBudgetRetainedScreenshotPaths(contract).map(file));
   if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision)files.push(...IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
-  const record=seal({version:2,proofBindings:proofBindings(contract,lane,files,expectedHead,readSource),lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
-  return [lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];
+  if(lane==='workspace-ui'&&fixture){
+   const index=files.findIndex(row=>row.path===active[0].path);if(index<0)deny('CURRENT85_TEST_FIXTURE_REQUIRED');files[index]={path:active[0].path,sha256:hash(typedBytes),bytes:typedBytes.length};
+   for(const[path,bytes]of fixture.evidence){if(files.some(row=>row.path===path))deny('CURRENT85_TEST_FIXTURE_REQUIRED');files.push({path,sha256:hash(bytes),bytes:bytes.length});}
+  }
+  const bindings=proofBindings(contract,lane,files,expectedHead,readSource).map(row=>row.kind===CURRENT85_CI_KIND?typedBinding:row);
+  const record=seal({version:2,proofBindings:bindings,lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
+  return[lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];
  }));
 }
+
+export function current85TypedGateSelftest(contract,sourceReader){
+ const readSource=optionalCurrent85UnitSourceReader(sourceReader);
+ const specs=contract.extension.proofs.filter(spec=>spec.kind===CURRENT85_CI_KIND);if(!specs.length)return[];if(specs.length!==1)deny('CURRENT85_TEST_FIXTURE_REQUIRED');
+ const checks=[],boundary='Explicit UNIT source/Git/evidence model only; no CI, browser, provider or environment mutation';
+ const good=(name,run)=>{run();checks.push({name:'current85-typed-'+name,result:'PASS',boundary});};
+ const bad=(name,codes,run)=>{assert.throws(run,error=>(Array.isArray(codes)?codes:[codes]).includes(error.code));checks.push({name:'current85-typed-'+name,result:'PASS',boundary,expectedDenial:codes});};
+ const expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),fixture=createSyntheticCurrent85FixtureFromSource({readSource,expectedHead,expectedTree:'b'.repeat(40),runId:100,runAttempt:1}),spec=specs[0];
+ const verifier=createWorkspaceCiVerifier({current85GitAuthority:fixture.options.gitAuthority}),proofBytes=()=>Buffer.from(JSON.stringify(fixture.proof));
+ let binding,needs;
+ good('explicit-git-port-validates-real-dispatch85-without-fallback',()=>{binding=verifier.validateExtensionProof(spec,proofBytes(),fixture.options);assert.equal(binding.kind,CURRENT85_CI_KIND);assert.equal(binding.checks,85);assert.equal(binding.proofSha256,hash(proofBytes()));});
+ good('expectedNeeds-uses-typed-raw-png-tap-and-envelope-digests',()=>{needs=verifier.expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture);const record=JSON.parse(needs['workspace-ui'].outputs.provenance),actual=record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND);equal(actual,binding,'PROOF_BINDING_IDENTITY');for(const[path,bytes]of fixture.evidence){const retained=record.files.find(row=>row.path===path);assert(retained);assert.equal(retained.sha256,hash(bytes));assert.equal(retained.bytes,bytes.length);}});
+ const input=()=>({needs:clone(needs),contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource,allowLegacyProvenance:true});
+ good('eight-lane-gate-accepts-complete-typed85-bindings',()=>{const report=verifier.gate(input());assert.equal(report.state,'PASS');assert.equal(report.lanes.length,8);assert.equal(report.lanes.find(row=>row.lane==='workspace-ui').proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).checks,85);});
+ const mutateNeeds=change=>{const value=input(),job=value.needs['workspace-ui'],record=JSON.parse(job.outputs.provenance);change(record);job.outputs.provenance=JSON.stringify(seal(unseal(record)));return value;};
+ bad('binding-omitted','PROOF_BINDINGS',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings=record.proofBindings.filter(row=>row.kind!==CURRENT85_CI_KIND);})));
+ bad('binding59-cannot-replace85','PROOF_BINDING_IDENTITY',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).checks=59;})));
+ bad('binding-source-digest-stale','PROOF_BINDING_SOURCE',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).sourceManifestSha256='f'.repeat(64);})));
+ bad('binding-head-foreign','PROOF_BINDING_IDENTITY',()=>verifier.gate(mutateNeeds(record=>{record.proofBindings.find(row=>row.kind===CURRENT85_CI_KIND).sourceRevision='f'.repeat(40);})));
+ bad('retained-envelope-missing','MISSING_REQUIRED_RETAINED_EVIDENCE',()=>verifier.gate(mutateNeeds(record=>{record.files=record.files.filter(row=>row.path!==spec.path);})));
+ bad('foreign-run-denied-before-any-git-model','CURRENT85_CI_REJECTED',()=>verifier.validateExtensionProof(spec,proofBytes(),{...fixture.options,runId:101}));
+ bad('local-envelope-is-not-ci','CURRENT85_CI_REJECTED',()=>{const proof=clone(fixture.proof);proof.sourceState='LOCAL_REVIEW_SOURCE';verifier.validateExtensionProof(spec,Buffer.from(JSON.stringify(proof)),fixture.options);});
+ bad('missing-original-png','CURRENT85_EVIDENCE_REJECTED',()=>{const missing=fixture.rawBrowserPath||fixture.proof.rawBrowser.path.replace('browser.json',fixture.raw.screenshots[0].path);verifier.validateExtensionProof(spec,proofBytes(),{...fixture.options,readEvidence:file=>file===missing?null:fixture.options.readEvidence(file)});});
+ bad('public-export-does-not-read-git-authority-from-options','CURRENT85_CI_REJECTED',()=>validateExtensionProof(spec,proofBytes(),fixture.options));
+ bad('factory-default-keeps-real-git-authority','CURRENT85_CI_REJECTED',()=>createWorkspaceCiVerifier().validateExtensionProof(spec,proofBytes(),fixture.options));
+ bad('git-port-cannot-arrive-inside-proof','CURRENT85_CI_REJECTED',()=>{const proof=clone(fixture.proof);proof.gitAuthority={synthetic:true};verifier.validateExtensionProof(spec,Buffer.from(JSON.stringify(proof)),fixture.options);});
+ bad('unknown-factory-dependency-is-not-an-injection-switch','CURRENT85_VERIFIER_DEPENDENCY_INVALID',()=>createWorkspaceCiVerifier({acceptSyntheticHead:true}));
+ bad('malformed-explicit-git-port-denied','CURRENT85_VERIFIER_DEPENDENCY_INVALID',()=>createWorkspaceCiVerifier({current85GitAuthority:{readGitBlob:()=>null}}));
+ bad('default-expectedNeeds-cannot-select-git-from-unit-fixture','CURRENT85_TEST_GIT_AUTHORITY_REQUIRED',()=>createWorkspaceCiVerifier().expectedNeeds(contract,expectedHead,workflowSha256,readSource,fixture));
+ bad('explicit-authority-cannot-autogenerate-an-omitted-fixture','CURRENT85_TEST_FIXTURE_REQUIRED',()=>verifier.expectedNeeds(contract,expectedHead,workflowSha256,readSource));
+ good('out-of-band-port-references-are-captured-before-caller-mutation',()=>{const port={...fixture.options.gitAuthority},bound=createWorkspaceCiVerifier({current85GitAuthority:port});port.readGitBlob=()=>null;assert.equal(bound.validateExtensionProof(spec,proofBytes(),fixture.options).checks,85);});
+ const sourceCodes=['CURRENT85_CI_REJECTED','CURRENT85_EVIDENCE_REJECTED','FOCUSED_WORKSPACE_CI_REJECTED'];
+ bad('live-source-reader-is-not-replaced-by-a-cached-verdict',sourceCodes,()=>verifier.validateExtensionProof(spec,proofBytes(),{...fixture.options,readSource:file=>file===spec.producer?Buffer.concat([readSource(file),Buffer.from('\n//changed\n')]):readSource(file)}));
+ return checks;
+}
+
 export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()){
  const checks=[],section=contract.kycExpiredCurrentComposition,prefix='kyc-expired-current-composition-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source/contract read; no PG/provider execution'});};
@@ -2162,18 +2426,18 @@ export function selftest(workflow,contract,root=process.cwd()){
  if(contract.workspaceContinuityCurrentRevision){
   good('workspace-continuity-complete-d5d-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWorkspaceContinuityPreviousContract(contract),null,2)+'\n'),WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('workspace-continuity-current-source-independent-of-original-proofs',()=>verifyWorkspaceContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
-  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
+  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['evidence-producer-disagrees',c=>{const proof=c.extension.proofs.find(row=>row.kind===CURRENT85_CI_KIND)||c.extension.proofs.find(row=>row.kind===FOCUSED_WORKSPACE_CI_KIND);assert(proof,'Focused workspace proof required for UNIT tamper');const producers=c.evidenceProducers.filter(row=>row.path===proof.path&&row.producer===proof.producer&&row.blockId===proof.blockId&&row.lane===proof.lane);assert.equal(producers.length,1,'One source-bound focused workspace producer required for UNIT tamper');producers[0].producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
  }
  if(contract.whatsappFieldContinuityCurrentRevision){
   good('whatsapp-field-complete052-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWhatsappFieldContinuityPreviousContract(contract),null,2)+'\n'),WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('whatsapp-field-current-source-independent-of-local-observations',()=>verifyWhatsappFieldContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
   good('whatsapp-field-independent21st-proof-and59th-block-ID65',()=>{const proof=contract.extension.proofs.find(row=>row.kind===FIELD_TASK_PAGINATION_CI_KIND);assert.equal(proof.blockId,65);assert.equal(proof.checkNames.length,33);assert.equal(restorePlanBudgetPreviousContract(contract).blocks.length,59);assert.equal(restorePlanBudgetPreviousContract(contract).extension.proofs.length,21);assert.equal(restoreWhatsappFieldContinuityPreviousContract(contract).blocks.length,58);});
-  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
+  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
  }
  checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
- checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
- const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
+ checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource),...current85TypedGateSelftest(contract,shadowSource));
+ const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource,allowLegacyProvenance:true};
  bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
  good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
  good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
@@ -2292,9 +2556,11 @@ export function selftest(workflow,contract,root=process.cwd()){
    {path:'.vercel/private/field-overtime-postgres-proof.json',lane:'field',retained:true},
    {path:'.vercel/private/field-overtime-ui-proof.json',lane:'field',retained:true}
   ],'OVERTIME_PRODUCER_CONTRACT');
+  ((contract)=>{
   const overtimeHistoricalContract=contract.whatsappFieldContinuityCurrentRevision?restoreWhatsappFieldContinuityPreviousContract(contract):contract;
   equal(overtimeHistoricalContract.lanes.field.blocks,[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
   equal(contract.lanes.field.blocks,contract.whatsappFieldContinuityCurrentRevision?[20,39,40,52,65]:[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
+  })(fieldUiAssignmentPreviousContract(contract,shadowSource));
  });
  for(const [name,code,edit] of [
   ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==52);}],
@@ -2350,7 +2616,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(parent+path.sep)&&path.basename(resolved).startsWith('ci-gate-selftest-fixture-'));
   rmSync(resolved,{recursive:true,force:true});
  }
-  for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
+  for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
    for(const [name,code,edit] of [
     ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
     ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
@@ -2373,7 +2639,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   ]){const c=clone(historicalContractForNegativeFixtures);edit(c);bad('extension-block-'+id+'-'+name,code,()=>validateContract(c));}
   const changedBaseline=clone(historicalContractForNegativeFixtures);changedBaseline.blocks[0].step.run+='\ntrue';changedBaseline.blocks[0].commandSha256=hash(changedBaseline.blocks[0].step.run);bad('old-block-changed-with-recomputed-digest','BASELINE_BLOCKS_CHANGED',()=>validateContract(changedBaseline));
   const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
-  try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
+  try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
  const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[],currentWhatsappPlanChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentCalendarChecks));checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks,currentWhatsappPlanChecks));for(const run of currentContinuityChecks)checks.push(...run());for(const run of currentReactiveChecks)checks.push(...run());for(const run of currentTemplateChecks)checks.push(...run());
   for(const [name,image] of [
@@ -2395,12 +2661,13 @@ export function selftest(workflow,contract,root=process.cwd()){
   return checks;
 }
 function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],currentKycStatusChecks=[],currentWhatsappPlanChecks=[]){
- const checks=[],expectedHead=contract.extension.baseHead,cache=new Map();
+ const checks=[],attendanceSupplementChecks=[],expectedHead=contract.extension.baseHead,cache=new Map();
  const readSource=file=>{if(!cache.has(file))cache.set(file,Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n')));return cache.get(file);};
  const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure canonical field shadow fixture; no Git/PG/UI/provider execution'});};
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure canonical field shadow fixture'});};
- const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource,allowLegacyProvenance:true};
  for(const spec of contract.extension.proofs.filter(isCanonicalField)){
+  const currentAttendance=spec.kind==='PG_FIELD'&&restorePilotCompletionPreviousProofSpec(spec)!==spec;
   const sets=canonicalFieldSourceSets(spec,readSource),map=files=>Object.fromEntries(files.map(file=>[file,hash(readSource(file))]));
   const fixture={records:[{projectId:'p-shadow',workerId:'w-shadow',submissionId:'kyc-shadow',submissionReceiptId:'participant_'+'1'.repeat(64),reviewReceiptId:'participant_'+'2'.repeat(64),actorId:'worker',reviewerActorId:'reviewer',contentHash:'3'.repeat(64),canonicalAdmissionConfirmed:true,identityCertified:false,providerCalls:0}],syntheticPrivateCalls:{privatePuts:2,privateReads:6},providerCalls:0,biometricIdentityCertified:false};
   const proof={status:'PASS',harnessSha256:spec.producerSha256,providerCalls:0,participantKycFixture:fixture};
@@ -2415,10 +2682,22 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
    if(spec.kind==='PG_FIELD')Object.assign(proof.ownHistoryPrivacy,{checks:privacyRevision.addedChecks.map(value=>JSON.parse(value).name),deniedBeforePrivateRead:true,postReadAuthorityRaces:['REASSIGNED','REVOKED'],providerCalls:0});
    else Object.assign(proof.ownHistoryPrivacy,{sameWorkerReassigned:true,newAuthorOwnShiftWithForeignPredecessorReadable:true});
   }
+  if(currentAttendance){
+   const names=[...utf8(readSource(spec.producer)).matchAll(/\battendanceReviewChecks\.push\('([^']+)'\)/g)].map(match=>match[1]);
+   Object.assign(proof,{attendanceReviewChecks:names,attendanceReviewCheckCount:4,totalChecks:71});
+  }
+  const previousEffectiveSpec=spec.kind==='PG_OVERTIME'?restorePilotCompletionPreviousProofSpec(spec):spec,currentEffectiveAttendance=previousEffectiveSpec!==spec;
+  if(currentEffectiveAttendance){
+   assert.equal(previousEffectiveSpec.checkNames.length,30);assert.equal(spec.checkNames.length,43);assert.deepEqual(spec.checkNames.slice(0,30),previousEffectiveSpec.checkNames);
+   const effectiveNames=spec.checkNames.slice(30);assert.equal(effectiveNames.length,13);assert.ok(effectiveNames.every(name=>name.startsWith('effective-attendance: ')));
+   // Synthetic shape only: no PostgreSQL case, report or provider is executed.
+   const reportNames=["private-reason-separation.json","unrelated-history.json","mixed-author.json","unconfirmed-effective.json","retained-checkpoint.json","cross-project-checkpoint.json","real-platform-head.json","overtime.json","malformed-own-inspection.json","missing-receipt-shift.json","selected-detail-global-guard.json","checkpoint-ancestor-foreign-author.json","unlocatable-marker-types.json","final-state.json"];
+   proof.effectiveAttendance={status:'PASS',checks:effectiveNames.map(name=>name.slice('effective-attendance: '.length)),checkCount:13,schema:'obrasaas_attendance_effective_'+'a'.repeat(32),disposableSchemaRemoved:true,caseReportDigests:Object.fromEntries(reportNames.map(name=>[name,hash(Buffer.from('synthetic canonical field shadow report '+name))])),providerCalls:0,actualAuthenticatedSessionVerified:false,syntheticSessionBoundaryInputsOnly:true,physicalAttendanceVerified:false,realBusinessDatabaseUsed:false,paymentEngineUsed:false,humanAccepted:false};
+  }
   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   currentKycStatusChecks.push(()=>currentKycStatusClosureSelftest(spec,proof,root,validate));
    currentWhatsappPlanChecks.push(()=>whatsappPlanImportClosureSelftest(spec,proof,root,validate));
-  good(spec.id+'-complete-current-proof',()=>assert.equal(validate(proof).checks,privacyRevision?.currentCheckCount??(spec.kind==='PG_FIELD'?66:29)));
+  good(spec.id+'-complete-current-proof',()=>assert.equal(validate(proof).checks,currentEffectiveAttendance?spec.checkNames.length:(privacyRevision?.currentCheckCount??(spec.kind==='PG_FIELD'?66:29))));
   good(spec.id+'-current-manifest-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   currentReactiveChecks.push(()=>{
    const start=checks.length,previous=REACTIVE_SOURCE_COUNTS[spec.kind]-1;
@@ -2473,11 +2752,32 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
   ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));bad(spec.id+'-'+name,code,()=>gate({...input,needs:value}));}
   const changed=clone(restoreParticipantPreanalysisPreviousContract(contract));changed.evidenceProducers.find(record=>record.path===spec.path).baselineProducerGitBlobSha256=spec.producerSha256;bad(spec.id+'-historical-record-not-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
   const omitted=clone(restoreParticipantPreanalysisPreviousContract(contract));omitted.extension.proofs=omitted.extension.proofs.filter(p=>p.id!==spec.id);bad(spec.id+'-typed-proof-not-optional','EXTENSION_PROOF_COVERAGE',()=>validateContract(omitted));
+  if(currentAttendance){
+   const start=checks.length;
+   good(spec.id+'-attendance-supplement-exact-71-preserves-historical67',()=>{
+    const before=canonical(proof),expected=clone(proof);expected.totalChecks=67;delete expected.attendanceReviewChecks;delete expected.attendanceReviewCheckCount;
+    equal(normalizePilotCanonicalFieldProof(spec,proof),expected,'PROOF_CHECK_NAMES');assert.equal(canonical(proof),before);assert.equal(proof.totalChecks,71);assert.equal(proof.attendanceReviewChecks.length,4);
+   });
+   mutate('attendance-checks-omitted','PROOF_CHECK_NAMES',p=>{delete p.attendanceReviewChecks;});
+   mutate('attendance-count-omitted','PROOF_CHECK_NAMES',p=>{delete p.attendanceReviewCheckCount;});
+   mutate('attendance-count-short','PROOF_CHECK_NAMES',p=>{p.attendanceReviewCheckCount=3;});
+   mutate('attendance-count-string','PROOF_CHECK_NAMES',p=>{p.attendanceReviewCheckCount='4';});
+   mutate('attendance-row-omitted','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.pop();});
+   mutate('attendance-row-extra','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.push('foreign attendance check');});
+   mutate('attendance-name-changed','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks[0]='foreign attendance check';});
+   mutate('attendance-row-duplicated','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks[0]=p.attendanceReviewChecks[1];});
+   mutate('attendance-order-changed','PROOF_CHECK_NAMES',p=>{p.attendanceReviewChecks.reverse();});
+   for(const total of [67,70,72])mutate('attendance-total-'+total,'PROOF_CHECK_NAMES',p=>{p.totalChecks=total;});
+   mutate('attendance-provider-call','PROOF_PROVIDER_IO',p=>{p.attendanceReviewProviderCalls=1;});
+   bad(spec.id+'-attendance-supplement-cannot-use-legacy-spec','PROOF_CHECK_NAMES',()=>normalizePilotCanonicalFieldProof(restorePilotCompletionPreviousProofSpec(spec),proof));
+   const forged=clone(spec);forged.checkNames[0]='foreign historical check';bad(spec.id+'-attendance-supplement-cannot-use-forged-spec','PROOF_CHECK_NAMES',()=>normalizePilotCanonicalFieldProof(forged,proof));
+   attendanceSupplementChecks.push(...checks.splice(start));
+  }
   const parent=path.resolve(root,'.vercel/workspace-ci-evidence'),scratch=mkdtempSync(path.join(parent,'ci-canonical-field-selftest-'));
   try{const target=path.join(scratch,spec.path);mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,'stale canonical field proof');bad(spec.id+'-stale-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:scratch,lane:spec.lane,contract}));}
   finally{assert.equal(path.dirname(path.resolve(scratch)),parent);rmSync(scratch,{recursive:true,force:true});}
  }
- return checks;
+ return [...checks,...attendanceSupplementChecks];
 }
 function identitySelftest(workflow,contract,root,currentContinuityChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[]){
  const checks=[],expectedHead=contract.extension.baseHead,spec=contract.extension.proofs.find(isIdentity);
@@ -2527,7 +2827,7 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  }
  mutate('source-duplicate','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push(clone(p.sourceManifest[0]));});mutate('source-foreign','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push({path:'src/foreign.mjs',sha256:'f'.repeat(64)});});
  mutate('source-path-unsafe','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest[0].path='../private';});mutate('source-reference-extra-key','PROOF_SOURCE_REFERENCE',p=>{p.sourceManifest[0].ignored=true;});
- const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource,allowLegacyProvenance:true};
  good('gate-binds-103-checks',()=>assert.equal(gate(input).lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,IDENTITY_ONLY_CHECK_COUNT));
  for(const [name,code,edit] of [
   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
@@ -2580,7 +2880,7 @@ function portfolioSelftest(workflow,contract,root){
   else Object.assign(proof,{sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],productionDataTouched:false,environment:'local-disposable-postgresql',databaseRemoved:true,connectionClosed:true,physicalWhatsAppTested:false,checks:[...spec.checkNames],totalCheckCount:spec.checkNames.length});
   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)});
   const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
-  checks.push(...documentCurveCopySelftest(spec,proof,validate));
+  checks.push(...documentCurveCopySelftest(spec,proof,validate,readSource));
   good(spec.id+'-complete-native-proof',()=>assert.equal(validate(proof).checks,summary(spec)));
   good(spec.id+'-current-source-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   good(spec.id+'-manifest-order-independent',()=>{const value=clone(proof);value.sourceManifest.reverse();assert.equal(validate(value).sourceManifestSha256,validate(proof).sourceManifestSha256);});
@@ -2612,7 +2912,7 @@ function portfolioSelftest(workflow,contract,root){
    mutate('dirty-source','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('dirty-path','PROOF_SOURCE_STATE',p=>{p.dirtyTrackedPaths=['src/lib/workspace-store.mjs'];});mutate('local-proof','PROOF_SOURCE_STATE',p=>{p.sourceState='LOCAL_REVIEW_SOURCE';});mutate('wrong-total','PROOF_CHECK_NAMES',p=>{p.totalCheckCount=0;});mutate('omitted-check','PROOF_CHECK_NAMES',p=>{p.checks.pop();});mutate('duplicated-check','PROOF_CHECK_NAMES',p=>{p.checks[0]=p.checks[1];});mutate('claims-physical-acceptance','PROOF_PROVIDER_IO',p=>{p.physicalWhatsAppTested=true;});
   }
  }
- const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const workflowSha256=hash(canonical(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource,allowLegacyProvenance:true};
  for(const spec of specs){
   for(const [name,code,edit] of [
    ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
@@ -2640,7 +2940,7 @@ function portfolioSelftest(workflow,contract,root){
 
 // Pure source/aggregate shadows: no browser, PostgreSQL or provider evidence.
 export function planBudgetCurrentGateSelftest(workflow,contract,root=process.cwd()){
- const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\r\n','\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource};
+ const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\r\n','\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource,allowLegacyProvenance:true};
  const good=(name,run)=>{run();checks.push({name:'budget-current-'+name,result:'PASS',boundary:'pure source and aggregate shadow; no browser acceptance'});},bad=(name,code,change)=>{const copy=clone(needs),record=JSON.parse(copy.plans.outputs.provenance);change(record);copy.plans.outputs.provenance=JSON.stringify(seal(unseal(record)));assert.throws(()=>gate({...input,needs:copy}),error=>error.code===code);checks.push({name:'budget-current-'+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial aggregate shadow'});};
  good('exact-corrected11-contract-inverse',()=>assert.equal(hash(JSON.stringify(restorePlanBudgetPreviousContract(contract),null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839'));
  good('all-current-sources-bound',()=>verifyPlanBudgetCurrentSources(contract,readSource));good('all23-pngs-bound-in-aggregate',()=>gate(input));
@@ -2657,6 +2957,7 @@ function writeJson(filename,value){mkdirSync(path.dirname(filename),{recursive:t
 function options(argv){const parsed={};for(let i=0;i<argv.length;i+=2){if(!argv[i]?.startsWith('--')||!argv[i+1])deny('CLI_ARGUMENT');parsed[argv[i].slice(2)]=argv[i+1];}return parsed;}
 function selftestWorkerA(workflow,contract,root,tracker){
 const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);
+void historicalContractForNegativeFixtures;
 const checks=[];
 function good(name,run){run();checks.push({name,result:'PASS'});}
 function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
@@ -2672,27 +2973,50 @@ if(contract.planMeasurementDocumentAssociationRevision){
 if(contract.workspaceContinuityCurrentRevision){
   good('workspace-continuity-complete-d5d-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWorkspaceContinuityPreviousContract(contract),null,2)+'\n'),WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('workspace-continuity-current-source-independent-of-original-proofs',()=>verifyWorkspaceContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
-  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
+  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['evidence-producer-disagrees',c=>{const proof=c.extension.proofs.find(row=>row.kind===CURRENT85_CI_KIND)||c.extension.proofs.find(row=>row.kind===FOCUSED_WORKSPACE_CI_KIND);assert(proof,'Focused workspace proof required for UNIT tamper');const producers=c.evidenceProducers.filter(row=>row.path===proof.path&&row.producer===proof.producer&&row.blockId===proof.blockId&&row.lane===proof.lane);assert.equal(producers.length,1,'One source-bound focused workspace producer required for UNIT tamper');producers[0].producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
  }
 if(contract.whatsappFieldContinuityCurrentRevision){
   good('whatsapp-field-complete052-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWhatsappFieldContinuityPreviousContract(contract),null,2)+'\n'),WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('whatsapp-field-current-source-independent-of-local-observations',()=>verifyWhatsappFieldContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
   good('whatsapp-field-independent21st-proof-and59th-block-ID65',()=>{const proof=contract.extension.proofs.find(row=>row.kind===FIELD_TASK_PAGINATION_CI_KIND);assert.equal(proof.blockId,65);assert.equal(proof.checkNames.length,33);assert.equal(restorePlanBudgetPreviousContract(contract).blocks.length,59);assert.equal(restorePlanBudgetPreviousContract(contract).extension.proofs.length,21);assert.equal(restoreWhatsappFieldContinuityPreviousContract(contract).blocks.length,58);});
-  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
+  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui'||row.id==='focused-workspace-current85-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
  }
 checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
 const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
-checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
+checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource),...current85TypedGateSelftest(contract,shadowSource));
 tracker.mark("F0",11,"end");
 tracker.segments.push({phase:"F0",rows:checks.slice(phaseStart)});
+tracker.mark("F3",153);phaseStart=checks.length;
+checks.push(...companySubscriptionContractSelftest(contract));
+checks.push(...taskMeasurementContractSelftest(contract));
+checks.push(...organizationUsageContractSelftest(contract));
+checks.push(...companyKycCurrentSourceContractSelftest(contract));
+checks.push(...planBaselineSelftest(workflow,contract,root));
+checks.push(...documentCurveUiSelftest(workflow,contract,root));
+checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));
+tracker.mark("F3",159,"end");
+tracker.segments.push({phase:"F3",rows:checks.slice(phaseStart)});
+return checks;
+}
+
+function selftestWorkerC(workflow,contract,root,tracker){
+const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);
+const checks=[];
+function good(name,run){run();checks.push({name,result:'PASS'});}
+function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
+let phaseStart;
+const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
 tracker.mark("F1",12);phaseStart=checks.length;
-const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
+const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedUnitNeedsWithExplicitCurrent85Authority(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource,allowLegacyProvenance:true};
 bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
 good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
 good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
 const laneEnv=Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),JSON.stringify(needs[lane])]));
 good('lane-environment-preserves-exact-eight-records',()=>equal(readLaneNeedsEnvironment({...laneEnv,PATH:'controlled'}),needs,'ENV_TRANSPORT_CHANGED'));
 good('lane-environment-still-runs-exact-gate',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,contract.blocks.length);});
+// The exact gate just checked the shared source inputs above. These cases
+// alter only lane results, so repeat the lane validation on the same inputs.
+const verifyAlteredNeeds=needs=>gateLaneResults({...input,needs});
 bad('legacy-aggregate-environment-denied','LEGACY_AGGREGATE_ENV_DENIED',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_NEEDS_JSON:JSON.stringify(needs)}));
 const missingEnv={...laneEnv};
 delete missingEnv.WORKSPACE_LANE_META_JSON;
@@ -2720,26 +3044,26 @@ good('lane-output-size-bounds-every-fixture',()=>{
 bad('oversized-output-blocked-before-github-output','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('x'.repeat(LANE_OUTPUT_BYTES)));
 bad('escaped-output-size-uses-wire-bytes','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('"'.repeat(LANE_OUTPUT_BYTES/2)));
 bad('non-string-output-size-denied','PROVENANCE_LIMIT',()=>assertLaneOutputSize(null));
-for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>gate({...input,needs:n}));}
+for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>verifyAlteredNeeds(n));}
 let n=clone(needs);
 delete n.meta;
 bad('missing-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
 n=clone(needs);
 n.unexpected=n.meta;
-bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
+bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 n.meta.outputs.artifactId='';
-bad('missing-artifact','MISSING_ARTIFACT',()=>gate({...input,needs:n}));
+bad('missing-artifact','MISSING_ARTIFACT',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 delete n.meta.outputs.provenance;
-bad('missing-output','MISSING_LANE_OUTPUT',()=>gate({...input,needs:n}));
+bad('missing-output','MISSING_LANE_OUTPUT',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 n.meta.outputs.artifactDigest='';
-bad('missing-artifact-digest','MISSING_ARTIFACT',()=>gate({...input,needs:n}));
+bad('missing-artifact-digest','MISSING_ARTIFACT',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 n.meta.outputs.artifactId=n.contracts.outputs.artifactId;
-bad('artifact-id-collision','ARTIFACT_COLLISION',()=>gate({...input,needs:n}));
-function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+bad('artifact-id-collision','ARTIFACT_COLLISION',()=>verifyAlteredNeeds(n));
+function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>verifyAlteredNeeds(n));}
 altered('wrong-source-sha','PROVENANCE_IDENTITY',r=>{r.head='c'.repeat(40);});
 altered('wrong-workflow-sha','PROVENANCE_IDENTITY',r=>{r.workflowSha256='c'.repeat(64);});
 altered('wrong-contract-sha','PROVENANCE_IDENTITY',r=>{r.contractSha256='c'.repeat(64);});
@@ -2760,12 +3084,12 @@ altered('traversal-absolute','UNSAFE_PATH',r=>{r.files[0].path='/tmp/foreign.jso
 altered('traversal-backslash','UNSAFE_PATH',r=>{r.files[0].path='C:\\private\\foreign.json';});
 n=clone(needs);
 n.people.outputs.provenance='{}';
-bad('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>gate({...input,needs:n}));
+bad('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>verifyAlteredNeeds(n));
 n=clone(needs);
 let r=JSON.parse(n.people.outputs.provenance);
 r.files[0].bytes++;
 n.people.outputs.provenance=JSON.stringify(r);
-bad('unsealed-provenance-change','PROVENANCE_DIGEST',()=>gate({...input,needs:n}));
+bad('unsealed-provenance-change','PROVENANCE_DIGEST',()=>verifyAlteredNeeds(n));
 for(const [name,edit] of [
   ['omitted-workflow-block',w=>{w.jobs.people.steps.splice(6,1);}],
   ['duplicate-workflow-block',w=>{w.jobs.people.steps.splice(6,0,clone(w.jobs.people.steps[6]));}],
@@ -2777,7 +3101,7 @@ for(const [name,edit] of [
   ['changed-upload-path',w=>{w.jobs.channels.steps.at(-1).with.path+='.vercel/private/**\n';}]
  ]){const w=clone(original);edit(w);bad(name,'WORKFLOW_NOT_EQUIVALENT',()=>equivalent(w,contract));}
 good('all-historical-optional-PNGs-absent-with-required-weekly-captures-present',()=>assert.equal(gate(input).state,'PASS'));
-if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));bad('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>gate({...input,needs:n}));}
+if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));bad('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>verifyAlteredNeeds(n));}
 for(const lane of LANES)for(const pattern of contract.lanes[lane].optionalArtifactPatterns.filter(pattern=>!PORTFOLIO_ARTIFACTS.includes(pattern))){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.files.push({path:pattern.replaceAll('*','fixture'),sha256:'4'.repeat(64),bytes:128});
@@ -2790,14 +3114,14 @@ for(const lane of LANES)for(const filename of contract.lanes[lane].requiredRetai
   if(!r.files.length){const owned=contract.lanes[lane].artifacts.find(pattern=>pattern.endsWith('/'));if(owned)r.files.push({path:owned+'diagnostic.json',sha256:'4'.repeat(64),bytes:128});}
   delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
    const historicalEmpty=lane==='contracts'&&filename==='.vercel/private/biometric-real-model-proof.json';
-   bad((historicalEmpty?'missing-main-proof-with-other-artifact-':'missing-main-proof-')+lane+'-'+filename,r.files.length?'MISSING_REQUIRED_RETAINED_EVIDENCE':'EMPTY_EVIDENCE',()=>gate({...input,needs:n}));
-   if(historicalEmpty){const prior=clone(needs),empty=JSON.parse(prior[lane].outputs.provenance);empty.files=[];delete empty.manifestSha256;prior[lane].outputs.provenance=JSON.stringify(seal(empty));bad('missing-main-proof-'+lane+'-'+filename,'EMPTY_EVIDENCE',()=>gate({...input,needs:prior}));}
+   bad((historicalEmpty?'missing-main-proof-with-other-artifact-':'missing-main-proof-')+lane+'-'+filename,r.files.length?'MISSING_REQUIRED_RETAINED_EVIDENCE':'EMPTY_EVIDENCE',()=>verifyAlteredNeeds(n));
+   if(historicalEmpty){const prior=clone(needs),empty=JSON.parse(prior[lane].outputs.provenance);empty.files=[];delete empty.manifestSha256;prior[lane].outputs.provenance=JSON.stringify(seal(empty));bad('missing-main-proof-'+lane+'-'+filename,'EMPTY_EVIDENCE',()=>verifyAlteredNeeds(prior));}
  }
 for(const lane of LANES)for(const filename of contract.lanes[lane].requiredProducedEvidence){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.producedNotUploaded=r.producedNotUploaded.filter(file=>file.path!==filename);
   delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
-  bad('missing-produced-not-uploaded-'+filename,'MISSING_REQUIRED_PRODUCED_EVIDENCE',()=>gate({...input,needs:n}));
+  bad('missing-produced-not-uploaded-'+filename,'MISSING_REQUIRED_PRODUCED_EVIDENCE',()=>verifyAlteredNeeds(n));
  }
 altered('required-retained-list-omitted','RETAINED_EVIDENCE_CONTRACT',r=>{r.requiredRetainedEvidence.pop();});
 altered('required-produced-list-omitted','PRODUCED_EVIDENCE_CONTRACT',r=>{r.requiredProducedEvidence.pop();});
@@ -2825,9 +3149,11 @@ good('overtime-block-52-three-canonical-proofs',()=>{
    {path:'.vercel/private/field-overtime-postgres-proof.json',lane:'field',retained:true},
    {path:'.vercel/private/field-overtime-ui-proof.json',lane:'field',retained:true}
   ],'OVERTIME_PRODUCER_CONTRACT');
+  ((contract)=>{
   const overtimeHistoricalContract=contract.whatsappFieldContinuityCurrentRevision?restoreWhatsappFieldContinuityPreviousContract(contract):contract;
   equal(overtimeHistoricalContract.lanes.field.blocks,[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
   equal(contract.lanes.field.blocks,contract.whatsappFieldContinuityCurrentRevision?[20,39,40,52,65]:[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
+  })(fieldUiAssignmentPreviousContract(contract,shadowSource));
  });
 for(const [name,code,edit] of [
   ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==52);}],
@@ -2836,7 +3162,7 @@ for(const [name,code,edit] of [
   ['foreign-lane','EVIDENCE_PRODUCER_COVERAGE',c=>{c.lanes.field.blocks=c.lanes.field.blocks.filter(id=>id!==52);c.lanes.meta.blocks.push(52);}],
   ['changed-command','CONTRACT_COMMAND',c=>{c.blocks.find(block=>block.id===52).step.run+='\ntrue';}]
  ]){const c=clone(historicalContractForNegativeFixtures);edit(c);bad('overtime-52-'+name,code,()=>validateContract(c));}
-function alteredField(name,code,edit){const n=clone(needs),r=JSON.parse(n.field.outputs.provenance);edit(r);delete r.manifestSha256;n.field.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+function alteredField(name,code,edit){const n=clone(needs),r=JSON.parse(n.field.outputs.provenance);edit(r);delete r.manifestSha256;n.field.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>verifyAlteredNeeds(n));}
 alteredField('overtime-52-omitted-from-provenance','BLOCK_COVERAGE',r=>{r.blockIds=r.blockIds.filter(id=>id!==52);});
 alteredField('overtime-52-duplicate-in-provenance','BLOCK_COVERAGE',r=>{r.blockIds.push(52);});
 alteredField('overtime-52-command-digest-changed','COMMAND_DIGEST',r=>{r.commandDigests[r.blockIds.indexOf(52)]='3'.repeat(64);});
@@ -2883,7 +3209,7 @@ try{
   const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(parent+path.sep)&&path.basename(resolved).startsWith('ci-gate-selftest-fixture-'));
   rmSync(resolved,{recursive:true,force:true});
  }
-for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
+for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
    for(const [name,code,edit] of [
     ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
     ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
@@ -2892,7 +3218,7 @@ for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYS
     ['binding-source-manifest-valid64-wrong','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],
     ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],
     ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}]
-   ]){if(spec.kind==='UI_CAUSAL'&&name==='binding-checks')continue;const n=clone(needs),r=JSON.parse(n[spec.lane].outputs.provenance);edit(r);delete r.manifestSha256;n[spec.lane].outputs.provenance=JSON.stringify(seal(r));bad(spec.id+'-'+name,code,()=>gate({...input,needs:n}));}
+   ]){if(spec.kind==='UI_CAUSAL'&&name==='binding-checks')continue;const n=clone(needs),r=JSON.parse(n[spec.lane].outputs.provenance);edit(r);delete r.manifestSha256;n[spec.lane].outputs.provenance=JSON.stringify(seal(r));bad(spec.id+'-'+name,code,()=>verifyAlteredNeeds(n));}
    bad(spec.id+'-current-source-bytes-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:file=>file===spec.sourceFiles[0]?Buffer.concat([shadowSource(file),Buffer.from('altered shadow source')]):shadowSource(file)}));
    // Keep this binding control independent from the causal fixture-presence
    // guard when its additive script source sorts before the application graph.
@@ -2909,20 +3235,10 @@ changedBaseline.blocks[0].step.run+='\ntrue';
 changedBaseline.blocks[0].commandSha256=hash(changedBaseline.blocks[0].step.run);
 bad('old-block-changed-with-recomputed-digest','BASELINE_BLOCKS_CHANGED',()=>validateContract(changedBaseline));
 const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
-try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
+try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,CURRENT85_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
 tracker.mark("F1",135,"end");
 tracker.segments.push({phase:"F1",rows:checks.slice(phaseStart)});
-tracker.mark("F3",153);phaseStart=checks.length;
-checks.push(...companySubscriptionContractSelftest(contract));
-checks.push(...taskMeasurementContractSelftest(contract));
-checks.push(...organizationUsageContractSelftest(contract));
-checks.push(...companyKycCurrentSourceContractSelftest(contract));
-checks.push(...planBaselineSelftest(workflow,contract,root));
-checks.push(...documentCurveUiSelftest(workflow,contract,root));
-checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));
-tracker.mark("F3",159,"end");
-tracker.segments.push({phase:"F3",rows:checks.slice(phaseStart)});
 return checks;
 }
 
@@ -2994,7 +3310,7 @@ return checks;
 
 const SELFTEST_WORKER_PROTOCOL=Object.freeze({
  version:1,phases:Object.freeze(['F0','F1','F2','F3']),
- workers:Object.freeze({A:Object.freeze(['F0','F1','F3']),B:Object.freeze(['F2'])}),
+ workers:Object.freeze({A:Object.freeze(['F0','F3']),B:Object.freeze(['F2']),C:Object.freeze(['F1'])}),
  statements:Object.freeze({F0:Object.freeze([4,11]),F1:Object.freeze([12,135]),F2:Object.freeze([136,152]),F3:Object.freeze([153,159])}),
  chunkRows:64,packetBytes:1024*1024,maxRows:1000000,stdioBytes:8*1024*1024,
  startMs:30000,finishMs:30000,defaultBudgetMs:70*60*1000,maxBudgetMs:74*60*1000,
@@ -3064,7 +3380,10 @@ function validateSelftestWorkerPacket(packet,binding){
   if(!phases.includes(packet.phase)||!integer(packet.chunk,0,SELFTEST_WORKER_PROTOCOL.maxRows)||!Array.isArray(packet.rows)||packet.rows.length<1||packet.rows.length>SELFTEST_WORKER_PROTOCOL.chunkRows)fail('SELFTEST_IPC_ROWS');
   for(const row of packet.rows){
    if(!plain(row)||!Object.hasOwn(row,'name')||!Object.hasOwn(row,'result')||Object.keys(row).some(key=>!['name','result','boundary','expectedDenial'].includes(key))||row.result!=='PASS'||typeof row.name!=='string'||!row.name||row.name.length>8192)fail('SELFTEST_IPC_ROW');
-   for(const key of ['boundary','expectedDenial'])if(Object.hasOwn(row,key)&&(typeof row[key]!=='string'||!row[key]||row[key].length>8192))fail('SELFTEST_IPC_ROW');
+   for(const key of ['boundary','expectedDenial'])if(Object.hasOwn(row,key)){
+    const value=row[key],originalCurrent85Vector=key==='expectedDenial'&&packet.worker==='A'&&packet.phase==='F0'&&row.name==='current85-typed-live-source-reader-is-not-replaced-by-a-cached-verdict'&&row.boundary==='Explicit UNIT source/Git/evidence model only; no CI, browser, provider or environment mutation'&&Array.isArray(value)&&value.length===3&&Object.keys(value).length===3&&['CURRENT85_CI_REJECTED','CURRENT85_EVIDENCE_REJECTED','FOCUSED_WORKSPACE_CI_REJECTED'].every((code,index)=>Object.hasOwn(value,index)&&value[index]===code);
+    if(!originalCurrent85Vector&&(typeof value!=='string'||!value||value.length>8192))fail('SELFTEST_IPC_ROW');
+   }
   }return packet;
  }
  if(packet.kind==='done'){
@@ -3083,9 +3402,9 @@ function validateSelftestWorkerPacket(packet,binding){
 function mergeSelftestWorkerChecks(records){
  const fail=code=>{throw Object.assign(new Error(code),{code});};
  const sha=value=>createHash('sha256').update(value).digest('hex');
- if(!Array.isArray(records)||records.length!==2)fail('SELFTEST_WORKERS_INCOMPLETE');
+ if(!Array.isArray(records)||records.length!==3)fail('SELFTEST_WORKERS_INCOMPLETE');
  const phases=new Map();
- for(const worker of ['A','B']){
+ for(const worker of ['A','B','C']){
   const matches=records.filter(record=>record.worker===worker);if(matches.length!==1)fail('SELFTEST_WORKERS_DUPLICATE');const record=matches[0];
   if(!record.ready||!record.closed||!record.disconnected||record.code!==0||record.signal!==null||record.executionError||record.terminal?.kind!=='done')fail('SELFTEST_WORKER_NOT_SUCCESS');
   const expected=SELFTEST_WORKER_PROTOCOL.workers[worker];if(record.phases.size!==expected.length)fail('SELFTEST_PHASE_MISSING');
@@ -3104,8 +3423,10 @@ function runParallelSelftest(root,options){
   if(process.env.NODE_OPTIONS||process.env.NODE_PATH)throw fail('SELFTEST_NODE_PRELOAD');
   const execution={session:randomUUID(),parentPid:process.pid,workflowFile:options.workflowFile,contractFile:options.contractFile};
   const before=snapshotSelftestPhysicalSource(root,options.expectedHead,execution);
-  const budget=options.timeoutMs??SELFTEST_WORKER_PROTOCOL.defaultBudgetMs;
-  if(!Number.isSafeInteger(budget)||budget<50||budget>SELFTEST_WORKER_PROTOCOL.maxBudgetMs)throw fail('SELFTEST_BUDGET');
+  const contractsCi=options.pilotCompletion===true&&before.context.run.kind==='GITHUB_ACTIONS'&&before.context.run.job==='contracts';
+  const maxBudget=contractsCi?CONTRACTS_CI_LIMITS.selftestBudgetMs:SELFTEST_WORKER_PROTOCOL.maxBudgetMs;
+  const budget=options.timeoutMs??(contractsCi?maxBudget:SELFTEST_WORKER_PROTOCOL.defaultBudgetMs);
+  if(!Number.isSafeInteger(budget)||budget<50||budget>maxBudget)throw fail('SELFTEST_BUDGET');
   const parent=path.join(before.root,'.vercel','workspace-ci-evidence');mkdirSync(parent,{recursive:true});
   if(realpathSync(parent)!==parent)throw fail('SELFTEST_SCRATCH_ROOT');
   const privateRoot=path.join(before.root,'.vercel','private');mkdirSync(privateRoot,{recursive:true});
@@ -3196,7 +3517,7 @@ function runParallelSelftest(root,options){
   };
   try{
    deadline=setTimeout(()=>{for(const record of records){record.executionError??=fail('SELFTEST_TIMEOUT');for(const cancelSend of record.cancelSends)cancelSend(record.executionError);}stopAll();},budget);
-   try{start('A');start('B');}catch(error){startupFailure=fail('SELFTEST_FORK_FAILED',{cause:error});stopAll();}
+   try{start('A');start('B');start('C');}catch(error){startupFailure=fail('SELFTEST_FORK_FAILED',{cause:error});stopAll();}
    await Promise.allSettled(pending);await Promise.allSettled(records.flatMap(record=>record.sendWaits));
   }finally{
    stopAll();await Promise.allSettled(pending);await Promise.allSettled(records.flatMap(record=>record.sendWaits));clearTimeout(deadline);process.off('SIGINT',onSigint);process.off('SIGTERM',onSigterm);
@@ -3218,10 +3539,35 @@ function runParallelSelftest(root,options){
  })();
 }
 
+// Diagnostic-only metadata. It never supplies IPC rows, receipts or acceptance.
+// Each owned A/C worker emits only its declared bounded phase diagnostics.
+// The default preserves the historical exported A diagnostic sequence.
+export function createSelftestPhaseDiagnostic(worker='legacy-A'){
+ const sequence=worker==='A'?[
+  ['preflight-before',null],['preflight-after',null],['oracle-enter',null],['phase-start','F0'],['phase-end','F0'],['phase-start','F3'],['phase-end','F3']
+ ]:worker==='C'?[
+  ['preflight-before',null],['preflight-after',null],['oracle-enter',null],['phase-start','F1'],['phase-end','F1']
+ ]:[['preflight-before',null],['preflight-after',null],['oracle-enter',null],['phase-start','F0'],['phase-end','F0'],['phase-start','F1'],['phase-end','F1'],['phase-start','F3'],['phase-end','F3']];
+ let started=null,last=null,next=0;
+ try{started=process.hrtime.bigint();}catch{/* Diagnostics cannot alter the oracle. */}
+ return(event,phase=null)=>{
+  try{
+   const expected=sequence[next];if(started===null||!expected||event!==expected[0]||phase!==expected[1])return;
+   const at=process.hrtime.bigint();if(typeof at!=='bigint'||at<started||last!==null&&at<last)return;
+   const elapsedNs=String(at-started),pid=process.pid,parentPid=process.ppid;
+   if(!/^[0-9]{1,24}$/.test(elapsedNs)||!Number.isSafeInteger(pid)||pid<=0||!Number.isSafeInteger(parentPid)||parentPid<=0)return;
+   const bytes=Buffer.from('OBRASAAS_SELFTEST_PHASE_DIAGNOSTIC_V1 '+JSON.stringify({type:'selftest-phase-diagnostic-v1',pid,parentPid,event:expected[0],phase:expected[1],elapsedNs})+'\n');
+   if(bytes.length>512)return;next++;last=at;
+   // A failed/partial diagnostic write is never retried or promoted to a verdict.
+   writeSync(2,bytes);
+  }catch{/* Fail-passive: diagnostic failure must not affect IPC or validation. */}
+ };
+}
+
 async function selftestWorkerMain(opts){
  const fail=code=>{throw Object.assign(new Error(code),{code});};
  const expected=['root','expected-head','workflow','contract','worker','session','parent-pid'];
- if(Object.keys(opts).length!==expected.length||expected.some(key=>!Object.hasOwn(opts,key))||!['A','B'].includes(opts.worker)||!process.send||!process.connected||process.execArgv.length||process.env.NODE_OPTIONS||process.env.NODE_PATH||Number(opts['parent-pid'])!==process.ppid)throw fail('SELFTEST_WORKER_ENTRY');
+ if(Object.keys(opts).length!==expected.length||expected.some(key=>!Object.hasOwn(opts,key))||!['A','B','C'].includes(opts.worker)||!process.send||!process.connected||process.execArgv.length||process.env.NODE_OPTIONS||process.env.NODE_PATH||Number(opts['parent-pid'])!==process.ppid)throw fail('SELFTEST_WORKER_ENTRY');
  const before=snapshotSelftestPhysicalSource(opts.root,opts['expected-head'],{session:opts.session,parentPid:process.ppid,workflowFile:opts.workflow,contractFile:opts.contract});
  const binding={worker:opts.worker,pid:process.pid,context:before.context,contextSha256:before.contextSha256},base={version:1,worker:opts.worker,session:opts.session,contextSha256:before.contextSha256,pid:process.pid,parentPid:process.ppid};
  const send=packet=>new Promise((resolve,reject)=>{try{validateSelftestWorkerPacket(packet,binding);process.send(packet,error=>error?reject(error):resolve());}catch(error){reject(error);}});
@@ -3247,11 +3593,15 @@ async function selftestWorkerMain(opts){
  };
  let waitingControl=null;
  let terminal,scope='preflight';const tracker={segments:[],phase:null,statement:null,started:process.hrtime.bigint(),progress:[]};
+ const diagnostic=['A','C'].includes(opts.worker)?createSelftestPhaseDiagnostic(opts.worker):null;
  try{
   waitingControl=control('start');await send({...base,kind:'ready'});await waitingControl.promise;waitingControl=null;
+  diagnostic?.('preflight-before');
   const contract=loadContract(path.resolve(before.root,before.context.contractPath)),workflow=yaml.load(readFileSync(path.resolve(before.root,before.context.workflowPath),'utf8'));equivalent(workflow,contract);dependencies(before.root,contract);
-  tracker.mark=(phase,statement,stage='start')=>{tracker.phase=phase;tracker.statement=statement;tracker.progress.push({...base,kind:'progress',phase,statement,stage,elapsedNs:String(process.hrtime.bigint()-tracker.started)});};
-  scope='oracle';const checks=(opts.worker==='A'?selftestWorkerA:selftestWorkerB)(workflow,contract,before.root,tracker),owned=tracker.segments.flatMap(segment=>segment.rows);
+  diagnostic?.('preflight-after');
+  tracker.mark=(phase,statement,stage='start')=>{tracker.phase=phase;tracker.statement=statement;tracker.progress.push({...base,kind:'progress',phase,statement,stage,elapsedNs:String(process.hrtime.bigint()-tracker.started)});diagnostic?.(stage==='start'?'phase-start':'phase-end',phase);};
+  diagnostic?.('oracle-enter');
+  scope='oracle';const checks=(opts.worker==='A'?selftestWorkerA:opts.worker==='B'?selftestWorkerB:selftestWorkerC)(workflow,contract,before.root,tracker),owned=tracker.segments.flatMap(segment=>segment.rows);
   if(controlError)throw controlError;
   if(JSON.stringify(checks)!==JSON.stringify(owned))throw fail('SELFTEST_LOCAL_SEGMENT_COVERAGE');
   terminal={...base,kind:'done',phases:[...SELFTEST_WORKER_PROTOCOL.workers[opts.worker]],count:checks.length,rowsSha256:createHash('sha256').update(JSON.stringify(checks)).digest('hex'),sourceFinalSha256:null};
@@ -3277,7 +3627,8 @@ async function main(){
  if(mode==='selftest'){
   if(opts['execution-mode']&&!['parallel','serial-reference'].includes(opts['execution-mode']))deny('CLI_ARGUMENT');
   const sourceHead=opts['expected-head']?identity(root,opts['expected-head']):identity(root,execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim());
-   const checks=opts['execution-mode']==='serial-reference'?selftest(workflow,contract,root):await runParallelSelftest(root,{expectedHead:sourceHead,workflowFile:file,contractFile:path.resolve(root,opts.contract||contractPath)}),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
+  const runOptions={expectedHead:sourceHead,workflowFile:file,contractFile:path.resolve(root,opts.contract||contractPath),pilotCompletion:Boolean(contract[PLAN_BUDGET_CURRENT_SECTION]?.pilotCompletionAdvance)};
+  const checks=opts['execution-mode']==='serial-reference'?selftest(workflow,contract,root):await runParallelSelftest(root,runOptions),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
   const escape=value=>value.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
   writeFileSync(output.replace(/\.json$/,'.xml'),`<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="workspace-ci-private-design" tests="${checks.length}" failures="0">${checks.map(check=>`<testcase name="${escape(check.name)}"/>`).join('')}</testsuite>\n`);
   console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,lanes:8}));return;
@@ -3290,7 +3641,7 @@ async function main(){
  }
  if(mode==='provenance'){
   const record=provenance({root,lane:opts.lane,contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes)}),manifest=path.join(root,'.vercel/workspace-ci-evidence/lane-'+opts.lane+'.json');mkdirSync(path.dirname(manifest),{recursive:true});writeFileSync(manifest,JSON.stringify(unseal(record))+'\n');
-  if(!process.env.GITHUB_OUTPUT)deny('OUTPUT_FILE_REQUIRED');writeFileSync(process.env.GITHUB_OUTPUT,'record='+JSON.stringify(record)+'\n',{flag:'a'});return;
+  if(!process.env.GITHUB_OUTPUT)deny('OUTPUT_FILE_REQUIRED');writeFileSync(process.env.GITHUB_OUTPUT,'record='+encodeWorkspaceProvenance(JSON.stringify(record))+'\n',{flag:'a'});return;
  }
  if(mode==='gate'){
   identity(root,opts['expected-head']);const filename=path.join(root,'.vercel/workspace-ci-evidence/gate.json');

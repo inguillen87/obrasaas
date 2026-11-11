@@ -1,6 +1,7 @@
 import {createHmac,timingSafeEqual,randomUUID} from 'node:crypto';
 import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
+import {observeRetiredTransferEvent} from './company-number-transfer-history.mjs';
 import {lockMetaCustomerInboxChannel,metaCustomerContentDigest} from './meta-customer-callback.mjs';
 import {metaCustomerInboxIntent} from './meta-customer-inbox-review.mjs';
 import {customerJobTransaction,recordCustomerOutboundDiagnostic} from './meta-customer-outbound.mjs';
@@ -22,7 +23,8 @@ export function decodeSignedCloudEvent(event,channel,environment,protocol=META_C
   const proof=JSON.parse(decryptCustomerSecret(event.payload.encryptedProof,{...context,purpose:protocol.proofPurpose},environment));
   const payload=JSON.parse(decryptCustomerSecret(event.payload.encryptedPayload,{...context,purpose:protocol.payloadPurpose},environment));
   if(proof.scheme!==protocol.scheme||proof.purpose!==protocol.purpose&&!(protocol===META_CUSTOMER_PROTOCOL&&proof.purpose===undefined)||protocol!==META_CUSTOMER_PROTOCOL&&(proof.grantId!==channel.metadata?.demoPilot?.grantId||event.payload.grantId!==proof.grantId)||proof.appId!==OBRASAAS_META_CHANNEL.appId||proof.channelId!==channel.id||proof.organizationId!==channel.organizationId||proof.payloadDigest!==event.payload.payloadDigest||metaCustomerContentDigest(payload)!==proof.payloadDigest||payload.wabaId!==channel.whatsappBusinessId||payload.phoneNumberId!==null&&payload.phoneNumberId!==channel.phoneNumberId)throw new Error();
-  return payload;
+  const ownership=channel.metadata?.assetOwnership;if(ownership&&(proof.assetOwnership?.transferId!==ownership.transferId||proof.assetOwnership?.generation!==ownership.generation||event.payload.assetOwnership?.transferId!==ownership.transferId||event.payload.assetOwnership?.generation!==ownership.generation))throw new Error();
+   return payload;
  }catch{throw new WorkspaceError('META_CUSTOMER_EVENT_PROOF_REQUIRED',409);}
 }
 export const decodeSignedCustomerEvent=(event,channel,environment)=>decodeSignedCloudEvent(event,channel,environment,META_CUSTOMER_PROTOCOL);
@@ -43,7 +45,8 @@ export function createDevelopmentPilotDispatchGuard({connect,environment=process
 // One production composition shared by the runtime and native regressions.
 // Adapters keep their canonical authorization; this function only preserves
 // dispatch order, recovery order and the exact purpose-specific outbound route.
-export function createMetaCustomerProductionProcessor({connect,environment=process.env,now=()=>Date.now(),onboarding,fieldBridge,kycBridge,kycOutbound,appProjection,companyBridge,fieldOutbound,companyOutbound,isCompany,rejectedKyc,expiredKyc,contextKyc,deferAuthorization,authorizationCodes}){
+export function createMetaCustomerProductionProcessor({connect,environment=process.env,now=()=>Date.now(),onboarding,fieldBridge,kycBridge,kycOutbound,appProjection,companyBridge,fieldOutbound,companyOutbound,isCompany,rejectedKyc,expiredKyc,contextKyc,deferAuthorization,authorizationCodes,officeBridge=null}){
+ if(officeBridge!==null&&['execute','send'].some(key=>typeof officeBridge[key]!=='function'))throw new TypeError('Canonical office navigation bridge required');
  if(typeof connect!=='function'||typeof isCompany!=='function'||typeof deferAuthorization!=='function'||!Array.isArray(authorizationCodes)||[fieldBridge,kycBridge,appProjection,companyBridge].some(adapter=>typeof adapter?.execute!=='function')||typeof kycBridge.executeIntake!=='function'||[fieldOutbound,companyOutbound,kycOutbound,rejectedKyc,expiredKyc,contextKyc].some(adapter=>typeof adapter?.send!=='function')||typeof rejectedKyc.rejection!=='function'||typeof expiredKyc.feedback!=='function'||typeof contextKyc.feedback!=='function')throw new TypeError('Invalid production Meta composition');
  // This remembers only which trusted adapter produced this process context.
  // It is not authority: outbound always re-enters its current canonical resolver.
@@ -51,8 +54,8 @@ export function createMetaCustomerProductionProcessor({connect,environment=proce
  const companyResults=new WeakSet();
  const dispatchCompany=async context=>{const result=await companyBridge.execute(context);if(result)companyResults.add(context);return result;};
  return createMetaCustomerProcessor({connect,environment,now,onboarding,beforeDispatch:createDevelopmentPilotDispatchGuard({connect,environment}),rejectedKyc:rejectedKyc.rejection,expiredKyc:expiredKyc.feedback,contextKyc:contextKyc.feedback,deferAuthorization,authorizationCodes,
-  dispatch:async context=>context.developmentPilot?fieldBridge.execute(context):(await kycBridge.executeIntake(context))||(await kycBridge.execute(context))||(await appProjection.execute(context))||(await dispatchCompany(context))||fieldBridge.execute(context),
-  outbound:{send:async(context,reply,{purpose}={})=>purpose==='KYC_REJECTION'?rejectedKyc.send(context,reply):purpose==='KYC_EXPIRY_FEEDBACK'?expiredKyc.send(context,reply):purpose==='KYC_CONTEXT_FEEDBACK'?contextKyc.send(context,reply):['EMPLOYEE_INTAKE','KYC_CAPTURE'].includes(purpose)?kycOutbound.send(context,reply,{purpose}):(companyResults.has(context)||await isCompany(context))?companyOutbound.send(context,reply):fieldOutbound.send(context,reply),observeStatus:(...args)=>fieldOutbound.observeStatus(...args)}});
+  dispatch:async context=>context.developmentPilot?fieldBridge.execute(context):(officeBridge&&await officeBridge.execute(context))||(await kycBridge.executeIntake(context))||(await kycBridge.execute(context))||(await appProjection.execute(context))||(await dispatchCompany(context))||fieldBridge.execute(context),
+  outbound:{send:async(context,reply,{purpose}={})=>purpose==='OFFICE_CHAT'?officeBridge.send(context,reply):purpose==='KYC_REJECTION'?rejectedKyc.send(context,reply):purpose==='KYC_EXPIRY_FEEDBACK'?expiredKyc.send(context,reply):purpose==='KYC_CONTEXT_FEEDBACK'?contextKyc.send(context,reply):['EMPLOYEE_INTAKE','KYC_CAPTURE'].includes(purpose)?kycOutbound.send(context,reply,{purpose}):(companyResults.has(context)||await isCompany(context))?companyOutbound.send(context,reply):fieldOutbound.send(context,reply),observeStatus:(...args)=>fieldOutbound.observeStatus(...args)}});
 }
 export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,deferAuthorization=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[],onboarding=null,rejectedKyc=null,expiredKyc=null,contextKyc=null}){
  resolveMetaCloudProtocol(protocol);
@@ -63,6 +66,7 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
   if(!row)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
   if(row.status==='PROCESSED')return {done:true,eventId,businessApplied:row.outcome?.businessApplied===true,replySent:row.outcome?.replySent===true};
   if(row.status!=='PENDING'||row.leaseToken&&new Date(row.leaseExpiresAt).getTime()>now())return {busy:true,eventId};
+  if(protocol===META_CUSTOMER_PROTOCOL&&row.payload?.retiredObservation){const historical=await observeRetiredTransferEvent(client,row,{environment,protocol,decode:decodeSignedCloudEvent,outbound});if(historical)return historical;}
   const leaseToken=randomUUID();await client.query(`UPDATE public."WebhookEvent" SET "leaseToken"=$2,"leaseExpiresAt"=$3,attempts=attempts+1,"updatedAt"=clock_timestamp() WHERE id=$1`,[row.id,leaseToken,new Date(now()+60000)]);
   return {eventId:row.id,projectId:row.projectId,channelId:row.payload.channelId,payloadDigest:row.payload.payloadDigest,leaseToken};
  });}
@@ -109,7 +113,7 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
      if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code);if(deferred)return deferred;if(!context.developmentPilot&&protocol===META_CUSTOMER_PROTOCOL&&error.code==='META_KYC_CHALLENGE_EXPIRED'&&expiredKyc!==null)result=await expiredKyc(context,{code:error.code});if(!result&&!context.developmentPilot&&protocol===META_CUSTOMER_PROTOCOL&&contextKyc!==null)result=await contextKyc(context,{code:error.code});if(!result&&!context.developmentPilot&&protocol===META_CUSTOMER_PROTOCOL&&['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED'].includes(error.code)&&rejectedKyc!==null)result=await rejectedKyc(context,{code:error.code});if(!result)result=await observe(context,error.code);}else throw error;
     }
     if(!result)result=await observe(context);
-    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='EMPLOYEE_INTAKE'?'EMPLOYEE_INTAKE':result.kind==='KYC_CHAT'?'KYC_CAPTURE':result.kind==='KYC_REJECTION'?'KYC_REJECTION':result.kind==='KYC_EXPIRY_FEEDBACK'?'KYC_EXPIRY_FEEDBACK':result.kind==='KYC_CONTEXT_FEEDBACK'?'KYC_CONTEXT_FEEDBACK':'FIELD'});}catch(error){await rememberReplyFailure(context,error);if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code,result);if(deferred)return deferred;reply={replySent:false,state:error.code};}else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state,...(reply.observationOnly===true?{replyObservation:'ORIGINAL_REPLY_OBSERVED'}:{})};}
+    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='OFFICE_CHAT'?'OFFICE_CHAT':result.kind==='EMPLOYEE_INTAKE'?'EMPLOYEE_INTAKE':result.kind==='KYC_CHAT'?'KYC_CAPTURE':result.kind==='KYC_REJECTION'?'KYC_REJECTION':result.kind==='KYC_EXPIRY_FEEDBACK'?'KYC_EXPIRY_FEEDBACK':result.kind==='KYC_CONTEXT_FEEDBACK'?'KYC_CONTEXT_FEEDBACK':'FIELD'});}catch(error){await rememberReplyFailure(context,error);if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code,result);if(deferred)return deferred;reply={replySent:false,state:error.code};}else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state,...(reply.observationOnly===true?{replyObservation:'ORIGINAL_REPLY_OBSERVED'}:{})};}
     return finish(context,result);
    }catch(error){
     await within(client=>client.query(`UPDATE public."WebhookEvent" SET "lastError"=$3,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "leaseToken"=$2 AND status='PENDING'`,[context.eventId,context.leaseToken,error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'])).catch(()=>{});throw error;

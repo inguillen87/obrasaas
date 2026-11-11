@@ -28,8 +28,33 @@ export function addReview(f,row,decision='APPROVE',{actorId='actor-reviewer',at=
  if(original)original.metadata.outcome.event.verificationStatus='REVIEW_REQUIRED';
  row.metadata.fieldOperations.review={decision,actorId,recordedAt:at,reason};f.state.receipts.push(receipt(row,{command:'REVIEW_ATTENDANCE'}));return row;
 }
-function makeState(){return {project:{id:'project-a',name:'Obra sintética',metadata:{},organizationMetadata:{}},scope:'a'.repeat(64),ledger:[],workers:[],receipts:[],generatedAt:'2026-10-18T12:00:00.000Z',afterLedger:null,memberActive:true,projectActive:true,assignmentActive:true,officeReviewOnly:false,ownWorkers:[],origin:false,kycReview:true,kycSubmission:true};}
+function makeState(){return {project:{id:'project-a',organizationId:'company-a',name:'Obra sintética',metadata:{},organizationMetadata:{}},scope:'a'.repeat(64),ledger:[],workers:[],receipts:[],generatedAt:'2026-10-18T12:00:00.000Z',afterLedger:null,memberActive:true,projectActive:true,assignmentActive:true,officeReviewOnly:false,ownWorkers:[],origin:false,kycReview:true,kycSubmission:true};}
+// Faithful additional SELECT shapes used by the audited chronology reader.
+// Synthetic identity/membership rows are fixture data, never a production grant.
+function chronologyMemorySelect(view,sql,args){
+ sql=sql.replace(/\s+/g,' ');
+ if(sql.startsWith('SELECT i.id,i.metadata FROM public."Incident"'))return result([]);
+ if(sql.startsWith('SELECT id,metadata FROM public."AuditLog"')&&sql.includes("action='field.attendance.corrected'"))return result([]);
+ const historicalActor=actorId=>({actorId,clerkUserId:'user_History'+digest(actorId).slice(0,24),membershipId:'history_'+digest(actorId).slice(0,24),membershipStatus:'ACTIVE',role:'SITE_MANAGER',clerkRole:'org:member',membershipRevision:'2026-01-01T00:00:00.000000'});
+ if(sql.includes('FROM public."PlatformUser" u JOIN public."TenantMembership" m')&&sql.includes('WHERE u.id=$1'))return result(args[1]==='company-a'&&view.ledger.some(row=>row.metadata?.fieldOperations?.recordedBy===args[0])?[historicalActor(args[0])]:[]);
+ if(sql.includes('FROM public."Worker" w JOIN public."Project" p')&&sql.includes("metadata->'participant'->>'clerkUserId'"))return result(view.ownWorkers.filter(w=>w.metadata?.participant?.clerkUserId===args[1]).slice(0,1));
+ if(sql.includes("action='participant.operation.recorded'")&&sql.includes("'EXISTING_ACCOUNT_ASSIGNED'")&&String(args[2]).startsWith('history_'))return result([]);
+ if(sql.includes('FROM public."ProjectMembership"')&&sql.includes('ORDER BY id LIMIT 10001'))return result([]);
+ if(sql.includes('FROM public."Worker" w')&&sql.includes('ORDER BY w.id LIMIT 10001'))return result(view.workers.filter(w=>w.projectId===args[0]&&w.metadata?.participant?.clerkUserId===args[1]).map(w=>({...w,metadata:w.metadata||{},revision:'2026-01-01T00:00:00.000000'})));
+ if(sql.startsWith('SELECT id,"projectId",active,metadata,')&&sql.includes('FROM public."Worker"'))return result(view.workers.filter(w=>w.id===args[0]&&w.projectId===args[1]).map(w=>({id:w.id,projectId:w.projectId,active:w.active,metadata:w.metadata||{},revision:'2026-01-01T00:00:00.000000'})));
+ if(sql.includes("action='participant.operation.recorded'")&&sql.includes('LIMIT 10001'))return result([]);
+ if(sql.startsWith('SELECT a.id,a."projectId",a."workerId",a."checkedInAt",a.metadata FROM public."AttendanceEntry" a JOIN public."Project" p')){
+  let rows=args[0]==='company-a'?view.ledger:[];
+  if(sql.includes('a.id=ANY($2::text[])'))rows=rows.filter(row=>args[1].includes(row.id));else rows=rows.filter(row=>row.metadata?.fieldOperations?.recordedBy===args[1]);
+  return result(rows.map(row=>({...row,checkedInAt:new Date(row.metadata.fieldOperations.recordedAt)})).sort((a,b)=>a.projectId.localeCompare(b.projectId)||a.workerId.localeCompare(b.workerId)||a.metadata.fieldOperations.sequence-b.metadata.fieldOperations.sequence||a.id.localeCompare(b.id)).slice(0,10001));
+ }
+ if(sql.startsWith('SELECT i.id,i."projectId",i.metadata FROM public."Incident"'))return result([]);
+ if(sql.startsWith('SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata,"createdAt" FROM public."AuditLog"'))return result(view.receipts.filter(a=>a.organizationId===args[0]&&['ATTENDANCE','REVIEW_ATTENDANCE'].includes(a.metadata.command)&&args[1].includes(a.metadata.outcome.event.id)).map(a=>({...a,createdAt:new Date(Date.parse(a.metadata.outcome.event.review?.recordedAt||a.metadata.outcome.event.recordedAt)-1000)})).slice(0,20001));
+ if(sql.startsWith('SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata FROM public."AuditLog"')&&sql.includes("action='field.attendance.corrected'"))return result([]);
+ return null;
+}
 function memorySelect(view,sql,args){
+ const chronology=chronologyMemorySelect(view,sql,args);if(chronology)return chronology;
  if(sql.includes('AS "generatedAt"'))return result([{generatedAt:view.generatedAt}]);
  if(sql.includes('FROM public."AttendanceEntry"')){
   assert.ok(sql.startsWith('SELECT id,"projectId","workerId",metadata '),'Only bounded source read supported');
@@ -60,6 +85,7 @@ export function canonicalFixture({role='ADMIN',linked=false,kyc='APPROVED',chann
   if(sql.startsWith('SET LOCAL ')||sql==='ROLLBACK'){if(sql==='ROLLBACK')snapshot=null;return result([]);}
   assert.notEqual(sql,'COMMIT','Read-only operation must roll back its snapshot');
   const view=snapshot||f.state;
+  const chronology=chronologyMemorySelect(view,sql,args);if(chronology)return chronology;
   if(sql.includes('FROM public."PlatformUser" u JOIN public."TenantMembership"'))return result(view.memberActive&&args[0]==='user_Hours'&&args[1]==='org_Hours'&&args[2]===member.clerkRole?[{...member,officeReviewOnly:view.officeReviewOnly}]:[]);
   if(sql.includes('FROM public."Worker" w')&&sql.includes('JOIN public."Project"'))return result(view.ownWorkers.filter(worker=>worker.metadata.participant.clerkUserId===args[1]).slice(0,1));
   if(sql.includes('FROM public."Worker"')&&sql.includes("metadata->'participant'->>'clerkUserId'"))return result(view.ownWorkers.filter(worker=>worker.projectId===args[0]&&worker.metadata.participant.clerkUserId===args[1]));
