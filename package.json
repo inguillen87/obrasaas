@@ -32,6 +32,7 @@
     "lucide-react": "^1.32.0",
     "mercadopago": "^3.4.0",
     "next": "16.4.3",
+    "pend": "^1.2.0",
     "pg": "^8.23.0",
     "prisma": "^7.9.1",
     "puppeteer": "25.13.0",
