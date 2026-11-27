@@ -189,7 +189,7 @@ const buttonText=node=>elements(node,element=>element.type==='button').map(eleme
 function panelButton(tree,text){const value=buttonText(tree).find(([,label])=>label===text)?.[0];assert.ok(value,`Expected visible ${text} control`);return value;}
 async function openPanel(value,{canApprove=true,drafts=[value]}={}){
  panel.reset();let tree=panel.render(panelContext);panel.respond({data:{...panelContext,canApprove,drafts,truncated:false}});await panelButton(tree,'Importar cronograma o presupuesto').props.onClick();
-  tree=panel.render(panelContext);panel.respond({data:{...panelContext,draft:value}});await elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&textContent(node).endsWith(' tareas'))[0].props.onClick();
+  tree=panel.render(panelContext);panel.respond({data:{...panelContext,draft:value}});await elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&/\d+ tareas?$/.test(textContent(node)))[0].props.onClick();
  panel.seed({recoveryReady:true,reason:'Revisión sintética del archivo',receipt:'receipt-synthetic',file:new File(['synthetic'],'source-synthetic.xlsx',{type:value.source.contentType}),consent:true,approved:true});
  tree=panel.render(panelContext);elements(tree,node=>node.type==='input'&&node.props.type==='file')[0].props.ref.current={value:'source-synthetic.xlsx'};
  return tree;
@@ -198,7 +198,7 @@ async function openPanel(value,{canApprove=true,drafts=[value]}={}){
 // Keep this helper synchronous so adversarial queued reads start before later responses.
 function consultSavedDraft(tree){
  const before=panel.snapshot(),queuedBefore=panel.queued();
-  const saved=elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&textContent(node).endsWith(' tareas'))[0];
+  const saved=elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&/\d+ tareas?$/.test(textContent(node)))[0];
  assert.ok(saved,'Expected saved draft control');const request=saved.props.onClick();
  const current=panel.snapshot();if(!current.draftConsultTarget)return request;
  assert.equal(panel.queued(),queuedBefore,'Opening the choice must not consume a response');
