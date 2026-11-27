@@ -12,14 +12,14 @@ const configuration=()=>({version:1,configRevision,configuredBy:'owner',configur
 ]});
 const receipt=()=>({id:'field_'+'d'.repeat(64),organizationId:'company-a',actorId:'owner',action:'field.operation.recorded',entityType:'Project',entityId:projectId,
   metadata:{version:1,projectId,command:'CONFIGURE_SITE',requestDigest:'e'.repeat(64),outcome:{kind:'CONFIGURATION',recordedAt:configuredAt,qrTokens:[{sectorId,token},{sectorId:'sector-other',token:otherToken}]}}});
-function fixture({role='DIRECTOR',config=configuration(),rows=[receipt()],gateError,svgError}={}) {
+function fixture({role='DIRECTOR',config=configuration(),rows=[receipt()],gateError,svgError,projectName}={}) {
   const queries=[],transactions=[],payloads=[];
   const handler=createFieldQrHandler({verify:async()=>session,workspace:{async projectOperation(actor,input,writable,callback){
     transactions.push({actor,input,writable});if(gateError)throw gateError;
     return callback({async query(sql,args){
       queries.push({sql,args});assert.match(sql,/^SELECT /);assert.match(sql,/LIMIT 3/);assert.doesNotMatch(sql,/FOR UPDATE|INSERT|UPDATE |DELETE/);
       return {rows};
-    }},{role,actorId:'director',organizationId:'company-a'},scope,{id:projectId,metadata:{fieldOperations:config}});
+    }},{role,actorId:'director',organizationId:'company-a'},scope,{id:projectId,name:projectName,metadata:{fieldOperations:config}});
   }},toSvg:async payload=>{payloads.push(JSON.parse(payload));if(svgError)throw svgError;return '<svg data-fixture="synthetic"/>';}});
   return {handler,queries,transactions,payloads};
 }
@@ -31,15 +31,33 @@ async function unavailable(f,code='FIELD_QR_RECEIPT_UNAVAILABLE',status=409,suff
 }
 test('current administrator or director reprints the exact durable configuration token in an authorized read-only transaction',async()=>{
   for(const role of ['ADMIN','DIRECTOR']) {
-    const f=fixture({role}),response=await f.handler(request());assert.equal(response.status,200);assert.equal(await response.text(),'<svg data-fixture="synthetic"/>');
+    const f=fixture({role}),response=await f.handler(request());assert.equal(response.status,200);
+    const svg=await response.text();assert.match(svg,/<svg data-fixture="synthetic"\/>/);assert.match(svg,/>sector-main<\/text>/);assert.match(svg,/>p-a<\/text>/);
     assert.deepEqual(f.transactions,[{actor:session,input:{projectId,scope},writable:false}]);
     assert.deepEqual(f.payloads,[{version:1,projectId,sectorId,token}]);
     assert.deepEqual(f.queries[0].args,['company-a',projectId,'owner',configuredAt]);
     for(const clause of ['"organizationId"=$1','"entityId"=$2','"actorId"=$3',"action='field.operation.recorded'","\"entityType\"='Project'","metadata->>'projectId'=$2","metadata->>'command'='CONFIGURE_SITE'","metadata->'outcome'->>'recordedAt'=$4"])assert.ok(f.queries[0].sql.includes(clause));
-    assert.equal(response.headers.get('content-type'),'image/svg+xml');assert.equal(response.headers.get('content-disposition'),'attachment; filename="qr-sector.svg"');
+    assert.equal(response.headers.get('content-type'),'image/svg+xml');assert.match(response.headers.get('content-disposition'),/^attachment; filename="qr-p-a-sector-main-[a-f0-9]{12}\.svg"$/);
     assert.equal(response.headers.get('cache-control'),'private, no-store, max-age=0');assert.equal(response.headers.get('vary'),'Cookie, Authorization');
     assert.equal(response.headers.get('referrer-policy'),'no-referrer');assert.equal(response.headers.get('content-security-policy'),"default-src 'none'; sandbox");
   }
+});
+test('printed worksite labels use the authorized names and safe filename while receipt and legacy copies share the same matrix and reference',async()=>{
+  const config=configuration(),projectName='Obra Ñandú & Sur';
+  config.sectors[0].name='Acceso <A> "Sur" / PB';
+  const f=fixture({config,projectName});
+  const current=await f.handler(request()),legacy=await f.handler(request('&token='+token));
+  assert.equal(current.status,200);assert.equal(legacy.status,200);
+  const svg=await current.text(),filename=current.headers.get('content-disposition');
+  assert.equal(await legacy.text(),svg);
+  assert.equal(legacy.headers.get('content-disposition'),filename);
+  assert.match(svg,/>Obra Ñandú &amp; Sur<\/text>/);
+  assert.match(svg,/>Acceso &lt;A&gt; &quot;Sur&quot; \/ PB<\/text>/);
+  assert.match(filename,/^attachment; filename="qr-obra-nandu-sur-acceso-a-sur-pb-[a-f0-9]{12}\.svg"$/);
+  assert.ok(!svg.includes(token));assert.deepEqual(f.payloads,Array(2).fill({version:1,projectId,sectorId,token}));
+  const next=structuredClone(config);next.configRevision='new-revision';next.sectors[0].qrHash=digest([projectId,sectorId,next.configRevision,token]);
+  const rotated=await fixture({config:next,projectName}).handler(request('&token='+token));
+  assert.equal(rotated.status,200);assert.notEqual(rotated.headers.get('content-disposition'),filename);
 });
 test('legacy explicit-token QR remains compatible without looking up any receipt',async()=>{
   const f=fixture({rows:[]}),response=await f.handler(request('&token='+token));assert.equal(response.status,200);assert.equal(f.queries.length,0);assert.deepEqual(f.payloads,[{version:1,projectId,sectorId,token}]);
