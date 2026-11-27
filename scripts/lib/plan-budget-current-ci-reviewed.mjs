@@ -42796,9 +42796,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-material-review-current-ci-lineage.test.mjs",
         "status": "MODIFIED",
         "previousSha256": "663106d23dc9109cb441f2f7b3a279a95b151dc6ba3f366bcda75d148c6c6641",
-        "currentSha256": "b17e2f7631b7d7795478da2385623483ed3f85db6db321c5400df14ef5b53674",
+        "currentSha256": "2d8b8276e58ed74c9d9c47423c7c8c9f98e77bca116bedc116475e85f0f2e9d1",
         "previousBytes": 22195,
-        "currentBytes": 25816,
+        "currentBytes": 26074,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 0,
@@ -42822,26 +42822,26 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "currentOffsetCharacters": 9416,
-            "currentText": " for(const file of captureNativeAdditions){const row=actual.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);assert.equal(sha(restorePilotCompletionPreviousSourceText(actual,file,read(file).toString('utf8'))),row.currentSha256);assert.equal(sha(read(file).toString('utf8').replaceAll('\\r\\n','\\n')),planBudgetCurrentSourcePin(actual,{path:file,sha256:row.currentSha256}));}\n const missingCaptureFile='src/app/(identity)/cuenta/kyc-image-quality.mjs',historicalFrame=historicalPilotBFrame();assert.throws(()=>verifyMaterialReviewCurrentSources(historicalFrame.contract,file=>file===missingCaptureFile?null:historicalFrame.readSource(file)),error=>error?.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Budget current CI lineage rejected: OWN_SOURCE_BYTES_'+missingCaptureFile);assert.throws(()=>verifyMaterialReviewCurrentSources(actual,file=>file===missingCaptureFile?null:read(file)),error=>error?.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Pilot completion source lineage rejected: PILOT_SOURCE_BYTES_'+missingCaptureFile);\n",
+            "currentText": " for(const file of captureNativeAdditions){\n  const row=actual.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);\n  assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);\n  const source=read(file).toString('utf8').replaceAll('\\r\\n','\\n');\n  assert.equal(sha(source),planBudgetCurrentSourcePin(actual,{path:file,sha256:row.currentSha256}),file);\n  // Pilot can pass untouched text through. The historical Git pin uses LF on both checkout forms.\n  for(const checkout of [source,source.replaceAll('\\n','\\r\\n')]){\n   const previousText=restorePilotCompletionPreviousSourceText(actual,file,checkout);\n   assert.equal(sha(previousText.replaceAll('\\r\\n','\\n')),row.currentSha256,file);\n  }\n }\n const missingCaptureFile='src/app/(identity)/cuenta/kyc-image-quality.mjs',historicalFrame=historicalPilotBFrame();assert.throws(()=>verifyMaterialReviewCurrentSources(historicalFrame.contract,file=>file===missingCaptureFile?null:historicalFrame.readSource(file)),error=>error?.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Budget current CI lineage rejected: OWN_SOURCE_BYTES_'+missingCaptureFile);assert.throws(()=>verifyMaterialReviewCurrentSources(actual,file=>file===missingCaptureFile?null:read(file)),error=>error?.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Pilot completion source lineage rejected: PILOT_SOURCE_BYTES_'+missingCaptureFile);\n",
             "previousText": " for(const file of captureNativeAdditions){const row=actual.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.find(row=>row.path===file);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(row.previousBytes,0);assert.equal(sha(read(file).toString('utf8').replaceAll('\\r\\n','\\n')),row.currentSha256);}\n const missingCaptureFile='src/app/(identity)/cuenta/kyc-image-quality.mjs';assert.throws(()=>verifyMaterialReviewCurrentSources(actual,file=>file===missingCaptureFile?null:read(file)),error=>error?.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Budget current CI lineage rejected: OWN_SOURCE_BYTES_'+missingCaptureFile);\n"
           },
           {
-            "currentOffsetCharacters": 15990,
+            "currentOffsetCharacters": 16248,
             "currentText": "  const inherited=Buffer.from(restoreOwnRuntimeDiagnosticPreviousSourceText(contract,row.path,text));\n",
             "previousText": "  const inherited=['src/lib/field-operations-http.mjs','src/lib/field-operations-store.mjs'].includes(row.path)?Buffer.from(restoreOwnRuntimeDiagnosticPreviousSourceText(contract,row.path,text)):bytes;\n"
           },
           {
-            "currentOffsetCharacters": 18489,
+            "currentOffsetCharacters": 18747,
             "currentText": "  const actualSpec=physicalProofByHistoricalId(full,spec.id);assert.deepEqual(currentProducerSourceFiles(actualSpec,process.cwd()),actualSpec.sourceFiles,'Actual producer import graph '+spec.id);\n",
             "previousText": "  assert.deepEqual(currentProducerSourceFiles(full.extension.proofs.find(row=>row.id===spec.id),process.cwd()),full.extension.proofs.find(row=>row.id===spec.id).sourceFiles,'Actual producer import graph '+spec.id);\n"
           },
           {
-            "currentOffsetCharacters": 19834,
+            "currentOffsetCharacters": 20092,
             "currentText": " const actual=current();for(const contract of [historicalPilotBContract(),restorePlanBudgetPreviousContract(actual)]){const previous=restoreMaterialReviewPreviousContract(contract);\n",
             "previousText": " for(const contract of [current(),restorePlanBudgetPreviousContract(current())]){const previous=restoreMaterialReviewPreviousContract(contract);\n"
           },
           {
-            "currentOffsetCharacters": 21397,
+            "currentOffsetCharacters": 21655,
             "currentText": " // The inherited oracles above retain their exact original descriptor stage.\n // Every same malformed list must also fail on the actual compiled current row.\n const historical=historicalPilotBContract(),previous=restoreMaterialReviewPreviousContract(historical);\n for(const delta of expected.proofSourceDeltas){\n  const spec=physicalProofByHistoricalId(historical,delta.id),prior=physicalProofByHistoricalId(previous,delta.id),files=spec.sourceFiles;\n  for(const malformed of [prior.sourceFiles,files.slice(1),[...files,files[0]],[...files].reverse(),[...files,'scripts/foreign-extra.mjs'].sort(),files.map(file=>file===delta.additions[0]?'scripts/foreign-substitute.mjs':file).sort()]){const changed=structuredClone(actual);physicalProofByHistoricalId(changed,delta.id).sourceFiles=malformed;denied(()=>restoreMaterialReviewPreviousContract(changed));}\n }\n\n",
             "previousText": ""
           }
