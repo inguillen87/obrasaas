@@ -207,6 +207,8 @@ export async function verifyFocusedWorkspaceUi(args=process.argv.slice(2)){
  async function check(name,fn){await fn();checks.push(name);}
  try{
   const environment=Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(SystemRoot|WINDIR|SystemDrive|ComSpec|Path|PATHEXT|TEMP|TMP)$/i.test(key)));environment.NEXT_TELEMETRY_DISABLED='1';
+  // The development Insights badge can intercept native clicks at the bottom of a narrow viewport.
+  environment.NEXT_PRIVATE_DISABLE_DEV_OVERLAY_UX='1';
   child=spawn(process.execPath,[serverFile],{cwd:fixture,env:environment,stdio:['ignore','pipe','pipe','ipc'],windowsHide:true});childClose=new Promise(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));child.stdout.on('data',chunk=>{serverLog+=chunk;});child.stderr.on('data',chunk=>{serverLog+=chunk;});child.on('message',message=>{if(message?.type==='closed'&&message.nonce===nonce)closeAck=true;});
   await timeout(new Promise((resolve,reject)=>{child.on('message',message=>{if(message?.nonce===nonce){if(message.type==='ready')resolve();if(message.type==='failed')reject(new Error('Owned Next fixture failed'));}});child.once('error',reject);child.once('exit',()=>reject(new Error('Owned fixture exited before ready')));}), 'Owned Next fixture readiness',90000);
   browser=await puppeteer.launch({headless:true,args:['--disable-background-networking','--disable-default-apps','--disable-sync','--no-first-run']});
@@ -403,6 +405,7 @@ async function runFocusedWorkspaceTaskPagingCases({browser,origin,scope,check,ch
    fact.responseStatus=status;await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){errors.push({width,mode:'task-paging-'+scenario,consumer,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
   await page.goto(origin+'/task-pages#'+(consumer==='field'?'field-title':'inventory-title'),{waitUntil:'networkidle0',timeout:120000});
+  assert.equal(await page.$('nextjs-portal'),null,'Next development tools must not cover the account pager');
   const base=selector(consumer);await visible({page},consumer==='field'?'actividad':'materiales');await page.waitForFunction(base=>document.querySelector(base)?.dataset.count==='100',{},base);await page.click(base+' [data-paging-start]');await page.waitForFunction(()=>window.__taskPagingParentPending===true);
   return {page,width,consumer,context:owned,facts,base,arm(status=200){responseStatus=status;hold=true;},waiting:()=>waiting.has('page'),release(){waiting.get('page')?.();},async close(){for(const resolve of waiting.values())resolve();await owned.close();}};
  }

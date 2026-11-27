@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI as historical59} from './whatsapp-field-continuity-current-ci-lineage.mjs';
 const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
 const declared={
-  "producerSha256": "ba7e060f53ba0a5acad6f39e0c2bdc5354c56dfaafc5cb7761ea9cff2715aabd",
+  "producerSha256": "0e8459c21e155f94aaf3dffdcdcc24c92a0934df7461cee84949e620e5f4fddb",
   "currentCaseCount": 85,
   "partitions": [
     20,
