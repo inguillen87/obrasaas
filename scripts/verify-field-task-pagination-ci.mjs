@@ -979,7 +979,7 @@ export function fieldTaskPaginationCurrentMetadata(readSource){
  const original=Buffer.from(bytes(readSource,producer));
  try{
   const currentPin=authenticate(()=>planBudgetCurrentSourcePin(contract,{path:producer,sha256:'4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604'}));
-  reject(currentPin==='f07d915c21adbb2ff039670bba669feb5597723b7820dfc26fba5437e355ac5a'&&currentPin!=='4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604'&&sha(original.toString('utf8').replaceAll('\r\n','\n'))===currentPin,'The exact current raw3 producer must be authenticated by its Own source row');
+  reject(currentPin==='98fabf61e35915add8c9a637bd631636f110a9f758de5f09af2188df32d7c1a3'&&currentPin!=='4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604'&&sha(original.toString('utf8').replaceAll('\r\n','\n'))===currentPin,'The exact current raw3 producer must be authenticated by its Own source row');
   const legacy=currentMetadata();
   return freezeCurrentPaginationData({...legacy,status:'AUTHENTICATED_CURRENT_SOURCE_RAW3',rawVersion:3,requestMatrix:currentPaginationRequestsRaw2,commandEqualityGroups:currentPaginationCommandGroupsRaw3});
  }finally{

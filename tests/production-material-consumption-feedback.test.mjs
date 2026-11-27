@@ -71,6 +71,21 @@ const say=(body,state,page,extra)=>plan({type:'text',text:{body}},state,page,ext
 function pick(value,choice,page,extra){const index=value.state.choices.findIndex(c=>c.value===choice);assert.ok(index>=0,choice);return plan({type:'interactive',interactive:{type:'list_reply',list_reply:{id:value.reply.sections[0].rows[index].id}}},value.state,page,extra);}
 const pageFor=async(records,options={})=>readOwnConsumptions(database(records),member,project,{workerId:'worker-a',...options});
 
+test('manual consumption displays a localized quantity and retains the exact command and catalog unit',()=>{
+ const state={version:1,purpose:'CONSUMPTION',step:'CONSUMPTION_QUANTITY',expiresAt:'2026-10-12T12:15:00.000Z',workerId:'worker-a',taskId:null,sectorId:'sector-a',materialId:material.id,name:'Material local',unit:'m3',catalogHash:'a'.repeat(64)};
+ for(const [input,canonical,display] of [['17','17.000','17'],['1.5','1.500','1,5'],['0.001','0.001','0,001']]){
+  const reason=say(input,state);
+  const confirmation=say('Usado para la obra sintética.',reason.state);
+  assert.ok(confirmation.reply.body.includes('Consumo propuesto: '+display+' m3 de Material local'));
+  const selected=confirmation.reply.sections[0].rows.find(row=>row.title==='Guardar');
+  const saved=planMetaFieldConversation({state:confirmation.state,facts:baseFacts,eventId:'save-localized',now,message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:selected.id}}}});
+  assert.equal(saved.command.payload.quantity,canonical);
+ }
+ const invalid=say('1,5',state);
+ assert.equal(invalid.state.step,'CONSUMPTION_QUANTITY');
+ assert.match(invalid.reply.body,/con punto/);
+});
+
 test('ESTADO discovers own history with a button; page/detail reads never propose/approve/reverse stock and preserve every state',async()=>{
  const records=Array.from({length:12},(_,i)=>consumption(i)),first=await pageFor(records),second=await pageFor(records,{afterConsumption:first.nextCursor});
  const status=say('ESTADO',null,first);assert.equal(status.reply.type,'interactive');assert.ok(status.state.choices.some(c=>c.title==='Mis consumos'));assert.match(status.reply.body,/últimos 5/);assert.match(status.reply.body,/Hay más informes/);
@@ -96,7 +111,7 @@ test('new proposal keeps immutable catalog label and proposal receipt without mo
  const db=database([]);let stored;db.query=async(sql,args)=>{if(sql.startsWith('INSERT INTO public."Incident"')){stored={id:args[0],metadata:JSON.parse(args[5]),revision:'2026-10-12T12:00:00.123456'};return rows([]);}if(sql.startsWith('SELECT id,metadata'))return rows([stored]);throw Error('Unexpected proposal query');};
  const outcome=await applyInventoryFieldAction({client:db,member,session:{userId:member.clerkUserId},project:structuredClone(project),command:{action:'PROPOSE_CONSUMPTION',operationId:randomUUID(),payload:{workerId:'worker-a',taskId:null,sectorId:'sector-a',materialId:material.id,quantity:'2.500',catalogHash:inventoryCatalogHash(project.metadata.materialInventory),reason:'Para preparar la mezcla del sector.'}},receiptId:'field_'+digest('original-proposal'),at:now.toISOString(),assertWorker:async()=>({id:'worker-a'}),assertTask:async()=>{throw Error('No task');}});
  assert.equal(outcome.stockChanged,false);assert.equal(outcome.consumption.materialName,'Cemento');assert.equal(outcome.consumption.proposalReceiptId,'field_'+digest('original-proposal'));assert.equal(project.metadata.materialInventory.materials[0].balance,'25.000');
- const reply=metaFieldConsumptionAcknowledgement({...outcome,receiptId:outcome.consumption.proposalReceiptId},project.name);for(const value of ['2.500 bolsa','Cemento',project.name,outcome.consumption.id,outcome.consumption.proposalReceiptId])assert.ok(reply.includes(value));assert.match(reply,/no descuenta stock/);customerReplyMessage({type:'text',body:reply});
+ const reply=metaFieldConsumptionAcknowledgement({...outcome,receiptId:outcome.consumption.proposalReceiptId},project.name);for(const value of ['2,5 bolsa','Cemento',project.name,outcome.consumption.id,outcome.consumption.proposalReceiptId])assert.ok(reply.includes(value));assert.match(reply,/no descuenta stock/);customerReplyMessage({type:'text',body:reply});
 });
 test('recovery preserves the original proposal snapshot separately from its current approval and original stock effect',async()=>{
  const operationId=randomUUID(),id=fieldReceiptId(member.actorId,project.id,operationId),original=consumption(0).metadata.materialInventory,current=consumption(0,{state:'APPROVED',decision:event('APPROVE')}),receipt={id,metadata:{version:1,projectId:project.id,command:'PROPOSE_CONSUMPTION',outcome:{kind:'CONSUMPTION_PROPOSAL',consumption:{id:current.id,...original},stockChanged:false}}};
@@ -143,7 +158,7 @@ test('actual bridge cached history reply rejects current report, KYC, membership
 test('actual bridge confirms one consumption with its material/amount/worksite/receipt and replays original ACK after a later decision',async()=>{
  const f=bridgeFixture([]),nonce='e'.repeat(20),state={purpose:'CONSUMPTION',step:'CONFIRM',taskId:null,sectorId:'sector-a',materialId:material.id,catalogHash:inventoryCatalogHash(project.metadata.materialInventory),quantity:'2.500',reason:'Para la mezcla del sector de la obra.',nonce,choices:[{value:'CONFIRM',title:'Guardar'}]};f.seedConversation(state);
  const context=f.inbound({type:'interactive',interactive:{type:'list_reply',list_reply:{id:'obra:'+nonce+':0'}}}),first=await f.bridge.execute(context);assert.equal(first.kind,'CONSUMPTION_PROPOSAL');assert.equal(first.businessApplied,true);assert.equal(first.replySent,false);assert.equal(f.records.length,1);const c=f.records[0].metadata.materialInventory;
- for(const value of ['Cemento','2.500 bolsa',project.name,first.receiptId,f.records[0].id,c.submittedAt])assert.ok(first.reply.body.includes(value));assert.equal(c.proposalReceiptId,first.receiptId);assert.equal(c.state,'PENDING');assert.equal(c.materialName,'Cemento');assert.equal(project.metadata.materialInventory.materials[0].balance,'25.000');assert.match(first.reply.body,/no descuenta stock/);
+ for(const value of ['Cemento','2,5 bolsa',project.name,first.receiptId,f.records[0].id,c.submittedAt])assert.ok(first.reply.body.includes(value));assert.equal(c.proposalReceiptId,first.receiptId);assert.equal(c.state,'PENDING');assert.equal(c.materialName,'Cemento');assert.equal(project.metadata.materialInventory.materials[0].balance,'25.000');assert.match(first.reply.body,/no descuenta stock/);
  c.state='APPROVED';c.decision=event('APPROVE');const count=f.audits.size,duplicate=await f.bridge.execute(context);assert.deepEqual(duplicate,first);assert.equal(f.audits.size,count);assert.equal(f.records.length,1);assert.equal(f.externalCalls(),0);
  f.worker.metadata.participant.permissions.report=false;await assert.rejects(f.bridge.execute(context),{code:'WORKER_CHANNEL_PERMISSION_REQUIRED'});f.worker.metadata.participant.permissions.report=true;
  const current=await f.bridge.execute(f.inbound('CONSUMOS'));assert.equal(current.kind,'CONSUMPTION_READ');assert.match(current.reply.sections[0].rows[0].description,/Aprobado/);assert.equal(f.records.length,1);assert.equal(f.externalCalls(),0);

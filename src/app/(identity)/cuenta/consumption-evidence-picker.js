@@ -8,6 +8,17 @@ export function ConsumptionEvidencePicker(props){
 }
 function EvidencePickerInner({projectId,scope,workerId,taskId,sectorId,selectedIds,onChange,onBusyChange,onAccessDenied,onUnavailableChange,request,disabled=false,approvedOnly=false}){
  const [catalog,setCatalog]=useState(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[current,setCurrent]=useState(false),[titles,setTitles]=useState({});
+ const picker=useRef(null),count=useRef(null),focusAfterEdit=useRef(null);
+ useLayoutEffect(()=>{
+  const requested=focusAfterEdit.current;
+  if(!requested)return;
+  focusAfterEdit.current=null;
+  const choice=requested.id&&picker.current?.querySelector(`input[data-choice-id="${requested.id}"]`);
+  (choice||count.current)?.focus();
+ },[selectedIds]);
+ function rememberFocus(control,id=null){
+  if(control&&control.ownerDocument.activeElement===control)focusAfterEdit.current={id};
+ }
  const lifecycle=useRef({alive:true,epoch:0,busy:false,controller:null}),handlers=useRef({selectedIds,onChange,onBusyChange,onAccessDenied,onUnavailableChange,disabled});
  useLayoutEffect(()=>{handlers.current={selectedIds,onChange,onBusyChange,onAccessDenied,onUnavailableChange,disabled};},[selectedIds,onChange,onBusyChange,onAccessDenied,onUnavailableChange,disabled]);
  useEffect(()=>{const life=lifecycle.current;life.alive=true;return()=>{life.alive=false;life.epoch++;life.controller?.abort();handlers.current.onBusyChange?.(false);handlers.current.onUnavailableChange?.(false);};},[]);
@@ -37,16 +48,21 @@ function EvidencePickerInner({projectId,scope,workerId,taskId,sectorId,selectedI
  const selected=new Set(selectedIds),selectedRows=catalog?.evidence.filter(row=>selected.has(row.id)&&(!approvedOnly||row.status==='APPROVED'))||[],rows=catalog?.entries.filter(row=>!selected.has(row.id)&&(!approvedOnly||row.status==='APPROVED'))||[],unavailableSelected=catalog?selectedIds.filter(id=>catalog.unavailableIds.includes(id)||approvedOnly&&catalog.evidence.some(row=>row.id===id&&row.status!=='APPROVED')):[],blocking=unavailableSelected.length>0;
  useEffect(()=>{handlers.current.onUnavailableChange?.(blocking);},[blocking]);
  function removeUnavailable(id){if(disabled||busy)return;const next=selectedIds.filter(value=>value!==id);onChange(next);setNotice(next.some(value=>unavailableSelected.includes(value))?'Quitaste un archivo no disponible. Todavía queda otro por quitar.':'Quitaste el archivo no disponible. El resto de tu selección y el borrador se conservan.');}
- function toggle(row,checked){if(disabled||busy||!current||checked&&selectedIds.length>=10||approvedOnly&&row.status!=='APPROVED')return;onChange(checked?[...selectedIds,row.id]:selectedIds.filter(id=>id!==row.id));}
- const choice=row=><label className={styles.choice} key={row.id}><input type="checkbox" checked={selected.has(row.id)} disabled={disabled||busy||!current||!selected.has(row.id)&&selectedIds.length>=10} onChange={event=>toggle(row,event.target.checked)}/><span>{row.title||'Archivo guardado'}<small>{row.media.kind==='audio'?'Audio':'Foto'} · {row.status==='APPROVED'?'Revisado':'Por revisar'}</small></span></label>;
- return <fieldset className={styles.picker} aria-busy={busy}>
+ function toggle(row,event){
+  const checked=event.target.checked;
+  if(disabled||busy||!current||checked&&selectedIds.length>=10||approvedOnly&&row.status!=='APPROVED')return;
+  rememberFocus(event.currentTarget,row.id);
+  onChange(checked?[...selectedIds,row.id]:selectedIds.filter(id=>id!==row.id));
+ }
+ const choice=row=><label className={styles.choice} key={row.id}><input type="checkbox" data-choice-id={row.id} checked={selected.has(row.id)} disabled={disabled||busy||!current||!selected.has(row.id)&&selectedIds.length>=10} onChange={event=>toggle(row,event)}/><span>{row.title||'Archivo guardado'}<small>{row.media.kind==='audio'?'Audio':'Foto'} · {row.status==='APPROVED'?'Revisado':'Por revisar'}</small></span></label>;
+ return <fieldset ref={picker} className={styles.picker} aria-busy={busy}>
   <legend>{approvedOnly?'Fotos y audios aprobados para el avance':'Fotos y audios guardados · opcional'}</legend>
   <p>{approvedOnly?'Elegí al menos un archivo aprobado de tu ficha, esta tarea y este sector.':'Elegí archivos de tu ficha, esta tarea y este sector. Podés recorrer los anteriores sin volver a subirlos.'}</p>
-  <p className={styles.count} aria-live="polite">{selectedIds.length} de 10 archivos seleccionados</p>
-  {(selectedRows.length>0||blocking)&&<div className={styles.selected} role="group" aria-label="Archivos seleccionados"><strong>Seleccionados</strong>{selectedRows.map(choice)}{unavailableSelected.map(id=><div className={styles.unavailable} key={id} data-evidence-unavailable={id}><span>{(Object.hasOwn(titles,id)&&titles[id])||'Archivo seleccionado'}<small>{approvedOnly&&catalog.evidence.some(row=>row.id===id&&row.status!=='APPROVED')?'No está aprobado para registrar avance':'Ya no está disponible · fue rechazado o retirado'}</small></span><button type="button" disabled={disabled||busy} onClick={()=>removeUnavailable(id)}>Quitar este archivo</button></div>)}</div>}
+  <p ref={count} tabIndex={-1} className={styles.count} aria-live="polite" aria-atomic="true">{selectedIds.length} de 10 archivos seleccionados</p>
+  {(selectedRows.length>0||blocking)&&<div className={styles.selected} role="group" aria-label="Archivos seleccionados"><strong>Seleccionados</strong>{selectedRows.map(choice)}{unavailableSelected.map(id=><div className={styles.unavailable} key={id} data-evidence-unavailable={id}><span>{(Object.hasOwn(titles,id)&&titles[id])||'Archivo seleccionado'}<small>{approvedOnly&&catalog.evidence.some(row=>row.id===id&&row.status!=='APPROVED')?'No está aprobado para registrar avance':'Ya no está disponible · fue rechazado o retirado'}</small></span><button type="button" disabled={disabled||busy} onClick={event=>{rememberFocus(event?.currentTarget);removeUnavailable(id);}}>Quitar este archivo</button></div>)}</div>}
   {catalog&&<div role="group" aria-label="Archivos de esta página">{rows.map(choice)}{!catalog.entries.length&&<p>No hay fotos ni audios disponibles en este contexto.</p>}{catalog.entries.length>0&&!rows.length&&<p>{approvedOnly&&!catalog.entries.some(row=>row.status==='APPROVED')?'No hay archivos aprobados en esta página. Podés consultar las páginas anteriores.':'Todos los archivos de esta página ya están seleccionados.'}</p>}</div>}
   <div className={styles.actions}>
-   {selectedIds.length>0&&<button type="button" disabled={disabled||busy} onClick={()=>{onChange([]);setNotice('Se quitaron los adjuntos del borrador. Los archivos guardados se conservan.');}}>Quitar todos los adjuntos</button>}
+   {selectedIds.length>0&&<button type="button" disabled={disabled||busy} onClick={event=>{rememberFocus(event?.currentTarget);onChange([]);setNotice('Se quitaron los adjuntos del borrador. Los archivos guardados se conservan.');}}>Quitar todos los adjuntos</button>}
    {(!catalog||!current)&&<button type="button" disabled={disabled||busy} onClick={()=>load('FIRST')}>{busy?'Consultando archivos…':!catalog?'Buscar fotos y audios guardados':'Reintentar consulta'}</button>}
    {catalog&&current&&<button type="button" disabled={disabled||busy} onClick={()=>load('REFRESH')}>Actualizar esta página</button>}
    {catalog&&current&&catalog.page.hasPrevious&&<button type="button" disabled={disabled||busy} onClick={()=>load('PREVIOUS')}>Ver más recientes</button>}
