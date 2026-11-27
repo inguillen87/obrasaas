@@ -3,6 +3,8 @@ import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers} from '../../
 import {after} from 'next/server';
 import {productionMetaCustomerProcessor} from '../../../../lib/meta-customer-processing-runtime.mjs';
 export const runtime='nodejs';
+// Process incoming WhatsApp messages next to the worksite database in São Paulo.
+export const preferredRegion='gru1';
 export const dynamic='force-dynamic';
 export const maxDuration=300;
 const handlers=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect:connectWorkspace}),schedule:eventIds=>after(async()=>{
