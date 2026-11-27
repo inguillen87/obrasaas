@@ -66,6 +66,26 @@ test('repeated sector names stay visibly distinct across a full page and preserv
  assert.equal(pick(page, 7, extra).state.sectorId, sectors[15].id);
  assert.equal(visible.some(label => label.includes('sector-')), false);
 });
+test('the shared workday shows both complete sector directions on the WhatsApp wire', () => {
+ const sectors = [
+  {id:'entrada-sur', name:'Entrada del personal por el sector Sur desde el pasillo central de planta baja'},
+  {id:'entrada-norte', name:'Entrada del personal por el sector Norte desde el pasillo central de planta baja'}
+ ];
+ const extra = {facts:{...facts, sectors}};
+ const menu = say('ENTRADA', null, extra);
+ const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;
+ const labels = rows.map(row => row.title + ' ' + row.description);
+ assert.deepEqual(labels.map(label => label.match(/\b(Sur|Norte)\b/u)?.[1]), ['Sur', 'Norte']);
+ assert.equal(pick(menu, labels.findIndex(label => /\bNorte\b/u.test(label)), extra).state.sectorId, 'entrada-norte');
+ const tasks = sectors.map((sector, index) => ({...facts.tasks[0], id:sector.id, title:sector.name, progress:25 * (index + 1)}));
+ const taskMenu = say('TAREAS', null, {facts:{...facts, tasks}});
+ const taskRows = customerReplyMessage(taskMenu.reply).interactive.action.sections[0].rows;
+ for (const [index, row] of taskRows.entries()) {
+  assert.match(row.title + ' ' + row.description, index === 0 ? /\bSur\b/u : /\bNorte\b/u);
+  assert.ok(row.description.endsWith(tasks[index].progress + '%'));
+  assert.ok(row.title.length <= 24 && row.description.length <= 72);
+ }
+});
 test('catalog units stay visible when reporting similar long material names', () => {
  const name = 'Cemento Portland compuesto para mampostería';
  const materials = ['bolsa','kg'].map(unit => ({id:'cemento-' + unit, name, unit, active:true}));

@@ -7,6 +7,7 @@ import {normalizeExecutionPayload} from './field-execution-policy.mjs';
 import {parseProgressMeasurementQuantity} from './progress-measurement-quantity.js';
 
 const graphemes = new Intl.Segmenter('es', {granularity: 'grapheme'});
+const normalizedLabel = value => value.normalize('NFC').replace(/\s+/gu, ' ').trim();
 
 function fit(parts, budget) {
   let text = '';
@@ -20,7 +21,7 @@ function fit(parts, budget) {
 // The transport counts UTF-16 units. Keep the ends where floor, sector,
 // unit and expiration often differ, without splitting a displayed character.
 function labelWithin(label, limit) {
-  const text = label.normalize('NFC').replace(/\s+/gu, ' ').trim();
+  const text = normalizedLabel(label);
   if (text.length <= limit) return text;
   const parts = Array.from(graphemes.segment(text), entry => entry.segment);
   const head = fit(parts, Math.ceil((limit - 1) / 2));
@@ -39,15 +40,18 @@ function distinguishFieldOptions(options, rows) {
     byTitle.get(option.title).push(index);
   }
   for (const group of byTitle.values()) {
+    if (group.length < 2) continue;
     const descriptions = group.map(index => options[index].description || '');
-    if (new Set(descriptions).size === group.length) continue;
+    const clipped = group.map(index => normalizedLabel(rows[index][2] || rows[index][1]).length > 72);
+    if (!clipped.includes(true) && new Set(descriptions).size === group.length) continue;
     const labels = group.map(index => {
       const [, name, detail] = rows[index];
       const context = detail && !detail.includes(name) ? name + ' · ' + detail : detail || name;
-      return Array.from(graphemes.segment(context.normalize('NFC').replace(/\s+/gu, ' ').trim()), part => part.segment);
+      return Array.from(graphemes.segment(normalizedLabel(context)), part => part.segment);
     });
     const excerpts = labels.map((parts, position) => {
-      const peers = labels.filter((_, other) => other !== position && descriptions[other] === descriptions[position]);
+      // Two clipped descriptions can differ by one letter while hiding the rest of the word.
+      const peers = labels.filter((_, other) => other !== position && (clipped[position] || descriptions[other] === descriptions[position]));
       if (!peers.length) return descriptions[position];
       // Among similar names, keep the first difference from the closest sibling on screen.
       let pivot = 0;

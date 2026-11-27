@@ -306,7 +306,8 @@ async function exercise({
     const rows = message.interactive.action.sections.flatMap(s => s.rows);
     if (title === sectorTitle) {
       const north = rows.filter(row => /\bNorte\b/iu.test([row.title, row.description].join(' ')));
-      assert.equal(north.length, 1, 'The other entrance must also be recognizable in WhatsApp');
+      assert.equal(north.length, 1,
+        'Expected one visible Norte entrance in the synthetic menu: ' + JSON.stringify(rows.map(({title, description}) => ({title, description}))));
     }
     const matches = title === sectorTitle
       ? rows.filter(row => /\bSur\b/iu.test([row.title, row.description].join(' ')))
