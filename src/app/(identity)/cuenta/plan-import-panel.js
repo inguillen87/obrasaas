@@ -60,6 +60,8 @@ export function PlanImportPanel({projectId,scope,getSessionToken,onPending,onApp
  const [documentPurpose,setDocumentPurpose]=useState('TASKS'),[curveDraft,setCurveDraft]=useState(null),[curveReviewConfirmed,setCurveReviewConfirmed]=useState(false);
  const [removeFileRequested,setRemoveFileRequested]=useState(false);
  const [differenceAcknowledged,setDifferenceAcknowledged]=useState(false);
+ const [singleSelection,setSingleSelection]=useState(null);
+ if(singleSelection&&(singleSelection.draft!==draft||singleSelection.owner!==measurementOwner))setSingleSelection(null);
  const replaceRows=useCallback(next=>{linkedUserWork.current=true;cancelLinkedRead();calendarEpochRef.current++;setCalendarEpoch(calendarEpochRef.current);setRows(next);},[cancelLinkedRead]);
  const invalidatePrivate=useCallback(()=>{
   const active=privateView.current,privatePayload=attemptPayload.current?.privateCurve===true;
@@ -257,6 +259,22 @@ export function PlanImportPanel({projectId,scope,getSessionToken,onPending,onApp
   replaceRows(result.rows);setApproved(false);setMessage('Se completaron '+result.changedCount+' rangos propuestos sólo en esta revisión. Todavía no se guardaron ni se aplicaron tareas; las dudas de cada fila siguen pendientes.');return true;
  };
  const filteredRows=rows.map((row,index)=>({row,index})).filter(({row})=>!cyp||!groupFilter||row.parentCode===groupFilter),pageCount=Math.max(1,Math.ceil(filteredRows.length/20)),page=Math.min(rowPage,pageCount-1),visibleRows=cyp?filteredRows.slice(page*20,(page+1)*20):filteredRows;
+ const selection=singleSelection?.draft===draft&&singleSelection?.owner===measurementOwner?singleSelection:null;
+ const undoSelection=selection?.previousRows&&rows.length===1&&rows[0].code===selection.code;
+ const chosenRow=filteredRows.find(({row})=>row.code===selection?.code)?.row;
+ function updateSingleSelection(){
+  if(!mounted.current||blocked||localRequest.current||attemptReference.current||!reviewable||!cyp||calendarEpochRef.current!==calendarEpoch)return;
+  if(undoSelection){
+   const retainedRow=rows[0];
+   replaceRows(selection.previousRows.map(row=>row.code===retainedRow.code?retainedRow:row));
+   setGroupFilter(selection.group);setRowPage(selection.page);setSingleSelection(null);
+  }else{
+   if(!chosenRow||rows.length<2)return;
+   setSingleSelection({...selection,previousRows:rows,group:groupFilter,page});
+   replaceRows([chosenRow]);setRowPage(0);
+  }
+  setApproved(false);
+ }
  return <section className={styles.panel} aria-label="Importar cronograma" data-plan-import>
    {!open?<><button id="plan-import-title" ref={openButtonRef} type="button" disabled={locked||busy} onClick={show}><FileUp size={17} aria-hidden="true"/>Importar cronograma o presupuesto</button><p className={styles.evidence}>PDF, imagen, Excel o CSV. Consultá las lecturas guardadas o elegí un archivo.</p>{file&&<p className={styles.evidence}>Archivo conservado en esta pantalla: {file.name}.</p>}{attempt&&<p className={styles.evidence}>El mismo intento sigue pendiente. Abrí la consulta para comprobarlo antes de reintentar.</p>}</>:<>
     <div className={styles.heading}><div><h4 id="plan-import-title">{csvBudgetFile||csvBudgetDraft?'Presupuesto de obra (lectura)':draft?.budgetImport===true||spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?'Cómputo y presupuesto (lectura)':investmentCurve||spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE?'Importar inversión mensual y semanal':documentCurve||documentPurpose==='FINANCIAL_MONTHLY_CURVE'?'Importar inversión mensual':'Importar cronograma'}</h4><p>{draft?.budgetImport===true||[PLAN_BUDGET_SOURCE_PROFILE,csvBudgetProfile].includes(spreadsheetSelection)?'Consultá los valores originales por partida y sus observaciones. Esta lectura no permite aprobar ni aplicar importes.':investmentCurve||spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE||documentCurve||documentPurpose==='FINANCIAL_MONTHLY_CURVE'?'Revisá los importes del documento. Esta aprobación no crea tareas.':'Subí el Gantt, revisá el borrador y aplicá las tareas a esta obra.'}</p></div><button type="button" disabled={busy||selectedDraftHasEdits&&!attempt&&(!recoveryReady||locked)} onClick={()=>closeReview()}>Cerrar</button></div>
@@ -292,6 +310,25 @@ export function PlanImportPanel({projectId,scope,getSessionToken,onPending,onApp
      {reviewable&&!documentCurve&&!investmentCurve&&<>{draftConsultTarget&&selectedDraftHasEdits&&<div className={styles.warning}><p>Elegí si querés conservar estas correcciones o descartarlas para consultar la versión guardada del borrador elegido.</p><button type="button" disabled={busy||locked} onClick={()=>{setDraftConsultTarget(null);setMessage('Conservamos tus correcciones. Podés seguir revisándolas.');draftTitleRef.current?.focus();}}>Conservar correcciones</button><button type="button" disabled={busy||locked} onClick={()=>checkDraft(draftConsultTarget,true)}>Descartar correcciones y consultar</button></div>}<p>Compará cada fila con el archivo. Completá las fechas dudosas, corregí los títulos y resolvé las observaciones. La aplicación agregará {rows.length} tareas al cronograma registrado.</p>
      {cyp&&<PlanImportCalendarSuggestions key={[projectId,scope,draft.id,draft.revision,draft.source.sha256].join('|')} context={calendarContext} rows={rows} spreadsheet={draft.spreadsheet} mutationEpoch={calendarEpoch} disabled={blocked} onApply={acceptCalendarSuggestions}/>}
      {cyp&&<div className={styles.hierarchy}><details><summary>Jerarquía original: {draft.spreadsheet.groups.length} agrupadores</summary><ul>{draft.spreadsheet.groups.map(group=><li key={group.code}><strong>{group.code}</strong> {group.title}{group.parentCode&&<small> · pertenece a {group.parentCode}</small>}</li>)}</ul></details><label>Revisar agrupador<select data-plan-group-filter value={groupFilter} disabled={blocked} onChange={event=>{setGroupFilter(event.target.value);setRowPage(0);}}><option value="">Todas las partidas ({rows.length})</option>{draft.spreadsheet.groups.filter(group=>group.code.split('.').length===3).map(group=><option key={group.code} value={group.code}>{group.code} · {group.title}</option>)}</select></label><div className={styles.pagination}><button type="button" disabled={page===0} onClick={()=>setRowPage(page-1)}>Partidas anteriores</button><span aria-live="polite">Página {page+1} de {pageCount} · {filteredRows.length} partidas en esta vista; {rows.length} en el borrador</span><button type="button" disabled={page+1>=pageCount} onClick={()=>setRowPage(page+1)}>Partidas siguientes</button></div><p>Filtrar o cambiar de página conserva las correcciones. Excluir una partida queda registrado al guardar; los agrupadores no crean tareas.</p></div>}
+     {cyp&&(rows.length>1||undoSelection)&&<details className={styles.calendar} data-plan-single-selection>
+      <summary>{undoSelection?'Una partida preparada · deshacer selección':'Preparar una sola partida'}</summary>
+      <div className={styles.calendarContent}>
+       {!undoSelection&&<label>Partida que querés conservar
+        <select value={chosenRow?.code||''} disabled={blocked} onChange={event=>setSingleSelection({draft,owner:measurementOwner,code:event.target.value})}>
+         <option value="">Elegí una partida</option>
+         {filteredRows.map(({row})=><option key={row.code} value={row.code}>{row.code} · {row.title}</option>)}
+        </select>
+       </label>}
+       <p aria-live="polite">{undoSelection
+        ?`El borrador tiene una sola partida: ${rows[0].code} · ${rows[0].title}. Podés recuperar la selección anterior hasta guardar las correcciones.`
+        :chosenRow
+         ?`Vas a conservar ${chosenRow.code} · ${chosenRow.title} y excluir ${rows.length-1} de las ${rows.length} partidas del borrador, incluidas las que están fuera de esta vista.`
+         :filteredRows.length?'Elegí por código y título. El listado respeta el agrupador y abarca todas sus páginas.':'Este agrupador no tiene partidas en el borrador. Elegí otro agrupador.'}</p>
+       <div className={styles.actions}><button type="button" disabled={blocked||(!undoSelection&&!chosenRow)} onClick={updateSingleSelection}>
+        {undoSelection?'Deshacer selección':'Conservar solo esta partida'}
+       </button></div>
+      </div>
+     </details>}
      <div className={styles.rows}>{visibleRows.map(({row,index})=><fieldset key={row.code||row.sourceRowId||index} disabled={blocked} data-partida={row.code}><legend>{cyp?`Partida ${row.code}`:`Tarea ${index+1}`}</legend>{monthlyCurve&&!cyp&&<p className={styles.evidence}>Rubro original: {row.sourceRowId}</p>}{cyp&&<><p className={styles.evidence}>Código original: {row.code} · Agrupador: {row.parentCode}</p><details><summary>Descripción y distribución originales</summary><p className={styles.original}>{cypItems.get(row.code)?.sourceTitle}</p><p>12 meses × 4 semanas ordinales. Valores previstos; sin fechas calendario ni avance registrado.</p><ol className={styles.distribution}>{draft.spreadsheet.periodOrdinals.map((month,i)=><li key={month}>Mes {month}: {cypItems.get(row.code)?.ordinalDistribution.slice(i*4,i*4+4).map((v,w)=>`S${w+1}: ${v===null?'sin dato':v*100+'%'}`).join(' · ')}</li>)}</ol></details></>}<label>Título<input maxLength={cyp?500:160} value={row.title} onChange={event=>change(index,'title',event.target.value)}/></label>{cyp&&<small>{row.title.length}/160 para aplicar. La descripción original se conserva.</small>}<div className={styles.dates}><label>Inicio previsto<input type="date" value={row.startsOn||''} onChange={event=>change(index,'startsOn',event.target.value)}/></label><label>Fin previsto<input type="date" min={row.startsOn||undefined} value={row.endsOn||''} onChange={event=>change(index,'endsOn',event.target.value)}/></label></div><p className={styles.evidence}>Fuente: {row.evidence}</p>{cyp&&(cypItems.get(row.code)?.missingUnit||cypItems.get(row.code)?.missingQuantity)&&<label className={styles.checkbox}><input type="checkbox" checked={row.sourceIssueReviewed} onChange={event=>change(index,'sourceIssueReviewed',event.target.checked)}/><span>Revisé la unidad o cantidad faltante con la fuente. Conservo esta partida como tarea sin completar esos datos automáticamente.</span></label>}{row.uncertainty&&<div className={styles.warning}><p>{row.uncertainty}</p><button type="button" disabled={!row.startsOn||!row.endsOn||row.title.length>160||cyp&&(cypItems.get(row.code)?.missingUnit||cypItems.get(row.code)?.missingQuantity)&&!row.sourceIssueReviewed} onClick={()=>change(index,'uncertainty','')}>Confirmé esta fila con la fuente</button></div>}<button type="button" disabled={rows.length<2} onClick={()=>{replaceRows(old=>old.filter((_,i)=>i!==index));setApproved(false);}}>Excluir esta fila</button></fieldset>)}</div>
      <label>Motivo de la revisión<textarea value={reason} minLength={8} maxLength={800} rows={2} disabled={blocked} onChange={event=>{setReason(event.target.value);setApproved(false);}}/></label>
      {canApprove&&<label className={styles.checkbox}><input type="checkbox" checked={approved} disabled={blocked||!validRows} onChange={event=>setApproved(event.target.checked)}/><span>Revisé la fuente, las tareas y sus fechas. Apruebo agregarlas a esta obra con avance cero.</span></label>}
