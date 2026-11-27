@@ -40,7 +40,8 @@ export function expectedDatabaseHosts(url, environment = process.env, inspect = 
 // Allocate an exclusively owned database. Shared services may host other suites.
 export async function runSharedWorkday({
   jpeg,
-  captureInventory
+  captureInventory,
+  approveConsumption
 }) {
   const url = lifecycleDisposableUrl(process.env);
   const expectedHosts = expectedDatabaseHosts(url);
@@ -70,7 +71,8 @@ export async function runSharedWorkday({
       database,
       databaseHost: target.host,
       jpeg,
-      captureInventory
+      captureInventory,
+      approveConsumption
     });
   } finally {
     try {
@@ -86,7 +88,8 @@ async function exercise({
   database,
   databaseHost,
   jpeg,
-  captureInventory
+  captureInventory,
+  approveConsumption
 }) {
   const query = (...args) => pool.query(...args);
   const connect = () => pool.connect();
@@ -561,16 +564,33 @@ async function exercise({
     assert.ok(item);
     assert.equal(item.taskId, task);
     assert.equal(pendingStock.materials[0].balance, '20.000');
-    const consumptionCmd = payload(director, 'DECIDE_CONSUMPTION', {
+    const decisionPayload = {
       proposalId: item.id,
       revision: item.revision,
       catalogHash: pendingStock.catalogHash,
       decision: 'APPROVE',
       reason: 'Tres bolsas verificadas por la dirección de obra de laboratorio.'
+    };
+    const browserDecision = approveConsumption && await approveConsumption({
+      web, director, scope: context(director), decisionPayload, proposalReceiptId: consumption.result.receiptId
     });
-    const approved = await post(director, consumptionCmd);
+    const consumptionCmd = approveConsumption ? browserDecision.command : payload(director, 'DECIDE_CONSUMPTION', decisionPayload);
+    const approved = approveConsumption ? browserDecision.response : await post(director, consumptionCmd);
     assert.equal(approved.consumption.state, 'APPROVED');
     assert.equal((await inv()).materials[0].balance, '17.000');
+    const movements = await query(`SELECT id, metadata FROM "AuditLog" WHERE action='material.inventory.moved'
+      AND "entityId"=$1 AND metadata->>'proposalId'=$2`, [project, item.id]);
+    assert.equal(movements.rowCount, 1);
+    assert.equal(movements.rows[0].id, approved.consumption.decision.movementId);
+    assert.equal(movements.rows[0].metadata.receiptId, approved.receiptId);
+    assert.equal(movements.rows[0].metadata.direction, 'OUT');
+    assert.equal(movements.rows[0].metadata.quantity, '3.000');
+    assert.equal(movements.rows[0].metadata.balanceBefore, '20.000');
+    assert.equal(movements.rows[0].metadata.balanceAfter, '17.000');
+    const decisionReceipts = await query(`SELECT id FROM "AuditLog" WHERE action='field.operation.recorded'
+      AND "entityId"=$1 AND metadata->>'command'='DECIDE_CONSUMPTION'
+      AND metadata->'outcome'->'consumption'->>'id'=$2 AND "actorId"='director'`, [project, item.id]);
+    assert.deepEqual(decisionReceipts.rows, [{id: approved.receiptId}]);
     assert.equal(await taskProgress(), 25);
     mark('Consumo WhatsApp y aprobación web', {
       saldoPendiente: 20,
@@ -638,11 +658,12 @@ async function exercise({
       steps,
       messages,
       browserInventory,
+      browserApproval: browserDecision ? {...browserDecision.proof, databaseOutflowsForProposal: movements.rowCount, databaseDecisionReceipts: decisionReceipts.rowCount} : null,
       outboundNetworkAttempts: networkAttempts,
       beforeReplay: before,
       afterReplay: after,
       elapsedMs: Math.round(performance.now() - started),
-      boundaries: ['PostgreSQL local descartable y handlers HTTP reales llamados con Request/Response en proceso.', 'Verificador de sesión, imagen, blob privado y descarga Meta de laboratorio. Sin JWT real, teléfono, entrega Meta ni IA.', browserInventory ? 'Chromium consultó por HTTP el inventario de esta jornada con el componente de producción y la sesión sintética.' : 'Esta corrida no montó la pantalla de inventario en un navegador.', 'Una declaración del 25 % y tres bolsas independientes. Entrada y salida ocurren en segundos, sin medir horas reales.']
+      boundaries: ['PostgreSQL local descartable y handlers HTTP reales llamados con Request/Response en proceso.', 'Verificador de sesión, imagen, blob privado y descarga Meta de laboratorio. Sin JWT real, teléfono, entrega Meta ni IA.', ...(browserDecision ? ['Dirección aprobó el consumo en el panel React de Chromium con la sesión sintética.'] : []), ...(browserInventory ? ['Chromium consultó por HTTP el inventario de esta jornada con el componente de producción y la sesión sintética.'] : []), 'Una declaración del 25 % y tres bolsas independientes. Entrada y salida ocurren en segundos, sin medir horas reales.']
     };
   } finally {
     globalThis.fetch = originalFetch;
