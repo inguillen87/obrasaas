@@ -11,7 +11,7 @@ import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createCompanyChannelStore} from '../src/lib/company-channel-store.mjs';
 import {createCustomerWhatsAppSetup} from '../src/lib/customer-whatsapp-setup.mjs';
 import {createMetaCustomerOnboarding} from '../src/lib/meta-customer-onboarding.mjs';
-import {createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
+import {createMetaCustomerProvider,customerReplyMessage} from '../src/lib/meta-customer-provider.mjs';
 import {createMetaCustomerHandlers} from '../src/lib/meta-customer-http.mjs';
 import {createParticipantHandlers} from '../src/lib/participant-http.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
@@ -149,7 +149,16 @@ try{
  const processor=createMetaCustomerProcessor({connect,environment,authorizationCodes:[...EMPLOYEE_INTAKE_AUTHORIZATION_CODES,...META_KYC_AUTHORIZATION_CODES],dispatch:async c=>{try{return (await bridge.executeIntake(c))||await bridge.execute(c);}catch(error){dispatchFailure={code:error.code,stack:error.stack,lastStatement};throw error;}},outbound:{send:(c,reply,{purpose})=>outbound.send(c,reply,{purpose})}}),callback=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect,environment}),environment,schedule:()=>{}});
  const push=async(message,{sender='15550001001',reply=null,timestamp=Math.floor(Date.now()/1000)}={})=>{sequence++;const value={id:'wamid.SyntheticReactiveMessage_'+sequence,from:sender,timestamp:String(timestamp),...(reply?{context:{id:reply}}:{}),...(typeof message==='string'?{type:'text',text:{body:message}}:message)},body={object:'whatsapp_business_account',entry:[{id:wabaId,changes:[{field:'messages',value:{metadata:{phone_number_id:phoneNumberId},messages:[value]}}]}]},bytes=Buffer.from(JSON.stringify(body)),signature='sha256='+createHmac('sha256',environment.META_APP_SECRET).update(bytes).digest('hex');assert.equal((await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':signature},body:bytes}))).status,200);return 'customer_webhook_'+splitMetaCustomerEvents(body)[0].externalId;};
  const execute=async(message,options)=>{const eventId=await push(message,options),result=await processor.process(eventId),sent=messages.get(customerOutboundId(eventId));return {eventId,result,...(sent||{})};};
- const choice=(last,title)=>{const row=last.message?.sections?.flatMap(s=>s.rows).find(r=>r.title===title);assert.ok(row,'Missing exact prompt '+title);return {type:'interactive',interactive:{type:'list_reply',list_reply:row}};};
+ const choice=(last,label)=>{
+  const menu=customerReplyMessage(last.message);
+  assert.equal(menu.type,'interactive');
+  const matches=menu.interactive.action.sections.flatMap(section=>section.rows).filter(row=>
+   row.title===label || row.description===label || row.description?.replace(/ · \d+(?:\.\d+)?%$/u,'')===label
+  );
+  assert.equal(matches.length,1,'Expected one visible prompt for '+label);
+  const [{id,title}]=matches;
+  return {type:'interactive',interactive:{type:'list_reply',list_reply:{id,title}}};
+ };
  const assertPendingWorksiteReply=message=>{
   assert.equal(message.type,'text');
   assert.match(message.body,/pendiente de revisión independiente/);
@@ -658,7 +667,7 @@ try{
   async function selectTask(action){
    const start=await field('HOLA');
    let selected=action==='CONSUMO'?await field(action,start.messageId):await chooseField(start,action);
-   selected=await chooseField(selected,task.title.slice(0,24));
+   selected=await chooseField(selected,task.title);
    return chooseField(selected,sector.name);
   }
   const preparedPhoto=await selectTask('Enviar evidencia');
@@ -708,7 +717,7 @@ try{
   await reviewField(directorAction('DECIDE_STOCK_ADJUSTMENT',{proposalId:opening.id,revision:opening.revision,catalogHash:catalog.catalogHash,decision:'APPROVE',reason:'Dirección comprobó saldo y unidad de apertura.'}));
   const balance=async()=>(await fieldView()).inventory.materials.find(row=>row.id===material.id).balance;
   assert.equal(await balance(),'3.000');
-  let consumption=await selectTask('CONSUMO');consumption=await chooseField(consumption,(material.name+' · '+material.unit).slice(0,24));
+  let consumption=await selectTask('CONSUMO');consumption=await chooseField(consumption,material.name+' · '+material.unit);
   consumption=await field('1.000',consumption.messageId);consumption=await field('Se consumió una bolsa sintética en la tarea importada.',consumption.messageId);
   const proposedConsumption=await chooseField(consumption,'Guardar',true);assert.equal(proposedConsumption.result.kind,'CONSUMPTION_PROPOSAL');assert.equal(await balance(),'3.000');
   const pendingConsumption=(await fieldView()).inventory.consumptions.find(row=>row.taskId===task.id);

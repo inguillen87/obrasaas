@@ -1,3 +1,4 @@
+import {customerReplyMessage} from '../src/lib/meta-customer-provider.mjs';
 import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
 import {CAPTURE_QUALITY_NOTICE_VERSION,CAPTURE_QUALITY_MODEL_MANIFEST_SHA256} from '../src/lib/private-capture-quality.mjs';
 import assert from 'node:assert/strict';
@@ -45,7 +46,20 @@ try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);cre
  const bridge=createMetaFieldBridge({connect,environment,provider,put,get,analyzer}),inbox=createMetaCustomerInbox({connect,environment}),callback=createMetaCustomerCallbackHandlers({inbox,environment}),channel=createWorkerChannelStore({workspace});
  async function push(message){const value={id:'wamid.'+randomUUID().replaceAll('-',''),from:'5491100001111',timestamp:String(Math.floor(Date.now()/1000)),...(typeof message==='string'?{type:'text',text:{body:message}}:message)},payload={object:'whatsapp_business_account',entry:[{id:'130000001',changes:[{field:'messages',value:{metadata:{phone_number_id:'120000001'},messages:[value]}}]}]},bytes=Buffer.from(JSON.stringify(payload)),signature='sha256='+createHmac('sha256',environment.META_APP_SECRET).update(bytes).digest('hex');const response=await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':signature},body:bytes}));assert.equal(response.status,200);const split=splitMetaCustomerEvents(payload)[0],eventId='customer_webhook_'+split.externalId,leaseToken=randomUUID();await pool.query(`UPDATE "WebhookEvent" SET "leaseToken"=$2,"leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1`,[eventId,leaseToken]);return {eventId,projectId:'project-a',channelId:'channel-a',payloadDigest:split.payloadDigest,leaseToken};}
  const execute=async message=>{const ctx=await push(message);return {ctx,result:await bridge.execute(ctx)};};
- const choose=async(result,title)=>{assert.equal(result.reply.type,'interactive');const row=result.reply.sections.flatMap(s=>s.rows).find(r=>r.title===title);assert.ok(row,'Missing choice '+title);return execute({type:'interactive',interactive:{type:'list_reply',list_reply:{id:row.id,title:row.title}}});};
+ function matchingChoices(reply, label) {
+  const message = customerReplyMessage(reply);
+  assert.equal(message.type, 'interactive');
+  return message.interactive.action.sections.flatMap(section => section.rows).filter(row =>
+   row.title === label || row.description === label || row.description?.replace(/ · \d+(?:\.\d+)?%$/u, '') === label
+  );
+ }
+ function choiceMessage(reply, label) {
+  const matches = matchingChoices(reply, label);
+  assert.equal(matches.length, 1, 'Expected one visible choice for ' + label);
+  const [{id, title}] = matches;
+  return {type:'interactive',interactive:{type:'list_reply',list_reply:{id,title}}};
+ }
+ const choose=(result,label)=>execute(choiceMessage(result.reply,label));
  let own=(await channel.read(person,context)).records[0],challenge=await channel.command(person,{...context,operationId:randomUUID(),action:'REQUEST_CHALLENGE',payload:{workerId:own.workerId,revision:own.revision}}),bound=await execute(challenge.code);assert.equal(bound.result.kind,'CHANNEL_BOUND');assert.equal(bound.result.businessApplied,false);assert.equal((await bridge.execute(bound.ctx)).kind,'CHANNEL_BOUND');checks.push('actual-HMAC-callback-encrypted-inbox-leased-context-and-single-use-account-bound-channel');
  const scheduleWorker=(await pool.query(`SELECT metadata FROM public."Worker" WHERE id='worker-a'`)).rows[0].metadata,scheduleTask=(await pool.query(`SELECT row_to_json(t) AS row FROM public."Task" t WHERE id='task-a'`)).rows[0].row;
  await pool.query(`UPDATE public."Task" SET status='IN_PROGRESS',progress=37,"startsAt"='2026-10-13 15:12:00',"endsAt"='2026-10-21 07:45:00' WHERE id='task-a'`);
@@ -321,7 +335,7 @@ const correctedKyc=createParticipantStore({assessCaptureQuality:assessFixtureCap
  const waitEvidence=async id=>(await operations.read(owner,ownerContext)).evidence.find(row=>row.id===id);
  const rejectedWaitEvidence=await waitEvidence('wait-progress-rejected');assert.ok(rejectedWaitEvidence);await operations.save(owner,command('REVIEW_EVIDENCE',{evidenceId:rejectedWaitEvidence.id,revision:rejectedWaitEvidence.revision,decision:'REJECT',reason:'Revisión independiente sintética: este adjunto no sustenta la medición.'}));
  const waitMeasuredTask=(await readMetaFieldTaskCatalog(pool,{projectId:'project-a',state:{taskId:'wait-measured-task'}})).tasks.find(row=>row.id==='wait-measured-task');await operations.save(owner,command('CONFIGURE_PROGRESS_MEASUREMENT',{taskId:waitMeasuredTask.id,revision:waitMeasuredTask.revision,baseline:'10',unit:'M2',sourceReference:'Cómputo sintético independiente para espera',reason:'Base sintética configurada antes de informar la cantidad adicional.'}));
- let restartedWaitBridge=createMetaFieldBridge({connect,environment,provider,put,get,analyzer});const waitExecute=async message=>{const ctx=await push(message);return {ctx,result:await restartedWaitBridge.execute(ctx)};},waitChoose=async(value,title)=>{const row=replyRows(value).find(row=>row.title===title);assert.ok(row,'Missing progress-wait choice '+title);return waitExecute({type:'interactive',interactive:{type:'list_reply',list_reply:{id:row.id,title:row.title}}});};
+ let restartedWaitBridge=createMetaFieldBridge({connect,environment,provider,put,get,analyzer});const waitExecute=async message=>{const ctx=await push(message);return {ctx,result:await restartedWaitBridge.execute(ctx)};},waitChoose=(value,label)=>waitExecute(choiceMessage(value.reply,label));
  const waitEnvelope=async()=>(await pool.query(`SELECT metadata->'fieldChannelConversation' AS value FROM public."Worker" WHERE id='worker-a'`)).rows[0].value;
  async function replaceWaitConversation(state,{headerExpiresAt=state.expiresAt,resourceId='worker-a'}={}){
   const header=await waitEnvelope(),value={...header,expiresAt:headerExpiresAt,encryptedState:encryptCustomerSecret(JSON.stringify(state),{organizationId:'org-a',projectId:'project-a',purpose:'field-conversation',resourceId},environment)};
@@ -381,7 +395,7 @@ const correctedKyc=createParticipantStore({assessCaptureQuality:assessFixtureCap
  const rollbackEvidenceMeta=structuredClone(waitSource.metadata);rollbackEvidenceMeta.fieldOperations.taskId='wait-measured-task';delete rollbackEvidenceMeta.fieldOperations.review;
  await pool.query(`INSERT INTO public."Incident"(id,"projectId",title,description,metadata,"createdAt","updatedAt") VALUES('wait-rollback-evidence','project-a','Foto para rollback de espera',$1,$2::jsonb,clock_timestamp(),clock_timestamp())`,[waitSource.description,JSON.stringify(rollbackEvidenceMeta)]);
  const rollbackEvidence=await waitEvidence('wait-rollback-evidence');assert.ok(rollbackEvidence);await operations.save(owner,command('REVIEW_EVIDENCE',{evidenceId:rollbackEvidence.id,revision:rollbackEvidence.revision,decision:'APPROVE',reason:'Otra cuenta comprobó este adjunto sintético antes del ensayo de rollback.'}));
- rollbackWait=await waitChoose(rollbackWait.result,'Consultar evidencia');rollbackWait=await waitChoose(rollbackWait.result,rollbackEvidence.title.slice(0,24));rollbackWait=await waitExecute('Cantidad adicional sintética verificada antes de confirmar el avance.');
+ rollbackWait=await waitChoose(rollbackWait.result,'Consultar evidencia');rollbackWait=await waitChoose(rollbackWait.result,rollbackEvidence.title);rollbackWait=await waitExecute('Cantidad adicional sintética verificada antes de confirmar el avance.');
  const rollbackState=await readConversation();assert.equal(rollbackState.step,'CONFIRM');assert.deepEqual(rollbackState.measurement,{mode:'DELTA',quantity:'1.0000'});const rollbackSaveChoice=replyRows(rollbackWait.result).find(row=>row.title==='Guardar'),rollbackContext=await push({type:'interactive',interactive:{type:'list_reply',list_reply:{id:rollbackSaveChoice.id,title:rollbackSaveChoice.title}}}),rollbackNow=(await pool.query('SELECT clock_timestamp() AS now')).rows[0].now,rollbackDeadline=new Date(rollbackNow.getTime()+750).toISOString();rollbackState.expiresAt=rollbackDeadline;rollbackState.progressEvidenceWait={version:1,deadline:rollbackDeadline};const rollbackHeader=await replaceWaitConversation(rollbackState),beforeWaitRollback=await waitBusinessSnapshot();let rollbackHookObserved=false;
  progressWaitProposalHook=async()=>{await pool.query(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.025)`,[rollbackDeadline]);rollbackHookObserved=true;};
  const rollbackResult=await restartedWaitBridge.execute(rollbackContext);assert.equal(rollbackHookObserved,true);assert.equal(rollbackResult.kind,'INPUT_REVIEW');assert.equal(rollbackResult.code,'META_CHANNEL_PROGRESS_DRAFT_EXPIRED');assert.equal(rollbackResult.businessApplied,false);assert.match(rollbackResult.reply.body,/Venció el plazo/);assert.deepEqual(await waitEnvelope(),rollbackHeader);assert.deepEqual(await readConversation(),rollbackState);assert.deepEqual(await waitBusinessSnapshot(),beforeWaitRollback);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM public."OperationalProposal" WHERE action->>'taskId'='wait-measured-task'`)).rows[0].n,0);assert.equal((await pool.query(`SELECT progress FROM public."Task" WHERE id='wait-measured-task'`)).rows[0].progress,0);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM public."AuditLog" WHERE action='meta.field.dispatched' AND metadata->>'eventId'=$1`,[rollbackContext.eventId])).rows[0].n,1);assert.deepEqual(await restartedWaitBridge.execute(rollbackContext),rollbackResult);assert.deepEqual(await waitEnvelope(),rollbackHeader);assert.deepEqual(await waitBusinessSnapshot(),beforeWaitRollback);
@@ -433,8 +447,8 @@ const correctedKyc=createParticipantStore({assessCaptureQuality:assessFixtureCap
  assert.equal(importProvenance.receiptId,applied.receiptId);
  const chooseImportedTask=async action=>{
   let selected=await execute(action);
-  const title=importedTask.title.slice(0,24);
-  for(let page=0;!replyRows(selected.result).some(row=>row.title===title);page++){
+  const title=importedTask.title;
+  for(let page=0;!matchingChoices(selected.result.reply,title).length;page++){
    assert.ok(page<32);
    selected=await choose(selected.result,'Más tareas');
   }
@@ -486,7 +500,7 @@ const correctedKyc=createParticipantStore({assessCaptureQuality:assessFixtureCap
  const balance=async()=>(await fieldRead()).inventory.materials.find(row=>row.id===material.id).balance;
  assert.equal(await balance(),'3.000');
  let consumptionStep=await chooseImportedTask('CONSUMO');
- consumptionStep=await choose(consumptionStep.result,(material.name+' · '+material.unit).slice(0,24));
+ consumptionStep=await choose(consumptionStep.result,material.name+' · '+material.unit);
  await execute('1.000');
  consumptionStep=await execute('Se consumió una bolsa sintética en la tarea importada.');
  const savedConsumption=await choose(consumptionStep.result,'Guardar');
