@@ -5,6 +5,10 @@ on:
     paths:
       - '.github/workflows/shared-workday-postgres.yml'
       - 'scripts/verify-shared-workday-postgres.mjs'
+      - 'scripts/verify-company-onboarding-postgres.mjs'
+      - 'scripts/lib/verify-bootstrapped-whatsapp-composition.mjs'
+      - 'scripts/lib/company-contact-migration.mjs'
+      - 'scripts/lib/company-channel-migration.mjs'
       - 'scripts/lib/shared-workday-scenario.mjs'
       - 'scripts/lib/company-channel-disposable-fixture.mjs'
       - 'scripts/lib/disposable-postgres-cleanup.mjs'
@@ -28,13 +32,16 @@ jobs:
           POSTGRES_USER: cutover_test
           POSTGRES_PASSWORD: cutover_test
           POSTGRES_DB: obrasaas_cutover_ci
-        ports: ['5432:5432']
+          TZ: UTC
+        ports: ['127.0.0.1:6549:5432']
         options: >-
           --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       CUTOVER_TEST_DISPOSABLE: '1'
-      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test@127.0.0.1:6549/obrasaas_cutover_ci
+      PGPASSWORD: cutover_test
+      TZ: UTC
       PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -47,3 +54,5 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Exercise signed WhatsApp events and web decisions in one database
         run: node scripts/verify-shared-workday-postgres.mjs
+      - name: Bootstrap a company and connect both WhatsApp number modes in UTC
+        run: node scripts/verify-company-onboarding-postgres.mjs --connect-whatsapp

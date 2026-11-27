@@ -308,7 +308,7 @@ try{
  let bootstrappedWhatsApp=null;
  if(connectWhatsApp){
   const databaseClock=(await pool.query("SELECT EXTRACT(timezone FROM clock_timestamp())::int AS offset")).rows[0];
-  assert.equal(databaseClock.offset,-new Date().getTimezoneOffset()*60,'Synthetic Node and PostgreSQL clocks must use matching zones');
+  assert.ok(databaseClock.offset === -new Date().getTimezoneOffset() * 60,'Synthetic Node and PostgreSQL clocks must use matching zones');
   const {verifyBootstrappedWhatsApp}=await import('./lib/verify-bootstrapped-whatsapp-composition.mjs');
   bootstrappedWhatsApp=await verifyBootstrappedWhatsApp({pool,workspace,store,identity,command,checks});
  }
