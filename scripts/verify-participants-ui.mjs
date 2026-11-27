@@ -214,6 +214,17 @@ async function documentBackScenario(width,mode){
  const reviewing=['back-review','back-review-whatsapp','back-malformed'].includes(mode),withBack=['back-submit','back-superseded'].includes(mode),backNotice={version:PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,sha256:PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,text:PARTICIPANT_DOCUMENT_BACK_NOTICE};
  const reviewImages=[{id:'document-front',kind:'DOCUMENT_FRONT'},{id:'selfie',kind:'SELFIE'},{id:'document-back',kind:'DOCUMENT_BACK'}].map(image=>({...image,contentType:'image/png',bytes:picture.length}));
  let row={id:'worker-fixture',name:'Persona de ensayo',active:true,revision:'2026-10-01T11:00:00.000001',status:'ACTIVE',self:!reviewing,accountLinked:true,invitation:null,kycChatChallenge:null,permissions:{attendance:false,report:false},identityCertified:false,whatsAppAccessGranted:false,kyc:{status:reviewing?'PENDING_REVIEW':'NOT_SUBMITTED',submissionId:reviewing?'kyc-fixture':null,submittedAt:null,review:null,images:reviewing?reviewImages:[],...(reviewing?{documentBackConsent:{allowed:mode!=='back-malformed',noticeVersion:mode==='back-review-whatsapp'?PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION:backNotice.version,noticeSha256:mode==='back-review-whatsapp'?PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256:backNotice.sha256}}:{})}};
+ const correctionReason='Repetí el frente del DNI con las cuatro esquinas visibles.';
+ const correcting=mode==='back-withdraw';
+ if(correcting)row.kyc={...row.kyc,status:'REJECTED',submissionId:'kyc-anterior',submittedAt:'2026-10-01T09:00:00.000Z',review:{decision:'REJECTED',reason:correctionReason,recordedAt:'2026-10-01T10:00:00.000Z'}};
+ const checkCorrection=async()=>{
+  const notice=await page.$('form [data-capture-correction] p');
+  if(correcting){
+   assert.ok(notice);
+   assert.equal(await notice.evaluate(node=>node.innerText),correctionReason);
+   assert.ok(await notice.isVisible());
+  }else assert.equal(notice,null);
+ };
  const posts=[],queries=[],downloads=[],receipts=new Map();
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(url.pathname!=='/api/identity/participants')return request.continue();assert.match(request.headers().authorization||'',/^Bearer synthetic-active-org-A-/);
@@ -274,16 +285,23 @@ async function documentBackScenario(width,mode){
    await page.keyboard.press('Enter');await imageControl.dispose();await review.dispose();
    await page.waitForFunction(()=>document.activeElement?.tagName==='H4'&&document.activeElement.textContent.trim()==='Decisión del responsable');
    assert.equal(posts.length,0,'Opening review is not a saved decision');
+   await page.select('form select','REJECTED');
+   assert.equal(await page.$eval('form textarea',field=>field.labels[0].textContent.trim()),'Qué foto debe repetir y por qué');
+   await wait(page,'La persona verá esta indicación en su cuenta cuando vuelva a presentar las fotos.');
    await click(page,'Guardar decisión');assert.equal(await page.$eval('form textarea',input=>input.validity.valueMissing),true);assert.equal(posts.length,0,'A review without its human reason is not sent');
    await page.select('form select','APPROVED');await page.type('form textarea','Revisión humana sintética de las tres imágenes.');await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-form-${width}.png`),fullPage:true});await click(page,'Guardar decisión');
   }else{
-   await click(page,'Presentar mi identidad');
+   await click(page,correcting?'Volver a presentar mi identidad':'Presentar mi identidad');
+   await checkCorrection();
    const prepare=async title=>{const selector='fieldset[aria-label="'+title+'"]';await (await page.$(selector+' input[type=file]')).uploadFile(picturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());const button=await page.$$(selector+' button');for(const handle of button)if((await handle.evaluate(node=>node.textContent)).startsWith('Usar ')){await handle.click();break;}await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Foto preparada. El encuadre y la calidad se comprobarán al enviar.'),{},title);};
    await prepare('Frente del documento');await click(page,'Continuar al dorso');await page.waitForSelector('[data-kyc-capture-step="2"]');
+   await checkCorrection();
    await page.click('[data-kyc-capture-step="2"] label input[type=checkbox]');await page.waitForSelector('fieldset[aria-label="Dorso del documento"]');await prepare('Dorso del documento');
    const backUrl=await page.$eval('fieldset[aria-label="Dorso del documento"] img',image=>image.src);
    if(mode==='back-withdraw'){await page.click('[data-kyc-capture-step="2"] label input[type=checkbox]');await page.waitForFunction(()=>!document.querySelector('fieldset[aria-label="Dorso del documento"]'));assert.ok((await page.evaluate(()=>window.__revokedPrivateUrls)).includes(backUrl));}
-   await click(page,mode==='back-withdraw'?'Continuar sin dorso':'Continuar a la selfie');await page.waitForSelector('[data-kyc-capture-step="3"]');await prepare('Fotografía del rostro');await assertCompactCaptureChoices(page,posts);assert.equal(posts.length,0,'Back authorization never sends the presentation');await privateStorage(page,0);await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-form-${width}.png`),fullPage:true});await click(page,'Solicitar revisión sin comparación facial');
+   await click(page,mode==='back-withdraw'?'Continuar sin dorso':'Continuar a la selfie');await page.waitForSelector('[data-kyc-capture-step="3"]');
+   await checkCorrection();
+   await prepare('Fotografía del rostro');await assertCompactCaptureChoices(page,posts);assert.equal(posts.length,0,'Back authorization never sends the presentation');await privateStorage(page,0);await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-form-${width}.png`),fullPage:true});await click(page,'Solicitar revisión sin comparación facial');
   }
   await wait(page,'El resultado quedó sin confirmar');await privateStorage(page,1);assert.equal(posts.length,1);await click(page,'Comprobar el mismo intento');await wait(page,mode==='back-superseded'?'El recibo original quedó confirmado. Hay una presentación más reciente':'Operación guardada con recibo');await privateStorage(page,0);assert.equal(posts.length,1);assert.equal(queries.at(-1),posts[0].operationId);if(mode==='back-superseded'){assert.equal(row.kyc.images.length,2);assert.equal(row.kyc.documentBackConsent,undefined);assert.deepEqual(row.permissions,{attendance:false,report:false});assert.equal(row.identityCertified,false);assert.equal(row.whatsAppAccessGranted,false);assert.equal(receipts.get(posts[0].operationId).kycSubmissionReceipt.submissionId,'kyc-fixture');}
   checks.push({width,mode,posts:posts.length,receiptQueries:queries.length,downloads,...(reviewing?{singleReviewAfterImagesBeforeOptions:true,privateImageRendering,reviewKeyboardContinuity:true,reviewOpenedWithoutPost:true,emptyReviewReasonNotSent:true}:{}),backOptional:true,privatePayloadPersisted:false,manualReviewOnly:true,realIdentityAccepted:false});
