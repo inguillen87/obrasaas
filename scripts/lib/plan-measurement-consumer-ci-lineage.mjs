@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
-import {participantPreanalysisConsumerSourceFiles} from './participant-preanalysis-current-ci-lineage.mjs';
+import {planBudgetCurrentSourcePin,restorePilotCompletionPreviousSourceText} from './plan-budget-current-ci-lineage.mjs';
+import {PARTICIPANT_PREANALYSIS_CONTRACT_PATH,participantPreanalysisConsumerSourceFiles} from './participant-preanalysis-current-ci-lineage.mjs';
 
 export const PLAN_MEASUREMENT_CONSUMER_CI_VERSION='plan-measurement-consumer-lineage-v1';
 export const PLAN_MEASUREMENT_CONSUMER_CI_HELPER='scripts/lib/plan-measurement-consumer-ci-lineage.mjs';
@@ -22,7 +23,21 @@ export function validatePlanMeasurementConsumerSourceLineage({family,files,readS
  for(const file of PLAN_MEASUREMENT_CONSUMER_SOURCES)requireLineage(files.filter(value=>value===file).length===1,'Source import dependency omitted: '+file);
  const previous=files.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));
  requireLineage(previous.length===expected.previousSourceCount&&sha(JSON.stringify(previous))===expected.previousSourcePathsSha256,'Published previous consumer path set changed');
- const producer=bytes(readSource,expected.producer),text=producer.toString('utf8');requireLineage(producer.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===expected.producerLfSha256,'Published producer body changed');
+ const producer=bytes(readSource,expected.producer),text=producer.toString('utf8');
+ requireLineage(producer.equals(Buffer.from(text)),'Invalid producer source encoding');
+ let published=text.replaceAll('\r\n','\n');
+ if(family==='CONSUMPTION_FEEDBACK'){
+  const raw=readSource(PARTICIPANT_PREANALYSIS_CONTRACT_PATH);
+  const contract=Buffer.isBuffer(raw)?JSON.parse(raw):null;
+  if(contract?.planBudgetCurrentRevision?.pilotCompletionAdvance){
+   try{
+    const currentPin=planBudgetCurrentSourcePin(contract,{path:expected.producer,sha256:expected.producerLfSha256});
+    requireLineage(sha(published)===currentPin,'Current producer body changed');
+    published=restorePilotCompletionPreviousSourceText(contract,expected.producer,published);
+   }catch(error){requireLineage(false,error.message);}
+  }
+ }
+ requireLineage(sha(published)===expected.producerLfSha256,'Published producer body changed');
  const helper=bytes(readSource,PLAN_MEASUREMENT_CONSUMER_CI_HELPER);
  return {version:PLAN_MEASUREMENT_CONSUMER_CI_VERSION,family,...expected,sourceCount:currentFiles.length,publishedCurrentSourceCount:expected.sourceCount,sourcePathsSha256:sha(JSON.stringify(currentFiles)),preanalysisSourceAdditions:currentFiles.filter(file=>!files.includes(file)),sourceAdditions:[...PLAN_MEASUREMENT_CONSUMER_SOURCES],sourceReferences:PLAN_MEASUREMENT_CONSUMER_SOURCES.map(file=>({path:file,sha256:sha(bytes(readSource,file))})),validationSource:{path:PLAN_MEASUREMENT_CONSUMER_CI_HELPER,sha256:sha(helper)}};
 }
