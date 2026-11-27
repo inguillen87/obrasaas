@@ -15,6 +15,7 @@ import { createFieldMedia } from '../../src/lib/field-media.mjs';
 import { createWorkerChannelStore } from '../../src/lib/worker-channel-identity.mjs';
 import { createMetaCustomerInbox, createMetaCustomerCallbackHandlers, splitMetaCustomerEvents } from '../../src/lib/meta-customer-callback.mjs';
 import { createMetaCustomerProcessor } from '../../src/lib/meta-customer-processing.mjs';
+import { customerReplyMessage } from '../../src/lib/meta-customer-provider.mjs';
 import { createMetaFieldBridge } from '../../src/lib/meta-field-bridge.mjs';
 import { encryptCustomerSecret } from '../../src/lib/meta-customer-credentials.mjs';
 
@@ -201,8 +202,8 @@ async function exercise({
     sector = 'sector-a',
     workerId = 'worker-a';
   const taskTitle = 'Muro de planta baja',
-    sectorTitle = 'Acceso de personal a la ampliación de portería · Sur',
-    northEntrance = 'Acceso de personal a la ampliación de portería · Norte',
+    sectorTitle = 'Entrada del personal por el sector Sur desde el pasillo central de planta baja',
+    northEntrance = 'Entrada del personal por el sector Norte desde el pasillo central de planta baja',
     materialTitle = 'Cemento';
   async function web(actor, route, method = 'GET', input = {}, expected = 200) {
     const verify = async () => actor;
@@ -301,8 +302,15 @@ async function exercise({
     };
   }
   async function choose(prior, title) {
-    const matches = prior.result.reply.sections.flatMap(s => s.rows)
-      .filter(row => row.title === title || row.description === title);
+    const message = customerReplyMessage(prior.result.reply);
+    const rows = message.interactive.action.sections.flatMap(s => s.rows);
+    if (title === sectorTitle) {
+      const north = rows.filter(row => /\bNorte\b/iu.test([row.title, row.description].join(' ')));
+      assert.equal(north.length, 1, 'The other entrance must also be recognizable in WhatsApp');
+    }
+    const matches = title === sectorTitle
+      ? rows.filter(row => /\bSur\b/iu.test([row.title, row.description].join(' ')))
+      : rows.filter(row => row.title === title || row.description === title);
     assert.equal(matches.length, 1, 'Expected one visible choice matching ' + title);
     const [row] = matches;
     return send({

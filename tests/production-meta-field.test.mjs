@@ -31,6 +31,41 @@ test('long sector labels distinguish the entrance on the wire and save the selec
  assert.equal(saved.command.action, 'ATTENDANCE');
  assert.equal(saved.command.payload.sectorId, sectors[1].id);
 });
+test('the WhatsApp sector menu shows the differing middle of a name before the worker chooses', () => {
+ const makeName = side => 'Entrada del personal por el edificio ' + side + ' por el pasillo central de planta baja';
+ const sectors = ['Sur', 'Norte'].map(side => ({id: 'sector-' + side, name: makeName(side)}));
+ assert.ok(sectors.every(sector => sector.name.length <= 80));
+ const extra = {facts: {...facts, sectors}};
+ const menu = say('ENTRADA', null, extra);
+ const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;
+ const visible = row => row.title + ' ' + row.description;
+ assert.deepEqual(rows.map(row => visible(row).match(/\b(Sur|Norte)\b/u)?.[1]), ['Sur', 'Norte']);
+ const selected = pick(menu, rows.findIndex(row => /\bNorte\b/u.test(visible(row))), extra);
+ assert.equal(selected.state.sectorId, sectors[1].id);
+ assert.equal(selected.command, undefined);
+ assert.deepEqual(menu.state.choices.map(choice => choice.title), sectors.map(sector => sector.name));
+});
+test('repeated sector names stay visibly distinct across a full page and preserve navigation', () => {
+ const name = 'Acceso al depósito 👷🏽‍♀️';
+ const sectors = Array.from({length: 20}, (_, index) => ({
+  id: 'sector-' + index, name: index % 2 ? name.normalize('NFD') : name
+ }));
+ const extra = {facts: {...facts, sectors}};
+ const menu = say('ENTRADA', null, extra);
+ const page = pickValue(menu, 'NEXT_SECTORS', extra);
+ const rows = customerReplyMessage(page.reply).interactive.action.sections[0].rows;
+ const visible = rows.map(row => row.title + ' ' + (row.description || ''));
+ assert.equal(rows.length, 10);
+ assert.equal(new Set(visible.map(label => label.normalize('NFC'))).size, rows.length);
+ for (const row of rows) {
+  assert.ok(row.title.length <= 24 && (row.description || '').length <= 72);
+  assert.ok(row.title.isWellFormed() && (row.description || '').isWellFormed());
+ }
+ assert.equal(rows.at(-2).title, 'Sectores anteriores');
+ assert.equal(rows.at(-1).title, 'Más sectores');
+ assert.equal(pick(page, 7, extra).state.sectorId, sectors[15].id);
+ assert.equal(visible.some(label => label.includes('sector-')), false);
+});
 test('catalog units stay visible when reporting similar long material names', () => {
  const name = 'Cemento Portland compuesto para mampostería';
  const materials = ['bolsa','kg'].map(unit => ({id:'cemento-' + unit, name, unit, active:true}));

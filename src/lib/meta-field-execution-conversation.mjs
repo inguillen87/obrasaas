@@ -20,7 +20,7 @@ function fit(parts, budget) {
 // The transport counts UTF-16 units. Keep the ends where floor, sector,
 // unit and expiration often differ, without splitting a displayed character.
 function labelWithin(label, limit) {
-  const text = label.replace(/\s+/gu, ' ').trim();
+  const text = label.normalize('NFC').replace(/\s+/gu, ' ').trim();
   if (text.length <= limit) return text;
   const parts = Array.from(graphemes.segment(text), entry => entry.segment);
   const head = fit(parts, Math.ceil((limit - 1) / 2));
@@ -32,6 +32,47 @@ function labelWithin(label, limit) {
   return head.trimEnd() + '…' + tail.trimStart();
 }
 
+function distinguishFieldOptions(options, rows) {
+  const byTitle = new Map();
+  for (const [index, option] of options.entries()) {
+    if (!byTitle.has(option.title)) byTitle.set(option.title, []);
+    byTitle.get(option.title).push(index);
+  }
+  for (const group of byTitle.values()) {
+    const descriptions = group.map(index => options[index].description || '');
+    if (new Set(descriptions).size === group.length) continue;
+    const labels = group.map(index => {
+      const [, name, detail] = rows[index];
+      const context = detail && !detail.includes(name) ? name + ' · ' + detail : detail || name;
+      return Array.from(graphemes.segment(context.normalize('NFC').replace(/\s+/gu, ' ').trim()), part => part.segment);
+    });
+    const excerpts = labels.map((parts, position) => {
+      const peers = labels.filter((_, other) => other !== position && descriptions[other] === descriptions[position]);
+      if (!peers.length) return descriptions[position];
+      // Among similar names, keep the first difference from the closest sibling on screen.
+      let pivot = 0;
+      for (const peer of peers) {
+        let match = 0;
+        while (match < parts.length && parts[match] === peer[match]) match++;
+        if (match !== parts.length || match !== peer.length) pivot = Math.max(pivot, match);
+      }
+      let start = pivot;
+      let contextUnits = 0;
+      while (start > 0 && contextUnits + parts[start - 1].length <= 16) {
+        start--;
+        contextUnits += parts[start].length;
+      }
+      const prefix = start ? '…' : '';
+      return prefix + labelWithin(parts.slice(start).join(''), 72 - prefix.length);
+    });
+    const numbered = new Set(excerpts).size !== group.length;
+    for (const [position, index] of group.entries()) {
+      const prefix = numbered ? (index + 1) + '. ' : '';
+      if (prefix || excerpts[position]) options[index].description = prefix + labelWithin(excerpts[position], 72 - prefix.length);
+    }
+  }
+}
+
 function choices(state, eventId, body, rows) {
   const nonce = digest([eventId, state.step]).slice(0, 20);
   const options = rows.map(([, name, detail], index) => {
@@ -40,6 +81,7 @@ function choices(state, eventId, body, rows) {
     return {id: 'obra:' + nonce + ':' + index, title,
       ...(description && {description: labelWithin(description, 72)})};
   });
+  distinguishFieldOptions(options, rows);
   return {
     state: {...state, nonce, choices: rows.map(([value, title]) => ({value, title}))},
     reply: {type: 'interactive', body, button: 'Elegir', sections: [{title: 'Opciones', rows: options}]}
