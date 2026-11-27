@@ -28,23 +28,49 @@ export const EXPECTED_SUITE_COUNTS=Object.freeze({
 export const EXPECTED_TOTAL_TESTS=289;
 
 // Historical95/289 exports above stay immutable for predecessor consumers.
-// Current UNIT extends only the five reviewed UX420 intake case declarations.
+// The historical counts predate the greeting, withdrawal and account-first pilot cases.
 export const CURRENT_INTAKE_GREETING_TEST_NAMES=Object.freeze(["bounded greetings cannot become a name through either confirmed NAME text path","the signed bridge retains an unverified NAME and expiry for greeting replies and fresh plain greetings","a greeting never makes a stale or malformed NAME context valid","a bounded signed welcome remains unprivileged and cannot resend an unknown greeting delivery","a bounded signed greeting restarts only an expired incomplete intake and preserves its source envelope"]);
-export const CURRENT_EXPECTED_SUITE_COUNTS=Object.freeze({...EXPECTED_SUITE_COUNTS,'tests/production-employee-intake.test.mjs':EXPECTED_SUITE_COUNTS['tests/production-employee-intake.test.mjs']+CURRENT_INTAKE_GREETING_TEST_NAMES.length});
-export const CURRENT_EXPECTED_TOTAL_TESTS=EXPECTED_TOTAL_TESTS+CURRENT_INTAKE_GREETING_TEST_NAMES.length;
+export const REVIEWED_PILOT_CASES=Object.freeze({
+ 'tests/production-employee-intake.test.mjs':Object.freeze([
+  ...CURRENT_INTAKE_GREETING_TEST_NAMES,
+  'a signed pending-request withdrawal is discoverable after its draft deadline and removes only the private request from review',
+  'exact signed withdrawal replay recovers the same sealed result and outbox without another transition or send',
+  'withdrawn requests cannot be admitted with either the old pending revision or the current cancelled revision',
+  'a new signed HOLA after withdrawal starts a separate unconsented draft without resurrecting the original request',
+  'CANCELAR arriving after human admission preserves the admitted person and reviewed permissions instead of undoing admission'
+ ]),
+ 'tests/production-company-channel-kyc.test.mjs':Object.freeze([
+  'current native corporate v3 accepted account presents three manual images once without approving identity or access',
+  'current native corporate v3 membership revocation blocks presentation before any Graph or Blob access',
+  'current native corporate v3 assignment revocation blocks presentation before any Graph or Blob access'
+ ]),
+ 'tests/production-participant-onboarding-next-step.test.mjs':Object.freeze([
+  'an invited person waits for explicit account acceptance before a new identity presentation',
+  'the current worksite review queue points a Director to the eligible profile outside their own',
+  'account acceptance changes preparation eligibility without removing legacy draft closure'
+ ])
+});
+export const CURRENT_EXPECTED_SUITE_COUNTS=Object.freeze({...EXPECTED_SUITE_COUNTS,
+ 'tests/production-employee-intake.test.mjs':105,
+ 'tests/production-company-channel-kyc.test.mjs':92,
+ 'tests/production-participant-onboarding-next-step.test.mjs':40
+});
+export const CURRENT_EXPECTED_TOTAL_TESTS=304;
 export const RECOVERY_CASES=[
  ...['bank','intake'].flatMap(kind=>['lost-response','http403'].map(failure=>kind+' '+failure+' persists its typed reference across reload and rejects the sibling receipt before exact GET recovery')),
  ...['bank','intake'].map(kind=>kind+' nonterminal and cross-context responses retain unknown and never use the generic participant fallback'),
  'independent bank and intake projects keep both typed references; settling one never clears the other'
 ];
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-export function parseTap(bytes,{recovery=false,expectedTests=null}={}){
+export function parseTap(bytes,{recovery=false,expectedTests=null,requiredNames=[]}={}){
  assert.ok(Buffer.isBuffer(bytes));const text=bytes.toString('utf8');assert.ok(bytes.equals(Buffer.from(text)),'TAP must be UTF-8');
  assert.ok(text.startsWith('TAP version 13\n'));assert.doesNotMatch(text,/^not ok /m);const plans=[...text.matchAll(/^1\.\.([0-9]+)$/gm)];assert.equal(plans.length,1);
  const counts={};for(const key of ['tests','pass','fail','cancelled','skipped','todo']){const rows=[...text.matchAll(new RegExp('^# '+key+' ([0-9]+)$','gm'))];assert.equal(rows.length,1,'One TAP summary: '+key);counts[key]=Number(rows[0][1]);assert.ok(Number.isSafeInteger(counts[key]));}assert.equal(Number(plans[0][1]),counts.tests);
  assert.ok(counts.tests>0);assert.equal(counts.pass,counts.tests);for(const key of ['fail','cancelled','skipped','todo'])assert.equal(counts[key],0,key);
  const cases=[...text.matchAll(/^ok ([0-9]+) - (.+)$/gm)].map(match=>({index:Number(match[1]),name:match[2]}));assert.equal(cases.length,counts.tests,'Complete top-level TAP cases');assert.deepEqual(cases.map(c=>c.index),Array.from({length:counts.tests},(_,i)=>i+1));assert.ok(cases.every(c=>!/#\s*(?:SKIP|TODO)\b/i.test(c.name)));assert.equal(new Set(cases.map(c=>c.name)).size,cases.length,'No duplicate cases');
  if(expectedTests!==null){assert.ok(Number.isSafeInteger(expectedTests)&&expectedTests>0);assert.equal(counts.tests,expectedTests,'Exact canonical suite count');}
+ const names=new Set(cases.map(c=>c.name));
+ for(const name of requiredNames)assert.ok(names.has(name),'Missing reviewed case: '+name);
  if(recovery){assert.equal(counts.tests,7);assert.deepEqual(cases.map(c=>c.name).sort(),[...RECOVERY_CASES].sort());}
  return {...counts,caseNames:cases.map(c=>c.name)};
 }
@@ -54,12 +80,12 @@ export function sourceFiles(root){
 }
 function identity(root,expected){assert.match(expected,/^[a-f0-9]{40}$/);const head=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();assert.equal(head,expected,'Exact source HEAD');assert.equal(execFileSync('git',['diff','--name-only','HEAD','--'],{cwd:root,encoding:'utf8'}).trim(),'','No tracked modifications');return head;}
 function main(){
- assert.equal(CURRENT_INTAKE_GREETING_TEST_NAMES.length,5,'Only the five reviewed greeting cases extend current UNIT');assert.equal(EXPECTED_SUITE_COUNTS['tests/production-employee-intake.test.mjs'],95);assert.equal(EXPECTED_TOTAL_TESTS,289);assert.equal(CURRENT_EXPECTED_SUITE_COUNTS['tests/production-employee-intake.test.mjs'],100);assert.equal(CURRENT_EXPECTED_TOTAL_TESTS,294);
+ assert.equal(Object.values(CURRENT_EXPECTED_SUITE_COUNTS).reduce((sum,count)=>sum+count,0),CURRENT_EXPECTED_TOTAL_TESTS);
  assert.deepEqual(process.argv.slice(2,3),['--expected-head']);assert.equal(process.argv.length,4);assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV&&!process.env.VERCEL_TARGET);
  const root=realpathSync(process.cwd()),sourceRevision=identity(root,process.argv[3]),out='.vercel/participant-bank-intake-contract-evidence',files=sourceFiles(root),sourceManifest=files.map(file=>({path:file,sha256:hash(readFileSync(path.join(root,file)))})),harnessSha256=hash(readFileSync(fileURLToPath(import.meta.url)));mkdirSync(out,{recursive:true});assert.equal(existsSync(path.join(out,'proof.json')),false,'Fresh main proof required');const suites=[];
  try{for(const [index,file] of TEST_SUITES.entries()){
   let bytes;try{bytes=execFileSync(process.execPath,['--test','--test-reporter=tap',file],{cwd:root,timeout:120000,maxBuffer:8*1024*1024});}catch(error){if(Buffer.isBuffer(error.stdout))writeFileSync(path.join(out,'failed-'+index+'.tap'),error.stdout,{flag:'wx'});throw error;}
-  const parsed=parseTap(bytes,{recovery:file===TEST_SUITES[4],expectedTests:CURRENT_EXPECTED_SUITE_COUNTS[file]??null}),tapPath=out+'/suite-'+index+'.tap';writeFileSync(tapPath,bytes,{flag:'wx'});suites.push({file,exitCode:0,...parsed,tap:{path:tapPath,bytes:bytes.length,sha256:hash(bytes)}});
+  const parsed=parseTap(bytes,{recovery:file===TEST_SUITES[4],expectedTests:CURRENT_EXPECTED_SUITE_COUNTS[file],requiredNames:REVIEWED_PILOT_CASES[file]}),tapPath=out+'/suite-'+index+'.tap';writeFileSync(tapPath,bytes,{flag:'wx'});suites.push({file,exitCode:0,...parsed,tap:{path:tapPath,bytes:bytes.length,sha256:hash(bytes)}});
  }
  assert.equal(suites.reduce((total,suite)=>total+suite.tests,0),CURRENT_EXPECTED_TOTAL_TESTS,'Exact canonical suite total');
  identity(root,sourceRevision);for(const item of sourceManifest)assert.equal(hash(readFileSync(path.join(root,item.path))),item.sha256,'Source stable during unit proof');assert.equal(hash(readFileSync(fileURLToPath(import.meta.url))),harnessSha256);
