@@ -51,7 +51,8 @@
     "mysql2": "3.23.1",
     "baseline-browser-mapping": "2.11.0",
     "@prisma/config": {
-      "deepmerge-ts": "8.0.0"
+      "deepmerge-ts": "8.0.0",
+      "effect": "3.22.1"
     },
     "undici": "6.29.1",
     "dompurify": "3.4.17",
