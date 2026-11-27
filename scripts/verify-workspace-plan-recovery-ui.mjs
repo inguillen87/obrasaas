@@ -176,7 +176,7 @@ async function scenario(mode,width){
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Nueva tarea')?.disabled===true);
   assert.equal(await page.$$eval('button',buttons=>buttons.find(button=>button.textContent.trim()==='Nueva tarea')?.disabled),true,'A ready plan draft prevents a new task from invalidating its reviewed baseline');
   await assertPlanBlockingNavigation(page,posts);
-  await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tareas');
+  await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tarea');
  }
  if(mode==='task-recover-after-reload'){
   await waitText(page,'La confirmación no llegó. Comprobá el recibo');assert.equal(posts.length,1);assert.equal(applied,true);
@@ -309,7 +309,7 @@ async function recoveryClosureScenario(mode,width){
    assert.equal(posts.length,mode==='invalid-source'?2:1);if(mode==='invalid-source')assert.notEqual(posts[0].operationId,posts[1].operationId);assert.deepEqual(await browserReferences(page),[]);await assertCount(page,150);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push({mode,width,posts:posts.length,rejectedAttachCalls,durableJournal:true,explicitCorrection:true});await context.close();return;
   }
-  if(decisionMode){await waitText(page,'Compará cada fila con el archivo');await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tareas');}
+  if(decisionMode){await waitText(page,'Compará cada fila con el archivo');await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tarea');}
  }
  if(!legacyMode&&!expiryMode)await waitText(page,'La confirmación no llegó.');await waitText(page,'Intento pendiente de comprobación');if(expiryMode)await waitText(page,'El intento quedó registrado.');const reference=(await browserReferences(page)).find(entry=>entry.resource==='plan-import');assert.ok(reference);assert.equal(reference.operationId,legacyMode?legacyId:posts.at(-1).operationId);assert.equal(reference.projectId,projectId);assert.equal(reference.scope,scope);
  const referenceFields=['createdAt','operationId','projectId','resource','scope','version'];

@@ -74,7 +74,7 @@ test('CyP can prepare one of 190 tasks locally and undo without losing any prior
  button(control(tree),'Conservar solo esta partida').props.onClick();
  tree=panel.render(props);
  assert.deepEqual(panel.snapshot().rows,[data.rows[189]]);
- assert.equal(button(tree,'Aplicar 1 tareas').props.disabled,true);
+ assert.equal(button(tree,'Aplicar 1 tarea').props.disabled,true);
  assert.equal(panel.snapshot().approved,false);
  assert.equal(panel.snapshot().attempt,null);
  editTitle(tree,data.rows[189].title,'Corrección posterior de la partida elegida');

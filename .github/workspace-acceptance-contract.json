@@ -40848,11 +40848,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-            "sha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c"
+            "sha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683"
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
-            "sha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9"
+            "sha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b"
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
@@ -43361,11 +43361,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-            "sha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c"
+            "sha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683"
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
-            "sha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9"
+            "sha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b"
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
@@ -49458,11 +49458,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-            "sha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c"
+            "sha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683"
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
-            "sha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9"
+            "sha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b"
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
@@ -49727,7 +49727,7 @@
           },
           {
             "path": "scripts/verify-plan-import-ui.mjs",
-            "sha256": "a86a0270ff71cacd61f37d8962abd9aade90b8d9f370faba251cb298926528a3"
+            "sha256": "5de26a0168dea015bf73414a344b49d1653ad17f722ba96386360b8e923b246d"
           },
           {
             "path": "src/app/(identity)/cuenta/attendance-closure-view.mjs",
@@ -49763,11 +49763,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-            "sha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c"
+            "sha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683"
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
-            "sha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9"
+            "sha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b"
           },
           {
             "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
@@ -77303,13 +77303,13 @@
           "path": "scripts/verify-plan-document-curve-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "eaed425d6fe1e24859611afbf84c318db5457f9541d9afc0f27cc1187858a3e8",
-          "currentSha256": "174ef0d08d7bef4866ae7020df4d0f6fb97630a6eb97f657091e718b06d81c1c",
+          "currentSha256": "643fee9ced8b754944674028d24028ef20b17b6ff2dad07ce4b05c90726afacb",
           "previousBytes": 31773,
-          "currentBytes": 31778,
+          "currentBytes": 31826,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 12139,
-              "currentText": " async function upload(item,{finance=true}={}){const {page}=item;await clickText(page,'[data-plan-import] button','Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('[data-plan-import] input[type=file]')?.disabled===false);const input=await page.$('[data-plan-import] input[type=file]');await input.uploadFile(path.join(fixture,syntheticFile));if(finance){await page.select('[data-document-purpose]','FINANCIAL_MONTHLY_CURVE');assert.equal(await page.$eval('[data-plan-import] form input[type=checkbox]',node=>node.checked),false);}await input.dispose();await page.click('[data-plan-import] form input[type=checkbox]');await clickText(page,'[data-plan-import] button','Extraer borrador');await page.waitForFunction(()=>document.body.innerText.includes('Fuente SHA-256:')||document.body.innerText.includes('La confirmación no llegó.'));}\n",
+              "currentText": " async function upload(item,{finance=true}={}){const {page}=item;await clickText(page,'[data-plan-import] button','Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('[data-plan-import] input[type=file]')?.disabled===false);const input=await page.$('[data-plan-import] input[type=file]');await input.uploadFile(path.join(fixture,syntheticFile));if(finance){await page.select('[data-document-purpose]','FINANCIAL_MONTHLY_CURVE');assert.equal(await page.$eval('[data-plan-import] form input[type=checkbox]',node=>node.checked),false);}await input.dispose();await page.click('[data-plan-import] form input[type=checkbox]');await clickText(page,'[data-plan-import] button','Extraer borrador');await page.waitForFunction(()=>document.querySelector('[data-plan-file-details] small')?.textContent.startsWith('Fuente SHA-256:')||document.body.innerText.includes('La confirmación no llegó.'));}\n",
               "previousText": " async function upload(item,{finance=true}={}){const {page}=item;await clickText(page,'[data-plan-import] button','Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('[data-plan-import] input[type=file]')?.disabled===false);const input=await page.$('[data-plan-import] input[type=file]');await input.uploadFile(path.join(fixture,syntheticFile));if(finance){await page.select('[data-document-purpose]','FINANCIAL_MONTHLY_CURVE');assert.equal(await page.$eval('[data-plan-import] form input[type=checkbox]',node=>node.checked),false);}await input.dispose();await page.click('[data-plan-import] form input[type=checkbox]');await clickText(page,'[data-plan-import] button','Extraer borrador');await page.waitForFunction(()=>document.body.innerText.includes('Fuente SHA-256:')||document.body.innerText.includes('La confirmación no llegó.'));}\n"
             }
           ]
@@ -77333,9 +77333,9 @@
           "path": "scripts/verify-plan-import-retention-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "30970445a2ed866b9e624e4ac4fd62528b2b6406e391bacb51f5977b50d52203",
-          "currentSha256": "0b20f56cb589cff40b34d7076533bee27ec94a24ef25e4609e8106d3bb4b4b86",
+          "currentSha256": "b9098320aa960368b6826cc4f98b2aa27f99734438a3a885af4df4ef3a291451",
           "previousBytes": 18017,
-          "currentBytes": 18032,
+          "currentBytes": 18031,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 10410,
@@ -77348,7 +77348,12 @@
               "previousText": "   assert.equal(posts.length,0);await click(page,'Cerrar');await retained(page);assert.equal(await page.$eval('#plan-import-title',element=>element.tagName),'BUTTON');assert.equal((await state(page)).localFileText,true);await click(page,'Importar PDF, imagen o Excel');await wait(page,'Archivo seleccionado: synthetic-retained-source.pdf');assert.equal(posts.length,0);await click(page,'Quitar archivo local');await wait(page,'Las fuentes privadas guardadas');await retained(page);assert.equal((await state(page)).localFileText,true);await click(page,'Conservar archivo');assert.equal((await state(page)).localFileText,true);await click(page,'Quitar archivo local');await click(page,'Confirmar quitar archivo local');await wait(page,'Archivo quitado sólo de esta pantalla');await page.waitForFunction(()=>!document.querySelector('[data-switch]').disabled);assert.equal((await state(page)).localFileText,false);assert.deepEqual(await references(page),[]);assert.equal(posts.length,0);checks.push({width,mode,selectedFileSurvivesClose:true,contextBlockedWhileFileRetained:true,closedNavigationAnchor:true,explicitConfirmOnlyRemovesLocalFile:true,sourceDraftReceiptMutations:0,posts:0});\n"
             },
             {
-              "currentOffsetCharacters": 13796,
+              "currentOffsetCharacters": 12023,
+              "currentText": "    await click(page,'Para revisar · 2026-10-14 · 1 tarea');await page.waitForFunction(()=>document.querySelector('fieldset input:not([type])')?.value==='Tarea sintética original');await page.$eval('fieldset input:not([type])',input=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Corrección sintética conservada');input.dispatchEvent(new Event('input',{bubbles:true}));});await page.type('textarea','Revisión sintética conservada sin aplicar tareas');await click(page,'Guardar correcciones');\n",
+              "previousText": "    await click(page,'Para revisar · 2026-10-14 · 1 tareas');await page.waitForFunction(()=>document.querySelector('fieldset input:not([type])')?.value==='Tarea sintética original');await page.$eval('fieldset input:not([type])',input=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Corrección sintética conservada');input.dispatchEvent(new Event('input',{bubbles:true}));});await page.type('textarea','Revisión sintética conservada sin aplicar tareas');await click(page,'Guardar correcciones');\n"
+            },
+            {
+              "currentOffsetCharacters": 13795,
               "currentText": "   await click(page,'Cerrar');await retained(page);if(mode!=='pending-usage'){await page.evaluate(()=>window.retentionOldRetry());assert.equal(posts.length,1);}assert.equal((await state(page)).localFileText,true);assert.equal(await page.$eval('#plan-import-title',element=>element.tagName),'BUTTON');assert.deepEqual(await references(page),[entry]);assert.equal(posts.length,1);await click(page,'Importar cronograma o presupuesto');await retained(page);assert.equal((await state(page)).retry,false);assert.equal((await state(page)).remove,false);if(mode==='edit'){assert.deepEqual((await state(page)).titles,before.titles);assert.equal((await state(page)).reason,before.reason);}assert.equal(posts.length,1);await click(page,'Comprobar resultado');await page.waitForFunction(()=>![...document.querySelectorAll('button')].find(button=>button.textContent==='Comprobar resultado').disabled);assert.equal(operationReads.length,2);\n",
               "previousText": "   await click(page,'Cerrar');await retained(page);if(mode!=='pending-usage'){await page.evaluate(()=>window.retentionOldRetry());assert.equal(posts.length,1);}assert.equal((await state(page)).localFileText,true);assert.equal(await page.$eval('#plan-import-title',element=>element.tagName),'BUTTON');assert.deepEqual(await references(page),[entry]);assert.equal(posts.length,1);await click(page,'Importar PDF, imagen o Excel');await retained(page);assert.equal((await state(page)).retry,false);assert.equal((await state(page)).remove,false);if(mode==='edit'){assert.deepEqual((await state(page)).titles,before.titles);assert.equal((await state(page)).reason,before.reason);}assert.equal(posts.length,1);await click(page,'Comprobar resultado');await page.waitForFunction(()=>![...document.querySelectorAll('button')].find(button=>button.textContent==='Comprobar resultado').disabled);assert.equal(operationReads.length,2);\n"
             }
@@ -77358,9 +77363,9 @@
           "path": "scripts/verify-plan-import-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "d85d5f2d21f3da43dcb66216d05798d9b2b5cdf2134b212be493a386a00301af",
-          "currentSha256": "a86a0270ff71cacd61f37d8962abd9aade90b8d9f370faba251cb298926528a3",
+          "currentSha256": "5de26a0168dea015bf73414a344b49d1653ad17f722ba96386360b8e923b246d",
           "previousBytes": 158786,
-          "currentBytes": 158941,
+          "currentBytes": 159838,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 2145,
@@ -77368,92 +77373,162 @@
               "previousText": "const copiedFiles=['plan-import-panel.js','plan-import-panel.module.css','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-recovery-journal.mjs','participant-office-account-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','private-bank-account-format.mjs','site-purchase-view.mjs','company-channel-view.mjs','workspace-recovery-storage.mjs','workspace-recovery-panel.js','workspace.module.css','template-send-view.mjs','plan-source-curve.js','plan-source-curve.mjs','plan-source-curve.module.css','plan-import-calendar-suggestions.mjs','plan-import-usage-view.mjs','plan-baseline-view.mjs','plan-partida-source-preview.js','plan-partida-source-preview.mjs','plan-partida-source-preview.module.css','plan-partida-measurement-preview.js','plan-partida-measurement-preview.mjs','plan-partida-budget-preview.js','plan-partida-budget-preview.mjs'];\n"
             },
             {
-              "currentOffsetCharacters": 28485,
+              "currentOffsetCharacters": 20331,
+              "currentText": "const waitForFileDigest=(page,hash)=>page.waitForFunction(value=>document.querySelector('[data-plan-file-details] small')?.textContent==='Fuente SHA-256: '+value,{},hash);\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 28657,
               "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await wait(page,'Autorizo enviar este cronograma a OpenAI');\n",
               "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await wait(page,'Autorizo enviar este cronograma a OpenAI');\n"
             },
             {
-              "currentOffsetCharacters": 28908,
+              "currentOffsetCharacters": 29080,
               "currentText": "  await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled&&[...document.querySelectorAll('button')].some(button=>button.textContent==='Consultando…'&&button.disabled));\n",
               "previousText": "  await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled&&[...document.querySelectorAll('button')].some(button=>button.textContent==='Procesando…'&&button.disabled));\n"
             },
             {
-              "currentOffsetCharacters": 41314,
-              "currentText": "   await click(page,'Cerrar');await click(page,'Importar cronograma o presupuesto');await click(page,'Para revisar · 2026-10-07 · 1 tareas');\n",
-              "previousText": "   await click(page,'Cerrar');await click(page,'Importar PDF, imagen o Excel');await click(page,'Para revisar · 2026-10-07 · 1 tareas');\n"
+              "currentOffsetCharacters": 30559,
+              "currentText": "   await wait(page,'Se agregarán 2 tareas nuevas.');\n   const savedDraftLabel='Para revisar · 2026-10-06 · 2 tareas',otherDraftLabel='Para revisar · 2026-10-05 · 1 tarea',discardLabel='Descartar correcciones y consultar',canonicalBefore=JSON.stringify(draft),otherCanonicalBefore=JSON.stringify(consultDraft);\n",
+              "previousText": "   const savedDraftLabel='Para revisar · 2026-10-06 · 2 tareas',otherDraftLabel='Para revisar · 2026-10-05 · 1 tareas',discardLabel='Descartar correcciones y consultar',canonicalBefore=JSON.stringify(draft),otherCanonicalBefore=JSON.stringify(consultDraft);\n"
             },
             {
-              "currentOffsetCharacters": 47781,
+              "currentOffsetCharacters": 33266,
+              "currentText": "   await click(page,otherDraftLabel);await wait(page,'Tenés correcciones sin guardar. Las conservamos');assert.deepEqual(await editableState(),localEdits);assert.equal(draftReads.length,0);assert.equal(posts.length,1);assert.equal(JSON.stringify(consultDraft),otherCanonicalBefore);await waitForFileDigest(page,'b'.repeat(64));\n   const fileDetails='[data-plan-file-details]';\n   await wait(page,'Se agregará 1 tarea nueva.');\n   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()==='Descargar fuente'&&!button.closest('details'))));\n   assert.equal(await page.$eval(fileDetails,el=>el.open),false);\n   assert.equal(await page.$eval(fileDetails+' summary',el=>el.textContent),'Detalles del archivo');\n   await page.focus(fileDetails+' summary');await page.keyboard.press('Enter');\n   await wait(page,'Fuente SHA-256: '+'b'.repeat(64));\n   await page.keyboard.press('Enter');assert.equal(await page.$eval(fileDetails,el=>el.open),false);\n   assert.equal(posts.length,1);\n",
+              "previousText": "   await click(page,otherDraftLabel);await wait(page,'Tenés correcciones sin guardar. Las conservamos');assert.deepEqual(await editableState(),localEdits);assert.equal(draftReads.length,0);assert.equal(posts.length,1);assert.equal(JSON.stringify(consultDraft),otherCanonicalBefore);await wait(page,'Fuente SHA-256: '+'b'.repeat(64));\n"
+            },
+            {
+              "currentOffsetCharacters": 35648,
+              "currentText": "   const discardButton=await page.evaluateHandle(label=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===label),discardLabel);await discardButton.asElement().focus();assert.equal(await discardButton.evaluate(button=>button.getBoundingClientRect().height>=44&&document.activeElement===button),true);await page.keyboard.press('Enter');await discardButton.dispose();const freshResult=await (await freshRead).json();assert.equal(freshResult.draft.id,'plan-protection-other');assert.equal(freshResult.draft.revision,4);await wait(page,'Estado actualizado. La consulta no repite la IA');await waitForFileDigest(page,'d'.repeat(64));\n",
+              "previousText": "   const discardButton=await page.evaluateHandle(label=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===label),discardLabel);await discardButton.asElement().focus();assert.equal(await discardButton.evaluate(button=>button.getBoundingClientRect().height>=44&&document.activeElement===button),true);await page.keyboard.press('Enter');await discardButton.dispose();const freshResult=await (await freshRead).json();assert.equal(freshResult.draft.id,'plan-protection-other');assert.equal(freshResult.draft.revision,4);await wait(page,'Estado actualizado. La consulta no repite la IA');await wait(page,'Fuente SHA-256: '+'d'.repeat(64));\n"
+            },
+            {
+              "currentOffsetCharacters": 40021,
+              "currentText": "   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Aplicar 1 tarea').disabled),true);\n",
+              "previousText": "   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Aplicar 1 tareas').disabled),true);\n"
+            },
+            {
+              "currentOffsetCharacters": 40561,
+              "currentText": "   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Aplicar 1 tarea').disabled),true);\n   const boxes=await page.$$('input[type=checkbox]');await boxes.at(-1).click();await click(page,'Aplicar 1 tarea');await wait(page,'1 tarea aplicada con recibo');assert.equal(posts.length,2);\n",
+              "previousText": "   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Aplicar 1 tareas').disabled),true);\n   const boxes=await page.$$('input[type=checkbox]');await boxes.at(-1).click();await click(page,'Aplicar 1 tareas');await wait(page,'1 tareas aplicadas con recibo');assert.equal(posts.length,2);\n"
+            },
+            {
+              "currentOffsetCharacters": 41048,
+              "currentText": "   const boxes=await page.$$('input[type=checkbox]');await boxes.at(-1).click();await click(page,'Aplicar 1 tarea');\n   if(mode==='recover'){await wait(page,'Intento pendiente de comprobación');await click(page,'Comprobar resultado');await wait(page,'1 tarea aplicada con recibo');assert.equal(recoveries.length,1);}else await wait(page,'1 tarea aplicada con recibo');assert.equal(posts.length,2);\n",
+              "previousText": "   const boxes=await page.$$('input[type=checkbox]');await boxes.at(-1).click();await click(page,'Aplicar 1 tareas');\n   if(mode==='recover'){await wait(page,'Intento pendiente de comprobación');await click(page,'Comprobar resultado');await wait(page,'1 tareas aplicadas con recibo');assert.equal(recoveries.length,1);}else await wait(page,'1 tareas aplicadas con recibo');assert.equal(posts.length,2);\n"
+            },
+            {
+              "currentOffsetCharacters": 42240,
+              "currentText": "   await click(page,'Cerrar');await click(page,'Importar cronograma o presupuesto');await click(page,'Para revisar · 2026-10-07 · 1 tarea');\n   await waitForFileDigest(page,'c'.repeat(64));assert.equal(await page.$eval('fieldset input:not([type])',e=>e.value),'Estructura sintética pendiente');\n",
+              "previousText": "   await click(page,'Cerrar');await click(page,'Importar PDF, imagen o Excel');await click(page,'Para revisar · 2026-10-07 · 1 tareas');\n   await wait(page,'Fuente SHA-256: '+'c'.repeat(64));assert.equal(await page.$eval('fieldset input:not([type])',e=>e.value),'Estructura sintética pendiente');\n"
+            },
+            {
+              "currentOffsetCharacters": 42782,
+              "currentText": "   await click(page,'Aplicado · 2026-10-06 · 1 tarea');await waitForFileDigest(page,'b'.repeat(64));await wait(page,'Recibo confirmado: receipt-fixture');\n",
+              "previousText": "   await click(page,'Aplicado · 2026-10-06 · 1 tareas');await wait(page,'Fuente SHA-256: '+'b'.repeat(64));await wait(page,'Recibo confirmado: receipt-fixture');\n"
+            },
+            {
+              "currentOffsetCharacters": 43467,
+              "currentText": "   await click(page,'Aplicado · 2026-10-06 · 1 tarea');const sameDecisionResult=await (await sameDecisionRead).json();assert.equal(sameDecisionResult.draft.id,'plan-fixture');assert.equal(sameDecisionResult.draft.decision.receiptId,'receipt-fixture');\n   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Aplicado · 2026-10-06 · 1 tarea'&&!button.disabled));await wait(page,'Recibo confirmado: receipt-fixture');\n",
+              "previousText": "   await click(page,'Aplicado · 2026-10-06 · 1 tareas');const sameDecisionResult=await (await sameDecisionRead).json();assert.equal(sameDecisionResult.draft.id,'plan-fixture');assert.equal(sameDecisionResult.draft.decision.receiptId,'receipt-fixture');\n   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Aplicado · 2026-10-06 · 1 tareas'&&!button.disabled));await wait(page,'Recibo confirmado: receipt-fixture');\n"
+            },
+            {
+              "currentOffsetCharacters": 48691,
               "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(sourceFile);await page.click('input[type=checkbox]');await click(page,'Extraer borrador');await wait(page,'Compará cada fila con el archivo');\n",
               "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(sourceFile);await page.click('input[type=checkbox]');await click(page,'Extraer borrador');await wait(page,'Compará cada fila con el archivo');\n"
             },
             {
-              "currentOffsetCharacters": 48739,
+              "currentOffsetCharacters": 49649,
               "currentText": "  if(mode==='decision-rejected-reload'){await wait(page,'La confirmación no llegó.');assert.equal(posts.length,2);await page.reload({waitUntil:'networkidle0'});await wait(page,'Intento pendiente de comprobación');assert.equal(posts.length,2);await click(page,'Comprobar recibo');await wait(page,'El servidor registró el rechazo de esta decisión');assert.equal(posts.length,2);await click(page,'Cerrar');await click(page,'Importar cronograma o presupuesto');await click(page,'Para revisar · 2026-10-06 · 2 tareas');await wait(page,'Compará cada fila con el archivo');await changeTitle(0,'Fundaciones corregidas');await page.type('textarea','Revisado después de recuperar rechazo');}\n",
               "previousText": "  if(mode==='decision-rejected-reload'){await wait(page,'La confirmación no llegó.');assert.equal(posts.length,2);await page.reload({waitUntil:'networkidle0'});await wait(page,'Intento pendiente de comprobación');assert.equal(posts.length,2);await click(page,'Comprobar recibo');await wait(page,'El servidor registró el rechazo de esta decisión');assert.equal(posts.length,2);await click(page,'Cerrar');await click(page,'Importar PDF, imagen o Excel');await click(page,'Para revisar · 2026-10-06 · 2 tareas');await wait(page,'Compará cada fila con el archivo');await changeTitle(0,'Fundaciones corregidas');await page.type('textarea','Revisado después de recuperar rechazo');}\n"
             },
             {
-              "currentOffsetCharacters": 55519,
+              "currentOffsetCharacters": 56429,
               "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(sourceFile);await page.click('input[type=checkbox]');await click(page,'Extraer borrador');\n",
               "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(sourceFile);await page.click('input[type=checkbox]');await click(page,'Extraer borrador');\n"
             },
             {
-              "currentOffsetCharacters": 63027,
+              "currentOffsetCharacters": 63937,
               "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(spreadsheetFile);await wait(page,'Alcance del Excel');assert.equal(await page.$eval('input[type=checkbox]',e=>e.disabled),true);assert.equal(posts.length,0);await page.select('select','MONTHLY_RUBROS');await wait(page,'No se envía a OpenAI ni se ejecutan macros');assert.equal(await page.$eval('input[type=checkbox]',e=>e.checked),false);await page.click('input[type=checkbox]');await click(page,'Extraer borrador');\n",
               "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(spreadsheetFile);await wait(page,'Alcance del Excel');assert.equal(await page.$eval('input[type=checkbox]',e=>e.disabled),true);assert.equal(posts.length,0);await page.select('select','MONTHLY_RUBROS');await wait(page,'No se envía a OpenAI ni se ejecutan macros');assert.equal(await page.$eval('input[type=checkbox]',e=>e.checked),false);await page.click('input[type=checkbox]');await click(page,'Extraer borrador');\n"
             },
             {
-              "currentOffsetCharacters": 71331,
+              "currentOffsetCharacters": 72241,
               "currentText": "  await page.goto(origin+'?linkFixture=measurement-preview',{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(cypFile);await wait(page,'Alcance del Excel');await page.select('select','CYP_PARTIDAS');await wait(page,'perfil CyP v2');await page.click('input[type=checkbox]');await click(page,'Extraer borrador');\n",
               "previousText": "  await page.goto(origin+'?linkFixture=measurement-preview',{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(cypFile);await wait(page,'Alcance del Excel');await page.select('select','CYP_PARTIDAS');await wait(page,'perfil CyP v2');await page.click('input[type=checkbox]');await click(page,'Extraer borrador');\n"
             },
             {
-              "currentOffsetCharacters": 87218,
+              "currentOffsetCharacters": 88128,
               "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(monthlyCurveFile);await page.select('select','MONTHLY_RUBROS_CURVE');await wait(page,'Sólo administradores y directores');await page.click('input[type=checkbox]');await click(page,'Extraer borrador');\n",
               "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(monthlyCurveFile);await page.select('select','MONTHLY_RUBROS_CURVE');await wait(page,'Sólo administradores y directores');await page.click('input[type=checkbox]');await click(page,'Extraer borrador');\n"
             },
             {
-              "currentOffsetCharacters": 98504,
+              "currentOffsetCharacters": 91029,
+              "currentText": "   await page.$$eval('input[type=date]',inputs=>{const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;for(const [i,input] of inputs.entries()){setter.call(input,i%2?'2026-11-05':'2026-11-01');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}});await click(page,'Confirmé esta fila con la fuente');await page.type('textarea','Fuente y alcance revisados por administración sintética');await (await page.$$('input[type=checkbox]')).at(-1).click();assert.equal(await page.$$eval('button',buttons=>buttons.find(b=>b.textContent==='Aplicar 1 tarea').disabled),true);await click(page,'Guardar correcciones');await wait(page,'Correcciones guardadas para revisión.');await page.type('textarea','Aprobación sintética del rubro elegido');await (await page.$$('input[type=checkbox]')).at(-1).click();\n   if(mode==='curve-review'&&[320,1280].includes(width))await page.screenshot({path:path.join(scratch,`plan-import-monthly-curve-${width}.png`),fullPage:true});await click(page,'Aplicar 1 tarea');\n",
+              "previousText": "   await page.$$eval('input[type=date]',inputs=>{const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;for(const [i,input] of inputs.entries()){setter.call(input,i%2?'2026-11-05':'2026-11-01');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}});await click(page,'Confirmé esta fila con la fuente');await page.type('textarea','Fuente y alcance revisados por administración sintética');await (await page.$$('input[type=checkbox]')).at(-1).click();assert.equal(await page.$$eval('button',buttons=>buttons.find(b=>b.textContent==='Aplicar 1 tareas').disabled),true);await click(page,'Guardar correcciones');await wait(page,'Correcciones guardadas para revisión.');await page.type('textarea','Aprobación sintética del rubro elegido');await (await page.$$('input[type=checkbox]')).at(-1).click();\n   if(mode==='curve-review'&&[320,1280].includes(width))await page.screenshot({path:path.join(scratch,`plan-import-monthly-curve-${width}.png`),fullPage:true});await click(page,'Aplicar 1 tareas');\n"
+            },
+            {
+              "currentOffsetCharacters": 92419,
+              "currentText": "   await wait(page,'1 tarea aplicada con recibo');await wait(page,'Esta curva conserva la previsión');assert.equal(await page.$eval('[data-task-count]',e=>e.textContent),'Tareas canónicas recibidas: 1');assert.deepEqual(posts.map(p=>p.action),['UPLOAD','EDIT','APPLY']);assert.deepEqual(await browserReferences(page),[]);\n",
+              "previousText": "   await wait(page,'1 tareas aplicadas con recibo');await wait(page,'Esta curva conserva la previsión');assert.equal(await page.$eval('[data-task-count]',e=>e.textContent),'Tareas canónicas recibidas: 1');assert.deepEqual(posts.map(p=>p.action),['UPLOAD','EDIT','APPLY']);assert.deepEqual(await browserReferences(page),[]);\n"
+            },
+            {
+              "currentOffsetCharacters": 99410,
               "currentText": "   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(cypCurveFile);assert.equal(await page.$eval('input[type=checkbox]',element=>element.disabled),true);assert.equal(posts.length,0);\n",
               "previousText": "   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await (await page.$('input[type=file]')).uploadFile(cypCurveFile);assert.equal(await page.$eval('input[type=checkbox]',element=>element.disabled),true);assert.equal(posts.length,0);\n"
             },
             {
-              "currentOffsetCharacters": 109733,
+              "currentOffsetCharacters": 100629,
+              "currentText": "    await click(page,'Consultar borradores registrados');await click(page,(mode==='cyp-curve-pending-revoked'?'Extracción en curso':'Extracción no confirmada')+' · 2026-10-10 · 0 tareas');await waitForFileDigest(page,cypCurveSource.sha256);assert.equal(await page.$('fieldset'),null);assert.equal(await page.$('[aria-label=\"Tabla completa de inversión prevista\"]'),null);assert.equal(draft.financialSource,true);assert.equal(draft.spreadsheet,undefined);\n    revoked=true;await click(page,'Descargar fuente');await page.waitForFunction(()=>!document.querySelector('[data-plan-file-details]')&&!document.body.innerText.includes('Inversión prevista del archivo'));assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false);assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent.includes(' · 2026-10-10 · 0 tareas'))),false);assert.deepEqual(await browserReferences(page),[reference]);assert.equal(posts.length,1);assert.equal(analysisCalls,0);\n",
+              "previousText": "    await click(page,'Consultar borradores registrados');await click(page,(mode==='cyp-curve-pending-revoked'?'Extracción en curso':'Extracción no confirmada')+' · 2026-10-10 · 0 tareas');await wait(page,'Fuente SHA-256: '+cypCurveSource.sha256);assert.equal(await page.$('fieldset'),null);assert.equal(await page.$('[aria-label=\"Tabla completa de inversión prevista\"]'),null);assert.equal(draft.financialSource,true);assert.equal(draft.spreadsheet,undefined);\n    revoked=true;await click(page,'Descargar fuente');await page.waitForFunction(()=>!document.body.innerText.includes('Fuente SHA-256:')&&!document.body.innerText.includes('Inversión prevista del archivo'));assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false);assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent.includes(' · 2026-10-10 · 0 tareas'))),false);assert.deepEqual(await browserReferences(page),[reference]);assert.equal(posts.length,1);assert.equal(analysisCalls,0);\n"
+            },
+            {
+              "currentOffsetCharacters": 110632,
               "currentText": "  const selectDraft=async()=>{await click(page,'Importar cronograma o presupuesto');await click(page,'Para revisar · 2026-10-10 · 190 tareas');await wait(page,'Extracción local de 190 partidas');};\n",
               "previousText": "  const selectDraft=async()=>{await click(page,'Importar PDF, imagen o Excel');await click(page,'Para revisar · 2026-10-10 · 190 tareas');await wait(page,'Extracción local de 190 partidas');};\n"
             },
             {
-              "currentOffsetCharacters": 117469,
+              "currentOffsetCharacters": 111512,
+              "currentText": "  assert.equal(await page.$$eval('[data-plan-calendar] button',buttons=>buttons.find(button=>button.textContent==='Completar 190 partidas en el borrador').disabled),false);assert.equal(posts.length,0);revoked=true;await click(page,'Descargar fuente');await page.waitForFunction(()=>!document.querySelector('[data-plan-calendar]')&&!document.querySelector('[data-plan-file-details]'));\n",
+              "previousText": "  assert.equal(await page.$$eval('[data-plan-calendar] button',buttons=>buttons.find(button=>button.textContent==='Completar 190 partidas en el borrador').disabled),false);assert.equal(posts.length,0);revoked=true;await click(page,'Descargar fuente');await page.waitForFunction(()=>!document.querySelector('[data-plan-calendar]')&&!document.body.innerText.includes('Fuente SHA-256:'));\n"
+            },
+            {
+              "currentOffsetCharacters": 118367,
               "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await click(page,savedLabel);await page.waitForFunction(()=>document.querySelector('[data-plan-import] fieldset')?.disabled===false);assert.equal(draftReads.length,1);assert.deepEqual(await browserReferences(page),[]);\n",
               "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await click(page,savedLabel);await page.waitForFunction(()=>document.querySelector('[data-plan-import] fieldset')?.disabled===false);assert.equal(draftReads.length,1);assert.deepEqual(await browserReferences(page),[]);\n"
             },
             {
-              "currentOffsetCharacters": 118319,
+              "currentOffsetCharacters": 119217,
               "currentText": "   const readsBefore=apiRequests.length;await click(page,'Cerrar');await page.waitForFunction(()=>!document.querySelector('[data-plan-import] textarea')&&[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent==='Importar cronograma o presupuesto'&&!button.disabled));assert.equal(await page.$('[aria-label=\"'+choiceLabel+'\"]'),null);assert.equal(apiRequests.length,readsBefore);assert.equal(posts.length,0);assert.equal(JSON.stringify(draft),canonicalBefore);\n",
               "previousText": "   const readsBefore=apiRequests.length;await click(page,'Cerrar');await page.waitForFunction(()=>!document.querySelector('[data-plan-import] textarea')&&[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent==='Importar PDF, imagen o Excel'&&!button.disabled));assert.equal(await page.$('[aria-label=\"'+choiceLabel+'\"]'),null);assert.equal(apiRequests.length,readsBefore);assert.equal(posts.length,0);assert.equal(JSON.stringify(draft),canonicalBefore);\n"
             },
             {
-              "currentOffsetCharacters": 122040,
-              "currentText": "    await click(page,'Importar cronograma o presupuesto');await wait(page,'Intento pendiente de comprobación');assert.deepEqual(await browserReferences(page),[entry]);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false);assert.equal(JSON.stringify(draft),canonicalAfterDispatch);assert.equal(posts.length,1);await click(page,'Comprobar resultado');await wait(page,'1 tareas aplicadas con recibo');assert.equal(posts.length,1);assert.equal(recoveries.length,1);assert.deepEqual(await browserReferences(page),[]);assert.equal(await page.$eval('[data-task-count]',element=>element.textContent),'Tareas canónicas recibidas: 1');\n",
+              "currentOffsetCharacters": 121527,
+              "currentText": "    await click(page,'Aplicar 1 tarea');let deadline;try{await Promise.race([decisionObserved,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('Close-review held decision not observed')),20000);})]);}finally{clearTimeout(deadline);}\n",
+              "previousText": "    await click(page,'Aplicar 1 tareas');let deadline;try{await Promise.race([decisionObserved,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('Close-review held decision not observed')),20000);})]);}finally{clearTimeout(deadline);}\n"
+            },
+            {
+              "currentOffsetCharacters": 122937,
+              "currentText": "    await click(page,'Importar cronograma o presupuesto');await wait(page,'Intento pendiente de comprobación');assert.deepEqual(await browserReferences(page),[entry]);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false);assert.equal(JSON.stringify(draft),canonicalAfterDispatch);assert.equal(posts.length,1);await click(page,'Comprobar resultado');await wait(page,'1 tarea aplicada con recibo');assert.equal(posts.length,1);assert.equal(recoveries.length,1);assert.deepEqual(await browserReferences(page),[]);assert.equal(await page.$eval('[data-task-count]',element=>element.textContent),'Tareas canónicas recibidas: 1');\n",
               "previousText": "    await click(page,'Importar PDF, imagen o Excel');await wait(page,'Intento pendiente de comprobación');assert.deepEqual(await browserReferences(page),[entry]);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false);assert.equal(JSON.stringify(draft),canonicalAfterDispatch);assert.equal(posts.length,1);await click(page,'Comprobar resultado');await wait(page,'1 tareas aplicadas con recibo');assert.equal(posts.length,1);assert.equal(recoveries.length,1);assert.deepEqual(await browserReferences(page),[]);assert.equal(await page.$eval('[data-task-count]',element=>element.textContent),'Tareas canónicas recibidas: 1');\n"
             },
             {
-              "currentOffsetCharacters": 124287,
+              "currentOffsetCharacters": 125182,
               "currentText": "     const button=await page.evaluateHandle(label=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent===label),discardLabel);await button.asElement().focus();assert.equal(await button.evaluate(element=>element.getBoundingClientRect().height>=44&&document.activeElement===element),true);await page.keyboard.press('Enter');await button.dispose();await page.waitForFunction(()=>!document.querySelector('[data-plan-import] textarea'));assert.equal(await page.evaluate(()=>document.activeElement?.textContent==='Importar cronograma o presupuesto'),true);assert.equal(apiRequests.length,readsBefore);assert.equal(posts.length,0);assert.equal(JSON.stringify(draft),canonicalBefore);assert.deepEqual(await browserReferences(page),[]);await click(page,'Importar cronograma o presupuesto');await click(page,savedLabel);await page.waitForFunction(()=>document.querySelectorAll('[data-plan-import] fieldset').length===2&&!document.querySelector('[data-plan-import] fieldset').disabled);assert.deepEqual(await editableState(),canonicalState);assert.equal(JSON.stringify(draft),canonicalBefore);assert.equal(posts.length,0);\n",
               "previousText": "     const button=await page.evaluateHandle(label=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent===label),discardLabel);await button.asElement().focus();assert.equal(await button.evaluate(element=>element.getBoundingClientRect().height>=44&&document.activeElement===element),true);await page.keyboard.press('Enter');await button.dispose();await page.waitForFunction(()=>!document.querySelector('[data-plan-import] textarea'));assert.equal(await page.evaluate(()=>document.activeElement?.textContent==='Importar PDF, imagen o Excel'),true);assert.equal(apiRequests.length,readsBefore);assert.equal(posts.length,0);assert.equal(JSON.stringify(draft),canonicalBefore);assert.deepEqual(await browserReferences(page),[]);await click(page,'Importar PDF, imagen o Excel');await click(page,savedLabel);await page.waitForFunction(()=>document.querySelectorAll('[data-plan-import] fieldset').length===2&&!document.querySelector('[data-plan-import] fieldset').disabled);assert.deepEqual(await editableState(),canonicalState);assert.equal(JSON.stringify(draft),canonicalBefore);assert.equal(posts.length,0);\n"
             },
             {
-              "currentOffsetCharacters": 134380,
+              "currentOffsetCharacters": 135275,
               "currentText": "    await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('[data-plan-import] input[type=file]')?.disabled===false);await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await (await page.$('[data-plan-import] input[type=checkbox]')).click();\n",
               "previousText": "    await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('[data-plan-import] input[type=file]')?.disabled===false);await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await (await page.$('[data-plan-import] input[type=checkbox]')).click();\n"
             },
             {
-              "currentOffsetCharacters": 137165,
+              "currentOffsetCharacters": 138060,
               "currentText": "    await page.click(variant==='context'?'[data-link-context]':'[data-link-hide]');if(variant==='unmount')await page.waitForSelector('[data-plan-import]',{hidden:true});else await page.waitForFunction(()=>!document.querySelector('[data-plan-import] fieldset')&&[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent==='Importar cronograma o presupuesto'));\n",
               "previousText": "    await page.click(variant==='context'?'[data-link-context]':'[data-link-hide]');if(variant==='unmount')await page.waitForSelector('[data-plan-import]',{hidden:true});else await page.waitForFunction(()=>!document.querySelector('[data-plan-import] fieldset')&&[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent==='Importar PDF, imagen o Excel'));\n"
             },
             {
-              "currentOffsetCharacters": 145922,
+              "currentOffsetCharacters": 146817,
               "currentText": "  await page.goto(origin+'?investmentFixture=1',{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await(await page.$('input[type=file]')).uploadFile(investmentFile);\n",
               "previousText": "  await page.goto(origin+'?investmentFixture=1',{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false);await(await page.$('input[type=file]')).uploadFile(investmentFile);\n"
             }
@@ -77718,9 +77793,9 @@
           "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "a6757ebe387dca9082869c41e2b3cabca0224aea8a4e13613681cd1998a64075",
-          "currentSha256": "7d5e8467c4ec1062eb60d476a305edcf9a684aef7a683a38d83ae6c261cdcd75",
+          "currentSha256": "dfed41fc38684c504cb5c93950898d6058651c1a4ab77d6449157fb4a80c89eb",
           "previousBytes": 62263,
-          "currentBytes": 62784,
+          "currentBytes": 62782,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 9032,
@@ -77733,32 +77808,42 @@
               "previousText": "  await click(page,'Importar PDF, imagen o Excel');await waitText(page,'Autorizo enviar este cronograma a OpenAI');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');\n"
             },
             {
-              "currentOffsetCharacters": 41523,
+              "currentOffsetCharacters": 23573,
+              "currentText": "  await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tarea');\n",
+              "previousText": "  await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tareas');\n"
+            },
+            {
+              "currentOffsetCharacters": 41522,
               "currentText": "  await click(page,'Importar cronograma o presupuesto');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(mode==='invalid-source'?invalidSourceFile:mode==='oversized-source'?oversizedSourceFile:sourceFile);\n  if(mode!=='oversized-source'){await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');}\n",
               "previousText": "  await click(page,'Importar PDF, imagen o Excel');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(mode==='invalid-source'?invalidSourceFile:mode==='oversized-source'?oversizedSourceFile:sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');\n"
             },
             {
-              "currentOffsetCharacters": 41904,
+              "currentOffsetCharacters": 41903,
               "currentText": "   await waitText(page,mode==='invalid-source'?'El archivo fue rechazado antes de reservar un borrador':'El PDF, Excel o CSV debe pesar hasta 3 MB y la imagen hasta 2 MB.');assert.equal(posts.length,mode==='invalid-source'?1:0);assert.equal(rejectedAttachCalls,0);assert.deepEqual(await browserReferences(page),[]);\n   if(mode==='oversized-source'){\n    assert.equal(await page.$eval('[data-plan-import] input[type=file]',input=>input.value===''&&input.files?.length===0),true,'Oversized selection must clear the file input');\n    assert.equal(await page.$eval('[data-plan-import] button[type=submit]',button=>button.textContent.trim()==='Extraer borrador'&&button.disabled),true,'Oversized selection must keep extraction disabled');\n   }\n",
               "previousText": "   await waitText(page,mode==='invalid-source'?'El archivo fue rechazado antes de reservar un borrador':'El PDF o Excel debe pesar hasta 3 MB');assert.equal(posts.length,mode==='invalid-source'?1:0);assert.equal(rejectedAttachCalls,0);assert.deepEqual(await browserReferences(page),[]);\n"
             },
             {
-              "currentOffsetCharacters": 48633,
+              "currentOffsetCharacters": 43337,
+              "currentText": "  if(decisionMode){await waitText(page,'Compará cada fila con el archivo');await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tarea');}\n",
+              "previousText": "  if(decisionMode){await waitText(page,'Compará cada fila con el archivo');await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tareas');}\n"
+            },
+            {
+              "currentOffsetCharacters": 48631,
               "currentText": "  if(globalMode){await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());await click(page,'Comprobar recibo');await waitText(page,'Venció el plazo de la extracción.');await click(page,'Importar cronograma o presupuesto');}else{await click(page,'Comprobar resultado');await waitText(page,'Venció el plazo de procesamiento de este intento. Esto no comprueba ausencia de consumo de IA.');}\n",
               "previousText": "  if(globalMode){await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());await click(page,'Comprobar recibo');await waitText(page,'Venció el plazo de la extracción.');await click(page,'Importar PDF, imagen o Excel');}else{await click(page,'Comprobar resultado');await waitText(page,'Venció el plazo de procesamiento de este intento. Esto no comprueba ausencia de consumo de IA.');}\n"
             },
             {
-              "currentOffsetCharacters": 53549,
+              "currentOffsetCharacters": 53547,
               "currentText": "   await click(page,'Importar cronograma o presupuesto');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'Reopening never reuses a previous retry authorization');assert.equal(posts.length,1);const readsBeforeReopenCheck=recoveryReads.length;await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');await page.waitForFunction(()=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent==='Reintentar los mismos datos'&&!button.disabled));assert.equal(recoveryReads.length,readsBeforeReopenCheck+1);assert.equal(recoveryReads.at(-1),reference.operationId,'Only a fresh GET of the exact same UUID can authorize the preserved RAM snapshot');await page.evaluate(()=>window.closedPlanPreviousRetry());assert.equal(posts.length,1,'A stale callback cannot spend the new retry authorization');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);\n",
               "previousText": "   await click(page,'Importar PDF, imagen o Excel');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'Reopening never reuses a previous retry authorization');assert.equal(posts.length,1);const readsBeforeReopenCheck=recoveryReads.length;await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');await page.waitForFunction(()=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent==='Reintentar los mismos datos'&&!button.disabled));assert.equal(recoveryReads.length,readsBeforeReopenCheck+1);assert.equal(recoveryReads.at(-1),reference.operationId,'Only a fresh GET of the exact same UUID can authorize the preserved RAM snapshot');await page.evaluate(()=>window.closedPlanPreviousRetry());assert.equal(posts.length,1,'A stale callback cannot spend the new retry authorization');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);\n"
             },
             {
-              "currentOffsetCharacters": 57199,
+              "currentOffsetCharacters": 57197,
               "currentText": "   await click(page,'Importar cronograma o presupuesto');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');assert.deepEqual(await browserReferences(page),[legacyReference]);\n",
               "previousText": "   await click(page,'Importar PDF, imagen o Excel');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');assert.deepEqual(await browserReferences(page),[legacyReference]);\n"
             },
             {
-              "currentOffsetCharacters": 58880,
+              "currentOffsetCharacters": 58878,
               "currentText": "   await click(page,'Importar cronograma o presupuesto');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);assert.equal(posts.length,expectedPosts);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'Closing resets retry authorization; a reload retains only its durable GET reference');\n",
               "previousText": "   await click(page,'Importar PDF, imagen o Excel');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);assert.equal(posts.length,expectedPosts);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'Closing resets retry authorization; a reload retains only its durable GET reference');\n"
             }
@@ -77768,9 +77853,9 @@
           "path": "scripts/verify-workspace-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "fa61a745984c731028ef0dc329cdcad353bb9e59bac5a12e007c8e8ccc6c0eb6",
-          "currentSha256": "6e1962460bb440b80fb47bcc48fb946ed931b8883a884d038f801600e5c97fb3",
+          "currentSha256": "ca73fbc57e0f05e2638569e6d5439869e75787416a30ed0d0a3c47b190b42a98",
           "previousBytes": 212188,
-          "currentBytes": 212214,
+          "currentBytes": 212211,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 9331,
@@ -77779,8 +77864,13 @@
             },
             {
               "currentOffsetCharacters": 25176,
-              "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"project-preparation-title\"]')?.getAttribute('aria-busy')==='false');await showWorkspaceSection(page,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tareas');await click(page,'Para revisar · 2026-10-06 · 1 tareas');await waitText(page,'Compará cada fila con el archivo');\n",
+              "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"project-preparation-title\"]')?.getAttribute('aria-busy')==='false');await showWorkspaceSection(page,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});await click(page,'Importar cronograma o presupuesto');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tarea');await click(page,'Para revisar · 2026-10-06 · 1 tarea');await waitText(page,'Compará cada fila con el archivo');\n",
               "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"project-preparation-title\"]')?.getAttribute('aria-busy')==='false');await showWorkspaceSection(page,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tareas');await click(page,'Para revisar · 2026-10-06 · 1 tareas');await waitText(page,'Compará cada fila con el archivo');\n"
+            },
+            {
+              "currentOffsetCharacters": 27025,
+              "currentText": "  if(uncertain){await click(page,'Aplicar 1 tarea');await waitText(page,'La confirmación no llegó.');assert.equal(posts.length,1);}else assert.equal(posts.length,0);\n",
+              "previousText": "  if(uncertain){await click(page,'Aplicar 1 tareas');await waitText(page,'La confirmación no llegó.');assert.equal(posts.length,1);}else assert.equal(posts.length,0);\n"
             }
           ]
         },
@@ -78793,9 +78883,9 @@
           "path": "src/app/(identity)/cuenta/plan-import-panel.js",
           "status": "MODIFIED",
           "previousSha256": "19b79557ed1fa8d5db6d1a46201d925ea1ffc601cedb100da42bfe0768410dbf",
-          "currentSha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c",
+          "currentSha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683",
           "previousBytes": 93853,
-          "currentBytes": 101812,
+          "currentBytes": 102210,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 1726,
@@ -78818,84 +78908,109 @@
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 12226,
+              "currentOffsetCharacters": 9510,
+              "currentText": "const taskCount=count=>count===1?'1 tarea':count+' tareas';\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 12286,
               "currentText": " if(selectedBudgetOwner&&selectedBudgetOwner!==measurementOwner){setSelectedBudgetOwner(null);if(draft?.budgetImport===true)setDraft(null);if([PLAN_BUDGET_SOURCE_PROFILE,csvBudgetProfile].includes(spreadsheetSelection)){setFile(null);setConsent(false);setSpreadsheetSelection('');setFileInputEpoch(value=>value+1);}}\n",
               "previousText": " if(selectedBudgetOwner&&selectedBudgetOwner!==measurementOwner){setSelectedBudgetOwner(null);if(draft?.budgetImport===true)setDraft(null);if(spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE){setFile(null);setConsent(false);setSpreadsheetSelection('');setFileInputEpoch(value=>value+1);}}\n"
             },
             {
-              "currentOffsetCharacters": 13443,
+              "currentOffsetCharacters": 13503,
               "currentText": " const [singleSelection,setSingleSelection]=useState(null);\n if(singleSelection&&(singleSelection.draft!==draft||singleSelection.owner!==measurementOwner))setSingleSelection(null);\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 18347,
+              "currentOffsetCharacters": 18407,
               "currentText": " const select=useCallback(value=>{if(value?.measurementImport===true)throw new Error('Esta fuente corresponde a Metrado desde archivo. Abrí ese panel para comparar cantidades y revisar sus tareas.');setSelectedBudgetOwner(value?.budgetImport===true?measurementOwner:null);setSpreadsheetSelection(value?.budgetImport===true?value.budgetDescriptor?.profile||(value.source?.contentType==='text/csv'?csvBudgetProfile:PLAN_BUDGET_SOURCE_PROFILE):value?.spreadsheet?.profile||'');setDocumentPurpose(documentFinancialDraft(value)?'FINANCIAL_MONTHLY_CURVE':'TASKS');setConsent(false);privateView.current=financialDraft(value);setDraft(value);replaceRows(value.rows.map(row=>({...row})));setCurveDraft(documentFinancialDraft(value)?structuredClone(value.reviewedCurve||value.documentCurve):null);setCurveReviewConfirmed(false);setDifferenceAcknowledged(false);setReceipt(value.decision?.receiptId||null);setApproved(false);setReason('');setGroupFilter('');setRowPage(0);setDraftConsultTarget(null);closeChoiceRef.current=null;setCloseDraftTarget(null);},[replaceRows,measurementOwner]);\n",
               "previousText": " const select=useCallback(value=>{if(value?.measurementImport===true)throw new Error('Esta fuente corresponde a Metrado desde archivo. Abrí ese panel para comparar cantidades y revisar sus tareas.');setSelectedBudgetOwner(value?.budgetImport===true?measurementOwner:null);setSpreadsheetSelection(value?.budgetImport===true?PLAN_BUDGET_SOURCE_PROFILE:value?.spreadsheet?.profile||'');setDocumentPurpose(documentFinancialDraft(value)?'FINANCIAL_MONTHLY_CURVE':'TASKS');setConsent(false);privateView.current=financialDraft(value);setDraft(value);replaceRows(value.rows.map(row=>({...row})));setCurveDraft(documentFinancialDraft(value)?structuredClone(value.reviewedCurve||value.documentCurve):null);setCurveReviewConfirmed(false);setDifferenceAcknowledged(false);setReceipt(value.decision?.receiptId||null);setApproved(false);setReason('');setGroupFilter('');setRowPage(0);setDraftConsultTarget(null);closeChoiceRef.current=null;setCloseDraftTarget(null);},[replaceRows,measurementOwner]);\n"
             },
             {
-              "currentOffsetCharacters": 34282,
+              "currentOffsetCharacters": 32050,
+              "currentText": "  if(data.draft){if(preservation.preserveRows)setDraft(data.draft);else select(data.draft);}if(data.receiptId){setReceipt(data.receiptId);setMessage(['APPLY_CURVE','APPLY_INVESTMENT'].includes(data.action)?'Curva financiera aprobada con recibo. No se crearon tareas. La elección de línea base es una decisión posterior.':['REVIEW_CURVE','REVIEW_INVESTMENT'].includes(data.action)?'Revisión financiera guardada. Todavía no se aprobó la curva ni se seleccionó una línea base.':data.action==='APPLY'?(data.tasks.length===1?'1 tarea aplicada con recibo. Comenzó por iniciar y con avance cero.':taskCount(data.tasks.length)+' aplicadas con recibo. Todas comenzaron por iniciar y con avance cero.'):data.action==='EDIT'?'Correcciones guardadas. Todavía no se crearon tareas.':'Borrador descartado con recibo.');if(data.action==='APPLY')onApplied?.(data.tasks);}\n",
+              "previousText": "  if(data.draft){if(preservation.preserveRows)setDraft(data.draft);else select(data.draft);}if(data.receiptId){setReceipt(data.receiptId);setMessage(['APPLY_CURVE','APPLY_INVESTMENT'].includes(data.action)?'Curva financiera aprobada con recibo. No se crearon tareas. La elección de línea base es una decisión posterior.':['REVIEW_CURVE','REVIEW_INVESTMENT'].includes(data.action)?'Revisión financiera guardada. Todavía no se aprobó la curva ni se seleccionó una línea base.':data.action==='APPLY'?`${data.tasks.length} tareas aplicadas con recibo. Todas comenzaron por iniciar y con avance cero.`:data.action==='EDIT'?'Correcciones guardadas. Todavía no se crearon tareas.':'Borrador descartado con recibo.');if(data.action==='APPLY')onApplied?.(data.tasks);}\n"
+            },
+            {
+              "currentOffsetCharacters": 34438,
               "currentText": "   const snapshot=retrying?attemptPayload.current:{privateCurve:privateView.current||value.kind==='UPLOAD'&&[monthlyCurveConsent,cypCurveConsent,documentConsent,investmentConsent,PLAN_BUDGET_SOURCE_CONSENT,csvBudgetConsent].includes(value.form.get('consent')),reference:{version:1,resource:'plan-import',operationId:value.operationId,projectId,scope,createdAt:Date.now()},options:value.kind==='UPLOAD'?{method:'POST',body:value.form,requestTimeoutMs:60000}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value.body),requestTimeoutMs:20000}};\n",
               "previousText": "   const snapshot=retrying?attemptPayload.current:{privateCurve:privateView.current||value.kind==='UPLOAD'&&[monthlyCurveConsent,cypCurveConsent,documentConsent,investmentConsent,PLAN_BUDGET_SOURCE_CONSENT].includes(value.form.get('consent')),reference:{version:1,resource:'plan-import',operationId:value.operationId,projectId,scope,createdAt:Date.now()},options:value.kind==='UPLOAD'?{method:'POST',body:value.form,requestTimeoutMs:60000}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value.body),requestTimeoutMs:20000}};\n"
             },
             {
-              "currentOffsetCharacters": 36840,
+              "currentOffsetCharacters": 36996,
               "currentText": "  async function upload(event){event.preventDefault();if(locked||busy||!recoveryReady||attempt||!file||!consent||[PLAN_BUDGET_SOURCE_PROFILE,csvBudgetProfile].includes(spreadsheetSelection)&&(!canApprove||canonicalAccess!==true||selectedBudgetOwner!==measurementOwner)||documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&(!canApprove||Boolean(spreadsheetTypes[file.type]))||spreadsheetTypes[file.type]&&!spreadsheetProfiles.includes(spreadsheetSelection))return;\n   if(file.type==='text/csv'&&(spreadsheetSelection!==csvBudgetProfile||!canApprove||canonicalAccess!==true||selectedBudgetOwner!==measurementOwner)||spreadsheetSelection===csvBudgetProfile&&file.type!=='text/csv')return;\n   const issue=selectedFileIssue(file);if(issue){setMessage(explain(issue));return;}\n   const operationId=crypto.randomUUID(),form=new FormData();for(const [key,value] of Object.entries({operationId,projectId,scope,consent:file.type==='text/csv'?csvBudgetConsent:spreadsheetTypes[file.type]?(spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?PLAN_BUDGET_SOURCE_CONSENT:spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE?investmentConsent:spreadsheetSelection==='CYP_PARTIDAS'?cypConsent:spreadsheetSelection==='CYP_PARTIDAS_CURVE'?cypCurveConsent:spreadsheetSelection==='MONTHLY_RUBROS_CURVE'?monthlyCurveConsent:spreadsheetConsent):documentPurpose==='FINANCIAL_MONTHLY_CURVE'?documentConsent:consentVersion}))form.append(key,value);form.append('file',file);\n",
               "previousText": "  async function upload(event){event.preventDefault();if(locked||busy||!recoveryReady||attempt||!file||!consent||spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE&&(!canApprove||canonicalAccess!==true||selectedBudgetOwner!==measurementOwner)||documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&(!canApprove||Boolean(spreadsheetTypes[file.type]))||spreadsheetTypes[file.type]&&!spreadsheetProfiles.includes(spreadsheetSelection))return;\n  if(!['application/pdf','image/png','image/jpeg','image/webp',...Object.keys(spreadsheetTypes)].includes(file.type)||file.size===0){setMessage(explain('PLAN_IMPORT_FILE_INVALID'));return;}\n  if(file.size>(file.type==='application/pdf'||spreadsheetTypes[file.type]?3:2)*1024*1024){setMessage(explain('PLAN_IMPORT_FILE_TOO_LARGE'));return;}\n   const operationId=crypto.randomUUID(),form=new FormData();for(const [key,value] of Object.entries({operationId,projectId,scope,consent:spreadsheetTypes[file.type]?(spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?PLAN_BUDGET_SOURCE_CONSENT:spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE?investmentConsent:spreadsheetSelection==='CYP_PARTIDAS'?cypConsent:spreadsheetSelection==='CYP_PARTIDAS_CURVE'?cypCurveConsent:spreadsheetSelection==='MONTHLY_RUBROS_CURVE'?monthlyCurveConsent:spreadsheetConsent):documentPurpose==='FINANCIAL_MONTHLY_CURVE'?documentConsent:consentVersion}))form.append(key,value);form.append('file',file);\n"
             },
             {
-              "currentOffsetCharacters": 41983,
+              "currentOffsetCharacters": 42139,
               "currentText": " async function checkDraft(id,discardLocalChanges=false){if(busy||locked||linkedRead.current||discardLocalChanges&&draftConsultTarget!==id)return;linkedUserWork.current=true;closeChoiceRef.current=null;setCloseDraftTarget(null);if(selectedDraftHasEdits&&!discardLocalChanges){setDraftConsultTarget(id);setMessage('Tenés correcciones sin guardar. Las conservamos; guardalas o elegí descartarlas antes de consultar el borrador elegido.');return;}setBusy(true);try{const data=await request({draftId:id});if(mounted.current){select(data.draft);setMessage(data.draft?.budgetImport===true&&data.draft.source?.contentType==='text/csv'?'Estado actualizado. La consulta del presupuesto se completó.':'Estado actualizado. La consulta no repite la IA ni resuelve el intento pendiente.');if(discardLocalChanges)draftTitleRef.current?.focus();}}catch(error){if(mounted.current)setMessage(error.message);}finally{if(mounted.current)setBusy(false);}}\n",
               "previousText": " async function checkDraft(id,discardLocalChanges=false){if(busy||locked||linkedRead.current||discardLocalChanges&&draftConsultTarget!==id)return;linkedUserWork.current=true;closeChoiceRef.current=null;setCloseDraftTarget(null);if(selectedDraftHasEdits&&!discardLocalChanges){setDraftConsultTarget(id);setMessage('Tenés correcciones sin guardar. Las conservamos; guardalas o elegí descartarlas antes de consultar el borrador elegido.');return;}setBusy(true);try{const data=await request({draftId:id});if(mounted.current){select(data.draft);setMessage('Estado actualizado. La consulta no repite la IA ni resuelve el intento pendiente.');if(discardLocalChanges)draftTitleRef.current?.focus();}}catch(error){if(mounted.current)setMessage(error.message);}finally{if(mounted.current)setBusy(false);}}\n"
             },
             {
-              "currentOffsetCharacters": 45485,
+              "currentOffsetCharacters": 45641,
               "currentText": "   const url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=draft.source.contentType==='text/csv'?'presupuesto.csv':spreadsheetTypes[draft.source.contentType]?'cronograma.'+spreadsheetTypes[draft.source.contentType]:draft.source.contentType==='application/pdf'?'cronograma.pdf':draft.source.contentType==='image/png'?'cronograma.png':draft.source.contentType==='image/webp'?'cronograma.webp':'cronograma.jpg';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);\n",
               "previousText": "   const url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=spreadsheetTypes[draft.source.contentType]?'cronograma.'+spreadsheetTypes[draft.source.contentType]:draft.source.contentType==='application/pdf'?'cronograma.pdf':draft.source.contentType==='image/png'?'cronograma.png':draft.source.contentType==='image/webp'?'cronograma.webp':'cronograma.jpg';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);\n"
             },
             {
-              "currentOffsetCharacters": 48524,
+              "currentOffsetCharacters": 48680,
               "currentText": " const csvBudgetFile=file?.type==='text/csv',csvBudgetDraft=draft?.budgetImport===true&&draft.source?.contentType==='text/csv';\n  const spreadsheetForm=Boolean(spreadsheetTypes[file?.type]||reviewable&&spreadsheetTypes[draft?.source?.contentType]);\n",
               "previousText": " const spreadsheetForm=Boolean(spreadsheetTypes[file?.type]||reviewable&&spreadsheetTypes[draft?.source?.contentType]);\n"
             },
             {
-              "currentOffsetCharacters": 49062,
+              "currentOffsetCharacters": 49218,
               "currentText": "  function chooseFile(event){\n   const next=selectedFile(event.target.files?.[0]);if(!next)return;\n   const issue=selectedFileIssue(next);if(issue){event.target.value='';setMessage(explain(issue));return;}\n   if([explain('PLAN_IMPORT_FILE_INVALID'),explain('PLAN_IMPORT_FILE_TOO_LARGE')].includes(message))setMessage('');\n   linkedUserWork.current=true;cancelLinkedRead();removeFileTargetRef.current=null;setRemoveFileRequested(false);\n   const csv=next.type==='text/csv';if(documentCurve||draft?.budgetImport===true){setDraft(null);setCurveDraft(null);setReason('');setReceipt(null);replaceRows([]);}setFile(next);setConsent(false);setSpreadsheetSelection(csv?csvBudgetProfile:'');setSelectedBudgetOwner(csv?measurementOwner:null);setDocumentPurpose('TASKS');setCurveReviewConfirmed(false);setApproved(false);privateView.current=csv||(!documentCurve&&draft?.budgetImport!==true&&financialDraft(draft));\n  }\n",
               "previousText": "  const chooseFile=event=>{linkedUserWork.current=true;cancelLinkedRead();removeFileTargetRef.current=null;setRemoveFileRequested(false);if(documentCurve){setDraft(null);setCurveDraft(null);setReason('');setReceipt(null);replaceRows([]);}setFile(selectedFile(event.target.files?.[0]));setConsent(false);setSpreadsheetSelection('');setDocumentPurpose('TASKS');setCurveReviewConfirmed(false);setApproved(false);privateView.current=documentCurve?false:financialDraft(draft);};\n"
             },
             {
-              "currentOffsetCharacters": 52015,
+              "currentOffsetCharacters": 52171,
               "currentText": " const selection=singleSelection?.draft===draft&&singleSelection?.owner===measurementOwner?singleSelection:null;\n const undoSelection=selection?.previousRows&&rows.length===1&&rows[0].code===selection.code;\n const chosenRow=filteredRows.find(({row})=>row.code===selection?.code)?.row;\n function updateSingleSelection(){\n  if(!mounted.current||blocked||localRequest.current||attemptReference.current||!reviewable||!cyp||calendarEpochRef.current!==calendarEpoch)return;\n  if(undoSelection){\n   const retainedRow=rows[0];\n   replaceRows(selection.previousRows.map(row=>row.code===retainedRow.code?retainedRow:row));\n   setGroupFilter(selection.group);setRowPage(selection.page);setSingleSelection(null);\n  }else{\n   if(!chosenRow||rows.length<2)return;\n   setSingleSelection({...selection,previousRows:rows,group:groupFilter,page});\n   replaceRows([chosenRow]);setRowPage(0);\n  }\n  setApproved(false);\n }\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 53010,
+              "currentOffsetCharacters": 53166,
               "currentText": "   {!open?<><button id=\"plan-import-title\" ref={openButtonRef} type=\"button\" disabled={locked||busy} onClick={show}><FileUp size={17} aria-hidden=\"true\"/>Importar cronograma o presupuesto</button><p className={styles.evidence}>PDF, imagen, Excel o CSV. Consultá las lecturas guardadas o elegí un archivo.</p>{file&&<p className={styles.evidence}>Archivo conservado en esta pantalla: {file.name}.</p>}{attempt&&<p className={styles.evidence}>El mismo intento sigue pendiente. Abrí la consulta para comprobarlo antes de reintentar.</p>}</>:<>\n    <div className={styles.heading}><div><h4 id=\"plan-import-title\">{csvBudgetFile||csvBudgetDraft?'Presupuesto de obra (lectura)':draft?.budgetImport===true||spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?'Cómputo y presupuesto (lectura)':investmentCurve||spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE?'Importar inversión mensual y semanal':documentCurve||documentPurpose==='FINANCIAL_MONTHLY_CURVE'?'Importar inversión mensual':'Importar cronograma'}</h4><p>{draft?.budgetImport===true||[PLAN_BUDGET_SOURCE_PROFILE,csvBudgetProfile].includes(spreadsheetSelection)?'Consultá los valores originales por partida y sus observaciones. Esta lectura no permite aprobar ni aplicar importes.':investmentCurve||spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE||documentCurve||documentPurpose==='FINANCIAL_MONTHLY_CURVE'?'Revisá los importes del documento. Esta aprobación no crea tareas.':'Subí el Gantt, revisá el borrador y aplicá las tareas a esta obra.'}</p></div><button type=\"button\" disabled={busy||selectedDraftHasEdits&&!attempt&&(!recoveryReady||locked)} onClick={()=>closeReview()}>Cerrar</button></div>\n",
               "previousText": "  {!open?<><button id=\"plan-import-title\" ref={openButtonRef} type=\"button\" disabled={locked||busy} onClick={show}><FileUp size={17} aria-hidden=\"true\"/>Importar PDF, imagen o Excel</button>{file&&<p className={styles.evidence}>Archivo conservado en esta pantalla: {file.name}.</p>}{attempt&&<p className={styles.evidence}>El mismo intento sigue pendiente. Abrí la consulta para comprobarlo antes de reintentar.</p>}</>:<>\n    <div className={styles.heading}><div><h4 id=\"plan-import-title\">{draft?.budgetImport===true||spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?'Cómputo y presupuesto (lectura)':investmentCurve||spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE?'Importar inversión mensual y semanal':documentCurve||documentPurpose==='FINANCIAL_MONTHLY_CURVE'?'Importar inversión mensual':'Importar cronograma'}</h4><p>{draft?.budgetImport===true||spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?'Consultá los valores originales por partida y sus observaciones. Esta lectura no permite aprobar ni aplicar importes.':investmentCurve||spreadsheetSelection===PLAN_CYP_INVESTMENT_PROFILE||documentCurve||documentPurpose==='FINANCIAL_MONTHLY_CURVE'?'Revisá los importes del documento. Esta aprobación no crea tareas.':'Subí el Gantt, revisá el borrador y aplicá las tareas a esta obra.'}</p></div><button type=\"button\" disabled={busy||selectedDraftHasEdits&&!attempt&&(!recoveryReady||locked)} onClick={()=>closeReview()}>Cerrar</button></div>\n"
             },
             {
-              "currentOffsetCharacters": 55522,
+              "currentOffsetCharacters": 55678,
               "currentText": "    {attempt?<div className={styles.recovery}><strong>Intento pendiente de comprobación</strong><p>Referencia: {attempt.operationId}</p>{file&&<p>Archivo seleccionado: {file.name}. Conservado en esta consulta.</p>}<button type=\"button\" disabled={busy} onClick={recover}>Comprobar resultado</button>{retryAllowed&&<button type=\"button\" disabled={busy||locked||!recoveryReady} onClick={()=>dispatch(null,true)}>Reintentar los mismos datos</button>}<button type=\"button\" disabled={busy} onClick={show}>Consultar borradores registrados</button><p>Podés cerrar esta consulta y volver a comprobar el intento. Su referencia permanece guardada y bloquea nuevas cargas o decisiones mientras no se confirme.</p></div>:csvBudgetDraft?<p className={styles.evidence}>{draft.status==='READY'?'Lectura privada guardada. Consultá las partidas originales a continuación; para elegir otro archivo, cerrá esta lectura.':'Consulta de presupuesto CSV registrada. Revisá su estado y su fuente; para elegir otro archivo, cerrá esta consulta.'}</p>:<form onSubmit={upload} className={styles.upload}>\n      <label>Archivo de cronograma o presupuesto<input key={fileInputEpoch} ref={fileRef} type=\"file\" accept=\"application/pdf,image/png,image/jpeg,image/webp,.xlsx,.xlsm,.csv,text/csv\" disabled={blocked||reviewable} onChange={chooseFile} required={!file}/></label>\n",
               "previousText": "   {attempt?<div className={styles.recovery}><strong>Intento pendiente de comprobación</strong><p>Referencia: {attempt.operationId}</p>{file&&<p>Archivo seleccionado: {file.name}. Conservado en esta consulta.</p>}<button type=\"button\" disabled={busy} onClick={recover}>Comprobar resultado</button>{retryAllowed&&<button type=\"button\" disabled={busy||locked||!recoveryReady} onClick={()=>dispatch(null,true)}>Reintentar los mismos datos</button>}<button type=\"button\" disabled={busy} onClick={show}>Consultar borradores registrados</button><p>Podés cerrar esta consulta y volver a comprobar el intento. Su referencia permanece guardada y bloquea nuevas cargas o decisiones mientras no se confirme.</p></div>:<form onSubmit={upload} className={styles.upload}>\n      <label>Fuente del cronograma o inversión<input key={fileInputEpoch} ref={fileRef} type=\"file\" accept=\"application/pdf,image/png,image/jpeg,image/webp,.xlsx,.xlsm\" disabled={blocked||reviewable} onChange={chooseFile} required={!file}/></label>\n"
             },
             {
-              "currentOffsetCharacters": 57538,
+              "currentOffsetCharacters": 57694,
               "currentText": "     <small>PDF, Excel o CSV hasta 3 MB; imagen hasta 2 MB. Presupuesto CSV: hasta 200 partidas, sin crear tareas. Hasta 50 tareas para PDF, imagen o Excel v1; hasta 200 partidas para CyP. Se intentará guardar la fuente de forma privada; su disponibilidad se comprueba por separado.</small>\n     {csvBudgetFile&&<section className={styles.csvBudget} aria-label=\"Alcance del presupuesto CSV\"><strong>Presupuesto de obra (lectura)</strong><p>Consultá todas las partidas con sus códigos, cantidades, unidades, precios e importes originales. Sólo administración y dirección pueden acceder a esta lectura privada.</p><details><summary>Formato del CSV</summary><p>Podés guardarlo desde Excel como «CSV UTF-8» o «CSV (delimitado por comas)»: se aceptan UTF-8 o Windows-1252 y la coma o el punto y coma como separador, el mismo en todo el archivo. Las siete columnas, en este orden, son:</p><code>pagina, codigo, descripcion, unidad_original, cantidad_original, precio_unitario_original, total_iva_incluido_original</code><p>Conservá la unidad y los importes como aparecen en la fuente. Esta lectura no completa fechas ni crea tareas.</p></details>{(!canApprove||canonicalAccess!==true)&&<p role=\"status\">Tu acceso actual no permite cargar presupuestos. Consultá la obra y tus permisos.</p>}</section>}\n     {file&&!csvBudgetFile&&!spreadsheetTypes[file.type]&&canApprove&&<label>Qué querés preparar de este documento<select data-document-purpose value={documentPurpose} disabled={blocked||reviewable} onChange={event=>{setDocumentPurpose(event.target.value);setConsent(false);setApproved(false);setCurveReviewConfirmed(false);privateView.current=event.target.value==='FINANCIAL_MONTHLY_CURVE'||financialDraft(draft);}}><option value=\"TASKS\">Cronograma de tareas</option><option value=\"FINANCIAL_MONTHLY_CURVE\">Curva de inversión mensual</option></select></label>}\n     {file&&!csvBudgetFile&&!spreadsheetTypes[file.type]&&documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&<p className={styles.warning}>Sólo administración y dirección pueden revisar estos importes. Se prepara una curva financiera completa, sin tareas ni inversión ejecutada. La moneda y los meses calendario deben estar sustentados por la fuente. Podés importar el mismo archivo por separado para preparar tareas.</p>}\n",
               "previousText": "    <small>PDF o Excel hasta 3 MB; imagen hasta 2 MB. Hasta 50 tareas para PDF, imagen o Excel v1; hasta 200 partidas para CyP. Se intentará guardar la fuente de forma privada; su disponibilidad se comprueba por separado.</small>\n     {file&&!spreadsheetTypes[file.type]&&canApprove&&<label>Qué querés preparar de este documento<select data-document-purpose value={documentPurpose} disabled={blocked||reviewable} onChange={event=>{setDocumentPurpose(event.target.value);setConsent(false);setApproved(false);setCurveReviewConfirmed(false);privateView.current=event.target.value==='FINANCIAL_MONTHLY_CURVE'||financialDraft(draft);}}><option value=\"TASKS\">Cronograma de tareas</option><option value=\"FINANCIAL_MONTHLY_CURVE\">Curva de inversión mensual</option></select></label>}\n     {file&&!spreadsheetTypes[file.type]&&documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&<p className={styles.warning}>Sólo administración y dirección pueden revisar estos importes. Se prepara una curva financiera completa, sin tareas ni inversión ejecutada. La moneda y los meses calendario deben estar sustentados por la fuente. Podés importar el mismo archivo por separado para preparar tareas.</p>}\n"
             },
             {
-              "currentOffsetCharacters": 62789,
+              "currentOffsetCharacters": 62945,
               "currentText": "     <label className={styles.checkbox}><input type=\"checkbox\" checked={consent} disabled={blocked||reviewable||csvBudgetFile&&(!canApprove||canonicalAccess!==true)||documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&!canApprove||spreadsheetForm&&!spreadsheetProfiles.includes(spreadsheetSelection)} onChange={event=>setConsent(event.target.checked)}/><span>{csvBudgetFile?'Autorizo guardar este CSV de forma privada y leer sus valores originales para esta obra. La lectura conserva códigos, cantidades, unidades, precios, importes y procedencia. No se calculan valores ni se crean tareas o movimientos de stock.':documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&!spreadsheetForm?'Autorizo guardar este documento en forma privada y enviarlo a OpenAI para leer la inversión mensual prevista como borrador financiero. Revisaré los importes y las páginas originales. No se crean tareas, no se aprueba la curva y no se registra inversión ejecutada.':spreadsheetForm?spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?'Autorizo guardar este Excel privado y leer localmente su cómputo y presupuesto original. Revisaré la moneda, la base histórica, las celdas y los vínculos pendientes. La lectura se realiza localmente, sin recalcular fórmulas ni ejecutar macros. No se crean tareas, no se aprueban importes ni se cambia stock.':investmentSelected?'Autorizo guardar este Excel privado y leer su previsión mensual y semanal para revisión de administración y dirección. Los importes originales se conservan, sin recalcular fórmulas ni ejecutar macros. Esta carga no crea tareas ni aprueba la inversión.':(reviewable?cypCurve:spreadsheetSelection==='CYP_PARTIDAS_CURVE')?'Autorizo guardar este Excel privado y extraer localmente las partidas físicas A/B, su jerarquía y la curva completa de inversión prevista de CyP para administración y dirección. Revisaré fechas, títulos y datos faltantes antes de aplicar tareas. Los costos adicionales permanecen sólo en la curva original. No se envía a OpenAI, no se recalculan fórmulas ni se ejecutan macros.':(reviewable?monthlyCurve:spreadsheetSelection==='MONTHLY_RUBROS_CURVE')?'Autorizo guardar este Excel privado y extraer localmente los rubros, importes y curva mensual original para revisión de administración y dirección. Confirmaré fechas y alcance antes de aplicar tareas. No se envía a OpenAI ni se ejecutan macros.':(reviewable?cyp:spreadsheetSelection==='CYP_PARTIDAS')?'Autorizo guardar este Excel de forma privada y extraer localmente las partidas físicas A/B del perfil CyP v2, con su jerarquía original. Los costos adicionales quedan excluidos. Revisaré fechas, títulos y datos faltantes antes de aplicar. No se envía a OpenAI ni se ejecutan macros.':'Autorizo guardar este Excel de forma privada y extraer localmente un borrador del plan mensual por rubros. Entiendo que las partidas quedan excluidas y que debo revisar las fechas. No se envía a OpenAI ni se ejecutan macros.':'Autorizo enviar este cronograma a OpenAI para extraer un borrador. Revisé que sólo incluya información del plan necesaria para esta obra.'}</span></label>\n    <button type=\"submit\" disabled={blocked||reviewable||!file||!consent||csvBudgetFile&&(!canApprove||canonicalAccess!==true||selectedBudgetOwner!==measurementOwner)||spreadsheetTypes[file?.type]&&!spreadsheetProfiles.includes(spreadsheetSelection)}>{busy?'Consultando…':csvBudgetFile||spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?'Leer presupuesto':'Extraer borrador'}</button>\n",
               "previousText": "     <label className={styles.checkbox}><input type=\"checkbox\" checked={consent} disabled={blocked||reviewable||documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&!canApprove||spreadsheetForm&&!spreadsheetProfiles.includes(spreadsheetSelection)} onChange={event=>setConsent(event.target.checked)}/><span>{documentPurpose==='FINANCIAL_MONTHLY_CURVE'&&!spreadsheetForm?'Autorizo guardar este documento en forma privada y enviarlo a OpenAI para leer la inversión mensual prevista como borrador financiero. Revisaré los importes y las páginas originales. No se crean tareas, no se aprueba la curva y no se registra inversión ejecutada.':spreadsheetForm?spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?'Autorizo guardar este Excel privado y leer localmente su cómputo y presupuesto original. Revisaré la moneda, la base histórica, las celdas y los vínculos pendientes. La lectura se realiza localmente, sin recalcular fórmulas ni ejecutar macros. No se crean tareas, no se aprueban importes ni se cambia stock.':investmentSelected?'Autorizo guardar este Excel privado y leer su previsión mensual y semanal para revisión de administración y dirección. Los importes originales se conservan, sin recalcular fórmulas ni ejecutar macros. Esta carga no crea tareas ni aprueba la inversión.':(reviewable?cypCurve:spreadsheetSelection==='CYP_PARTIDAS_CURVE')?'Autorizo guardar este Excel privado y extraer localmente las partidas físicas A/B, su jerarquía y la curva completa de inversión prevista de CyP para administración y dirección. Revisaré fechas, títulos y datos faltantes antes de aplicar tareas. Los costos adicionales permanecen sólo en la curva original. No se envía a OpenAI, no se recalculan fórmulas ni se ejecutan macros.':(reviewable?monthlyCurve:spreadsheetSelection==='MONTHLY_RUBROS_CURVE')?'Autorizo guardar este Excel privado y extraer localmente los rubros, importes y curva mensual original para revisión de administración y dirección. Confirmaré fechas y alcance antes de aplicar tareas. No se envía a OpenAI ni se ejecutan macros.':(reviewable?cyp:spreadsheetSelection==='CYP_PARTIDAS')?'Autorizo guardar este Excel de forma privada y extraer localmente las partidas físicas A/B del perfil CyP v2, con su jerarquía original. Los costos adicionales quedan excluidos. Revisaré fechas, títulos y datos faltantes antes de aplicar. No se envía a OpenAI ni se ejecutan macros.':'Autorizo guardar este Excel de forma privada y extraer localmente un borrador del plan mensual por rubros. Entiendo que las partidas quedan excluidas y que debo revisar las fechas. No se envía a OpenAI ni se ejecutan macros.':'Autorizo enviar este cronograma a OpenAI para extraer un borrador. Revisé que sólo incluya información del plan necesaria para esta obra.'}</span></label>\n    <button type=\"submit\" disabled={blocked||reviewable||!file||!consent||spreadsheetTypes[file?.type]&&!spreadsheetProfiles.includes(spreadsheetSelection)}>{busy?'Procesando…':spreadsheetSelection===PLAN_BUDGET_SOURCE_PROFILE?'Leer presupuesto':'Extraer borrador'}</button>\n"
             },
             {
-              "currentOffsetCharacters": 66259,
-              "currentText": "    {drafts.length>0&&<div className={styles.saved}><h5>Borradores registrados</h5><ul>{drafts.map(item=><li key={item.id}><button type=\"button\" disabled={busy||locked} onClick={()=>checkDraft(item.id)}>{item.budgetImport===true&&item.status==='READY'?'Lectura lista':labels[item.status]||'Estado para revisar'} · {item.createdAt.slice(0,10)} · {item.budgetImport===true?'Presupuesto · sólo lectura':item.spreadsheet?.version===5?'Inversión mensual y semanal':documentFinancialDraft(item)?'Documento financiero':item.rows.length+' tareas'}</button></li>)}</ul></div>}\n   {draft&&(draft.budgetImport!==true||canonicalAccess===true&&canApprove&&selectedBudgetOwner===measurementOwner)&&<div className={styles.draft}><div className={styles.heading}><h5 ref={draftTitleRef} tabIndex={-1}><FileCheck2 size={18} aria-hidden=\"true\"/>{draft.budgetImport===true&&draft.status==='READY'?'Lectura lista':labels[draft.status]||'Estado para revisar'}</h5><button type=\"button\" disabled={busy||!draft.sourceAvailable} onClick={download}><Download size={16} aria-hidden=\"true\"/>Descargar fuente</button></div><small>Fuente SHA-256: {draft.source.sha256}</small>\n",
+              "currentOffsetCharacters": 66415,
+              "currentText": "    {drafts.length>0&&<div className={styles.saved}><h5>Borradores registrados</h5><ul>{drafts.map(item=><li key={item.id}><button type=\"button\" disabled={busy||locked} onClick={()=>checkDraft(item.id)}>{item.budgetImport===true&&item.status==='READY'?'Lectura lista':labels[item.status]||'Estado para revisar'} · {item.createdAt.slice(0,10)} · {item.budgetImport===true?'Presupuesto · sólo lectura':item.spreadsheet?.version===5?'Inversión mensual y semanal':documentFinancialDraft(item)?'Documento financiero':taskCount(item.rows.length)}</button></li>)}</ul></div>}\n   {draft&&(draft.budgetImport!==true||canonicalAccess===true&&canApprove&&selectedBudgetOwner===measurementOwner)&&<div className={styles.draft}><div className={styles.heading}><h5 ref={draftTitleRef} tabIndex={-1}><FileCheck2 size={18} aria-hidden=\"true\"/>{draft.budgetImport===true&&draft.status==='READY'?'Lectura lista':labels[draft.status]||'Estado para revisar'}</h5><button type=\"button\" disabled={busy||!draft.sourceAvailable} onClick={download}><Download size={16} aria-hidden=\"true\"/>Descargar fuente</button></div><details key={draft.id} className={styles.fileDetails} data-plan-file-details><summary>Detalles del archivo</summary><small>Fuente SHA-256: {draft.source.sha256}</small></details>\n",
               "previousText": "    {drafts.length>0&&<div className={styles.saved}><h5>Borradores registrados</h5><ul>{drafts.map(item=><li key={item.id}><button type=\"button\" disabled={busy||locked} onClick={()=>checkDraft(item.id)}>{labels[item.status]||'Estado para revisar'} · {item.createdAt.slice(0,10)} · {item.budgetImport===true?'Presupuesto · sólo lectura':item.spreadsheet?.version===5?'Inversión mensual y semanal':documentFinancialDraft(item)?'Documento financiero':item.rows.length+' tareas'}</button></li>)}</ul></div>}\n   {draft&&(draft.budgetImport!==true||canonicalAccess===true&&canApprove&&selectedBudgetOwner===measurementOwner)&&<div className={styles.draft}><div className={styles.heading}><h5 ref={draftTitleRef} tabIndex={-1}><FileCheck2 size={18} aria-hidden=\"true\"/>{labels[draft.status]||'Estado para revisar'}</h5><button type=\"button\" disabled={busy||!draft.sourceAvailable} onClick={download}><Download size={16} aria-hidden=\"true\"/>Descargar fuente</button></div><small>Fuente SHA-256: {draft.source.sha256}</small>\n"
             },
             {
-              "currentOffsetCharacters": 78879,
+              "currentOffsetCharacters": 71078,
+              "currentText": "     {reviewable&&!documentCurve&&!investmentCurve&&<p className={styles.counts}>Al crear este borrador había {taskCount(draft.existingTaskCount)} {draft.existingTaskCount===1?'registrada':'registradas'}. {rows.length===1?'Se agregará 1 tarea nueva.':'Se agregarán '+taskCount(rows.length)+' nuevas.'} Las tareas existentes conservan sus fechas y avance registrado.</p>}\n",
+              "previousText": "     {reviewable&&!documentCurve&&!investmentCurve&&<p className={styles.counts}>Al crear este borrador había {draft.existingTaskCount} tareas registradas. Se agregarán {rows.length} tareas nuevas. Las tareas existentes conservan sus fechas y avance registrado.</p>}\n"
+            },
+            {
+              "currentOffsetCharacters": 76889,
+              "currentText": "     {reviewable&&!documentCurve&&!investmentCurve&&<>{draftConsultTarget&&selectedDraftHasEdits&&<div className={styles.warning}><p>Elegí si querés conservar estas correcciones o descartarlas para consultar la versión guardada del borrador elegido.</p><button type=\"button\" disabled={busy||locked} onClick={()=>{setDraftConsultTarget(null);setMessage('Conservamos tus correcciones. Podés seguir revisándolas.');draftTitleRef.current?.focus();}}>Conservar correcciones</button><button type=\"button\" disabled={busy||locked} onClick={()=>checkDraft(draftConsultTarget,true)}>Descartar correcciones y consultar</button></div>}<p>Compará cada fila con el archivo. Completá las fechas dudosas, corregí los títulos y resolvé las observaciones. La aplicación agregará {taskCount(rows.length)} al cronograma registrado.</p>\n",
+              "previousText": "     {reviewable&&!documentCurve&&!investmentCurve&&<>{draftConsultTarget&&selectedDraftHasEdits&&<div className={styles.warning}><p>Elegí si querés conservar estas correcciones o descartarlas para consultar la versión guardada del borrador elegido.</p><button type=\"button\" disabled={busy||locked} onClick={()=>{setDraftConsultTarget(null);setMessage('Conservamos tus correcciones. Podés seguir revisándolas.');draftTitleRef.current?.focus();}}>Conservar correcciones</button><button type=\"button\" disabled={busy||locked} onClick={()=>checkDraft(draftConsultTarget,true)}>Descartar correcciones y consultar</button></div>}<p>Compará cada fila con el archivo. Completá las fechas dudosas, corregí los títulos y resolvé las observaciones. La aplicación agregará {rows.length} tareas al cronograma registrado.</p>\n"
+            },
+            {
+              "currentOffsetCharacters": 79271,
               "currentText": "     {cyp&&(rows.length>1||undoSelection)&&<details className={styles.calendar} data-plan-single-selection>\n      <summary>{undoSelection?'Una partida preparada · deshacer selección':'Preparar una sola partida'}</summary>\n      <div className={styles.calendarContent}>\n       {!undoSelection&&<label>Partida que querés conservar\n        <select value={chosenRow?.code||''} disabled={blocked} onChange={event=>setSingleSelection({draft,owner:measurementOwner,code:event.target.value})}>\n         <option value=\"\">Elegí una partida</option>\n         {filteredRows.map(({row})=><option key={row.code} value={row.code}>{row.code} · {row.title}</option>)}\n        </select>\n       </label>}\n       <p aria-live=\"polite\">{undoSelection\n        ?`El borrador tiene una sola partida: ${rows[0].code} · ${rows[0].title}. Podés recuperar la selección anterior hasta guardar las correcciones.`\n        :chosenRow\n         ?`Vas a conservar ${chosenRow.code} · ${chosenRow.title} y excluir ${rows.length-1} de las ${rows.length} partidas del borrador, incluidas las que están fuera de esta vista.`\n         :filteredRows.length?'Elegí por código y título. El listado respeta el agrupador y abarca todas sus páginas.':'Este agrupador no tiene partidas en el borrador. Elegí otro agrupador.'}</p>\n       <div className={styles.actions}><button type=\"button\" disabled={blocked||(!undoSelection&&!chosenRow)} onClick={updateSingleSelection}>\n        {undoSelection?'Deshacer selección':'Conservar solo esta partida'}\n       </button></div>\n      </div>\n     </details>}\n",
               "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 83785,
+              "currentText": "     <div className={styles.actions}><button type=\"button\" disabled={blocked||reason.trim().length<8} onClick={()=>decide('EDIT')}>Guardar correcciones</button>{canApprove?<><button type=\"button\" className={styles.primary} disabled={blocked||!validRows||!approved||!spreadsheetReviewed||reason.trim().length<8} onClick={()=>decide('APPLY')}>Aplicar {taskCount(rows.length)}</button><button type=\"button\" disabled={blocked||reason.trim().length<8} onClick={()=>decide('REJECT')}>Descartar borrador</button></>:<p>Un administrador o director debe aprobar la aplicación.</p>}</div>\n",
+              "previousText": "     <div className={styles.actions}><button type=\"button\" disabled={blocked||reason.trim().length<8} onClick={()=>decide('EDIT')}>Guardar correcciones</button>{canApprove?<><button type=\"button\" className={styles.primary} disabled={blocked||!validRows||!approved||!spreadsheetReviewed||reason.trim().length<8} onClick={()=>decide('APPLY')}>Aplicar {rows.length} tareas</button><button type=\"button\" disabled={blocked||reason.trim().length<8} onClick={()=>decide('REJECT')}>Descartar borrador</button></>:<p>Un administrador o director debe aprobar la aplicación.</p>}</div>\n"
             }
           ]
         },
@@ -78903,14 +79018,19 @@
           "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
           "status": "MODIFIED",
           "previousSha256": "c64771e75e83b6708ede012f90636bac1d13c19a3c1088c685513e702cc69061",
-          "currentSha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9",
+          "currentSha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b",
           "previousBytes": 5236,
-          "currentBytes": 5710,
+          "currentBytes": 5766,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 2781,
               "currentText": ".csvBudget{display:grid;gap:.6rem;min-width:0;padding:.8rem;border:1px solid #54708a;border-radius:8px;background:#132638;overflow-wrap:anywhere}.csvBudget p{margin:0;line-height:1.5}.csvBudget summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}.csvBudget summary:focus-visible{outline:3px solid #f7b94d;outline-offset:3px}.csvBudget details[open]{display:grid;gap:.6rem}.csvBudget code{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}\n",
               "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 3759,
+              "currentText": ".fileDetails summary,.calendar summary{cursor:pointer;min-height:44px;align-content:center;font-weight:600}\n.fileDetails summary:focus-visible,.calendar summary:focus-visible{outline:3px solid #f7b94d;outline-offset:3px}\n",
+              "previousText": ".calendar summary{cursor:pointer;min-height:44px;align-content:center;font-weight:600}\n.calendar summary:focus-visible{outline:3px solid #f7b94d;outline-offset:3px}\n"
             }
           ]
         },
@@ -83168,13 +83288,13 @@
           "path": "tests/production-plan-import-calendar-ui.test.mjs",
           "status": "MODIFIED",
           "previousSha256": "9eca05c38d8074297ea75be72f24e323e68103d292f4ed3d30ccc5afae679746",
-          "currentSha256": "c95ad23604742fa7436924320f1336fd95d39c490dfef5e3fb4487fac884d29d",
+          "currentSha256": "d30bee8ec04ff819873e15bd199f480d02a76b21e9118b1c12c81793ff3554f0",
           "previousBytes": 12473,
-          "currentBytes": 15487,
+          "currentBytes": 15486,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 12467,
-              "currentText": "\ntest('CyP can prepare one of 190 tasks locally and undo without losing any prior or subsequent row edits',()=>{\n const data=fixture(190),source=structuredClone(data);\n const draft={id:context.draftId,revision:3,status:'READY',rows:data.rows,source:{sha256:context.sourceSha256,contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},sourceAvailable:false,spreadsheet:data.spreadsheet,existingTaskCount:0,warnings:[]};\n const props={projectId:context.projectId,scope:context.scope,getSessionToken:()=>assert.fail('Local selection requested a session')};\n const control=tree=>nodes(tree,node=>node.props?.['data-plan-single-selection']===true)[0];\n const selectPartida=(tree,code)=>nodes(control(tree),node=>node.type==='select')[0].props.onChange({target:{value:code}});\n const editTitle=(tree,previous,value)=>nodes(tree,node=>node.type==='input'&&node.props.value===previous)[0].props.onChange({target:{value}});\n panel.reset({open:true,recoveryReady:true,canApprove:true,draft,rows:data.rows,approved:true,reason:'Revisión de prueba'});\n let tree=panel.render(props);\n assert.equal(button(control(tree),'Conservar solo esta partida').props.disabled,true);\n selectPartida(tree,data.rows[189].code);\n tree=panel.render(props);\n assert.match(renderToStaticMarkup(control(tree)),/excluir 189 de las 190 partidas/);\n assert.deepEqual(panel.snapshot().rows,data.rows);\n button(tree,'Excluir esta fila').props.onClick();\n tree=panel.render(props);\n editTitle(tree,data.rows[1].title,'Corrección anterior en otra fila');\n tree=panel.render(props);\n nodes(tree,node=>node.type==='select'&&node.props['data-plan-group-filter'])[0].props.onChange({target:{value:'A.1.1'}});\n tree=panel.render(props);\n button(tree,'Partidas siguientes').props.onClick();\n tree=panel.render(props);\n const before=structuredClone(panel.snapshot().rows);\n assert.ok(!nodes(tree,node=>node.type==='fieldset').some(field=>field.props['data-partida']===data.rows[189].code));\n selectPartida(tree,data.rows[189].code);\n tree=panel.render(props);\n assert.match(renderToStaticMarkup(control(tree)),/excluir 188 de las 189 partidas/);\n button(control(tree),'Conservar solo esta partida').props.onClick();\n tree=panel.render(props);\n assert.deepEqual(panel.snapshot().rows,[data.rows[189]]);\n assert.equal(button(tree,'Aplicar 1 tareas').props.disabled,true);\n assert.equal(panel.snapshot().approved,false);\n assert.equal(panel.snapshot().attempt,null);\n editTitle(tree,data.rows[189].title,'Corrección posterior de la partida elegida');\n tree=panel.render(props);\n const edited=panel.snapshot().rows[0];\n button(control(tree),'Deshacer selección').props.onClick();\n panel.render(props);\n assert.deepEqual(panel.snapshot().rows,before.map(row=>row.code===edited.code?edited:row));\n assert.equal(panel.snapshot().groupFilter,'A.1.1');\n assert.equal(panel.snapshot().rowPage,1);\n assert.equal(panel.snapshot().reason,'Revisión de prueba');\n assert.equal(panel.snapshot().attempt,null);\n assert.deepEqual(data,source);\n});\n",
+              "currentText": "\ntest('CyP can prepare one of 190 tasks locally and undo without losing any prior or subsequent row edits',()=>{\n const data=fixture(190),source=structuredClone(data);\n const draft={id:context.draftId,revision:3,status:'READY',rows:data.rows,source:{sha256:context.sourceSha256,contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},sourceAvailable:false,spreadsheet:data.spreadsheet,existingTaskCount:0,warnings:[]};\n const props={projectId:context.projectId,scope:context.scope,getSessionToken:()=>assert.fail('Local selection requested a session')};\n const control=tree=>nodes(tree,node=>node.props?.['data-plan-single-selection']===true)[0];\n const selectPartida=(tree,code)=>nodes(control(tree),node=>node.type==='select')[0].props.onChange({target:{value:code}});\n const editTitle=(tree,previous,value)=>nodes(tree,node=>node.type==='input'&&node.props.value===previous)[0].props.onChange({target:{value}});\n panel.reset({open:true,recoveryReady:true,canApprove:true,draft,rows:data.rows,approved:true,reason:'Revisión de prueba'});\n let tree=panel.render(props);\n assert.equal(button(control(tree),'Conservar solo esta partida').props.disabled,true);\n selectPartida(tree,data.rows[189].code);\n tree=panel.render(props);\n assert.match(renderToStaticMarkup(control(tree)),/excluir 189 de las 190 partidas/);\n assert.deepEqual(panel.snapshot().rows,data.rows);\n button(tree,'Excluir esta fila').props.onClick();\n tree=panel.render(props);\n editTitle(tree,data.rows[1].title,'Corrección anterior en otra fila');\n tree=panel.render(props);\n nodes(tree,node=>node.type==='select'&&node.props['data-plan-group-filter'])[0].props.onChange({target:{value:'A.1.1'}});\n tree=panel.render(props);\n button(tree,'Partidas siguientes').props.onClick();\n tree=panel.render(props);\n const before=structuredClone(panel.snapshot().rows);\n assert.ok(!nodes(tree,node=>node.type==='fieldset').some(field=>field.props['data-partida']===data.rows[189].code));\n selectPartida(tree,data.rows[189].code);\n tree=panel.render(props);\n assert.match(renderToStaticMarkup(control(tree)),/excluir 188 de las 189 partidas/);\n button(control(tree),'Conservar solo esta partida').props.onClick();\n tree=panel.render(props);\n assert.deepEqual(panel.snapshot().rows,[data.rows[189]]);\n assert.equal(button(tree,'Aplicar 1 tarea').props.disabled,true);\n assert.equal(panel.snapshot().approved,false);\n assert.equal(panel.snapshot().attempt,null);\n editTitle(tree,data.rows[189].title,'Corrección posterior de la partida elegida');\n tree=panel.render(props);\n const edited=panel.snapshot().rows[0];\n button(control(tree),'Deshacer selección').props.onClick();\n panel.render(props);\n assert.deepEqual(panel.snapshot().rows,before.map(row=>row.code===edited.code?edited:row));\n assert.equal(panel.snapshot().groupFilter,'A.1.1');\n assert.equal(panel.snapshot().rowPage,1);\n assert.equal(panel.snapshot().reason,'Revisión de prueba');\n assert.equal(panel.snapshot().attempt,null);\n assert.deepEqual(data,source);\n});\n",
               "previousText": ""
             }
           ]
@@ -83433,14 +83553,19 @@
           "path": "tests/production-plan-source-curve-ui.test.mjs",
           "status": "MODIFIED",
           "previousSha256": "aa7fc15132d80cb9378cbcbf32312cf6aff20b95e7d2bb35cf96390657c3d0f0",
-          "currentSha256": "b7eeabf025062efb3e8517ee0fe62ad6a5e34f002e94b1291d49b2bd50b41479",
+          "currentSha256": "e2ed1fcc80b4496117a6d1b476f922081f922d153216e984dd734c2fe033ff83",
           "previousBytes": 38007,
-          "currentBytes": 38012,
+          "currentBytes": 38014,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 22649,
-              "currentText": " panel.reset();let tree=panel.render(panelContext);panel.respond({data:{...panelContext,canApprove,drafts,truncated:false}});await panelButton(tree,'Importar cronograma o presupuesto').props.onClick();\n",
-              "previousText": " panel.reset();let tree=panel.render(panelContext);panel.respond({data:{...panelContext,canApprove,drafts,truncated:false}});await panelButton(tree,'Importar PDF, imagen o Excel').props.onClick();\n"
+              "currentText": " panel.reset();let tree=panel.render(panelContext);panel.respond({data:{...panelContext,canApprove,drafts,truncated:false}});await panelButton(tree,'Importar cronograma o presupuesto').props.onClick();\n  tree=panel.render(panelContext);panel.respond({data:{...panelContext,draft:value}});await elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&/\\d+ tareas?$/.test(textContent(node)))[0].props.onClick();\n",
+              "previousText": " panel.reset();let tree=panel.render(panelContext);panel.respond({data:{...panelContext,canApprove,drafts,truncated:false}});await panelButton(tree,'Importar PDF, imagen o Excel').props.onClick();\n  tree=panel.render(panelContext);panel.respond({data:{...panelContext,draft:value}});await elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&textContent(node).endsWith(' tareas'))[0].props.onClick();\n"
+            },
+            {
+              "currentOffsetCharacters": 23738,
+              "currentText": "  const saved=elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&/\\d+ tareas?$/.test(textContent(node)))[0];\n",
+              "previousText": "  const saved=elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&textContent(node).endsWith(' tareas'))[0];\n"
             }
           ]
         },
@@ -91445,11 +91570,11 @@
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-              "sha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c"
+              "sha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683"
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
-              "sha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9"
+              "sha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b"
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
@@ -97534,11 +97659,11 @@
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-              "sha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c"
+              "sha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683"
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
-              "sha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9"
+              "sha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b"
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
@@ -98198,7 +98323,7 @@
             },
             {
               "path": "scripts/verify-plan-import-ui.mjs",
-              "sha256": "a86a0270ff71cacd61f37d8962abd9aade90b8d9f370faba251cb298926528a3"
+              "sha256": "5de26a0168dea015bf73414a344b49d1653ad17f722ba96386360b8e923b246d"
             },
             {
               "path": "src/app/(identity)/cuenta/attendance-closure-view.mjs",
@@ -98234,11 +98359,11 @@
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-              "sha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c"
+              "sha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683"
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
-              "sha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9"
+              "sha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b"
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
@@ -101267,11 +101392,11 @@
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-              "sha256": "6f65a5db82f0d74a8c6d2b76637dc961accecd2cac35611a42d40d1d1ef9d77c"
+              "sha256": "30bfca5a2c6102f29753794441a668f7ea4614c2a1011d64c19c64a4804fc683"
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
-              "sha256": "bd3ef44e02c766cb582e6b6696da93940fec384511064a0877720b339dae89c9"
+              "sha256": "973e5403a051c6e63a1618a118e0b3c1765d33c1b14a6392da3c0abaa32a7d2b"
             },
             {
               "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
