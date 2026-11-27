@@ -5521,7 +5521,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-execution-conversation.mjs",
-          "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+          "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
         },
         {
           "path": "src/lib/meta-greeting.mjs",
@@ -6668,7 +6668,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-execution-conversation.mjs",
-          "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+          "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
         },
         {
           "path": "src/lib/meta-greeting.mjs",
@@ -7836,7 +7836,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-execution-conversation.mjs",
-          "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+          "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
         },
         {
           "path": "src/lib/meta-greeting.mjs",
@@ -8766,7 +8766,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-execution-conversation.mjs",
-          "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+          "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
         },
         {
           "path": "src/lib/meta-greeting.mjs",
@@ -9623,7 +9623,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-execution-conversation.mjs",
-          "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+          "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
         },
         {
           "path": "src/lib/meta-greeting.mjs",
@@ -40906,17 +40906,17 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/lib/meta-field-execution-conversation.mjs",
         "status": "MODIFIED",
         "previousSha256": "20f11a5864b32f8b2fde4d615b2acb205ec7c05de60da614b867d7bee87add38",
-        "currentSha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100",
+        "currentSha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f",
         "previousBytes": 14578,
-        "currentBytes": 15777,
+        "currentBytes": 17804,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 471,
-            "currentText": "const graphemes = new Intl.Segmenter('es', {granularity: 'grapheme'});\n\nfunction fit(parts, budget) {\n  let text = '';\n  for (const part of parts) {\n    if (text.length + part.length > budget) break;\n    text += part;\n  }\n  return text;\n}\n\n// The transport counts UTF-16 units. Keep the ends where floor, sector,\n// unit and expiration often differ, without splitting a displayed character.\nfunction labelWithin(label, limit) {\n  const text = label.replace(/\\s+/gu, ' ').trim();\n  if (text.length <= limit) return text;\n  const parts = Array.from(graphemes.segment(text), entry => entry.segment);\n  const head = fit(parts, Math.ceil((limit - 1) / 2));\n  let tail = '';\n  for (let index = parts.length - 1; index >= 0; index--) {\n    if (tail.length + parts[index].length > limit - 1 - head.length) break;\n    tail = parts[index] + tail;\n  }\n  return head.trimEnd() + '…' + tail.trimStart();\n}\n\nfunction choices(state, eventId, body, rows) {\n  const nonce = digest([eventId, state.step]).slice(0, 20);\n  const options = rows.map(([, name, detail], index) => {\n    const title = labelWithin(name, 24);\n    const description = detail || (name.length > 24 ? name : '');\n    return {id: 'obra:' + nonce + ':' + index, title,\n      ...(description && {description: labelWithin(description, 72)})};\n  });\n  return {\n    state: {...state, nonce, choices: rows.map(([value, title]) => ({value, title}))},\n    reply: {type: 'interactive', body, button: 'Elegir', sections: [{title: 'Opciones', rows: options}]}\n  };\n}\n\nexport {choices as fieldChoices};\n\n",
+            "currentText": "const graphemes = new Intl.Segmenter('es', {granularity: 'grapheme'});\n\nfunction fit(parts, budget) {\n  let text = '';\n  for (const part of parts) {\n    if (text.length + part.length > budget) break;\n    text += part;\n  }\n  return text;\n}\n\n// The transport counts UTF-16 units. Keep the ends where floor, sector,\n// unit and expiration often differ, without splitting a displayed character.\nfunction labelWithin(label, limit) {\n  const text = label.normalize('NFC').replace(/\\s+/gu, ' ').trim();\n  if (text.length <= limit) return text;\n  const parts = Array.from(graphemes.segment(text), entry => entry.segment);\n  const head = fit(parts, Math.ceil((limit - 1) / 2));\n  let tail = '';\n  for (let index = parts.length - 1; index >= 0; index--) {\n    if (tail.length + parts[index].length > limit - 1 - head.length) break;\n    tail = parts[index] + tail;\n  }\n  return head.trimEnd() + '…' + tail.trimStart();\n}\n\nfunction distinguishFieldOptions(options, rows) {\n  const byTitle = new Map();\n  for (const [index, option] of options.entries()) {\n    if (!byTitle.has(option.title)) byTitle.set(option.title, []);\n    byTitle.get(option.title).push(index);\n  }\n  for (const group of byTitle.values()) {\n    const descriptions = group.map(index => options[index].description || '');\n    if (new Set(descriptions).size === group.length) continue;\n    const labels = group.map(index => {\n      const [, name, detail] = rows[index];\n      const context = detail && !detail.includes(name) ? name + ' · ' + detail : detail || name;\n      return Array.from(graphemes.segment(context.normalize('NFC').replace(/\\s+/gu, ' ').trim()), part => part.segment);\n    });\n    const excerpts = labels.map((parts, position) => {\n      const peers = labels.filter((_, other) => other !== position && descriptions[other] === descriptions[position]);\n      if (!peers.length) return descriptions[position];\n      // Among similar names, keep the first difference from the closest sibling on screen.\n      let pivot = 0;\n      for (const peer of peers) {\n        let match = 0;\n        while (match < parts.length && parts[match] === peer[match]) match++;\n        if (match !== parts.length || match !== peer.length) pivot = Math.max(pivot, match);\n      }\n      let start = pivot;\n      let contextUnits = 0;\n      while (start > 0 && contextUnits + parts[start - 1].length <= 16) {\n        start--;\n        contextUnits += parts[start].length;\n      }\n      const prefix = start ? '…' : '';\n      return prefix + labelWithin(parts.slice(start).join(''), 72 - prefix.length);\n    });\n    const numbered = new Set(excerpts).size !== group.length;\n    for (const [position, index] of group.entries()) {\n      const prefix = numbered ? (index + 1) + '. ' : '';\n      if (prefix || excerpts[position]) options[index].description = prefix + labelWithin(excerpts[position], 72 - prefix.length);\n    }\n  }\n}\n\nfunction choices(state, eventId, body, rows) {\n  const nonce = digest([eventId, state.step]).slice(0, 20);\n  const options = rows.map(([, name, detail], index) => {\n    const title = labelWithin(name, 24);\n    const description = detail || (name.length > 24 ? name : '');\n    return {id: 'obra:' + nonce + ':' + index, title,\n      ...(description && {description: labelWithin(description, 72)})};\n  });\n  distinguishFieldOptions(options, rows);\n  return {\n    state: {...state, nonce, choices: rows.map(([value, title]) => ({value, title}))},\n    reply: {type: 'interactive', body, button: 'Elegir', sections: [{title: 'Opciones', rows: options}]}\n  };\n}\n\nexport {choices as fieldChoices};\n\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 2196,
+            "currentOffsetCharacters": 4220,
             "currentText": "",
             "previousText": "function choices(state,eventId,body,rows){const nonce=digest([eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Opciones',rows:rows.map(([,title],index)=>({id:`obra:${nonce}:${index}`,title:title.slice(0,24)}))}]}};}\n"
           }
@@ -43146,9 +43146,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-meta-field.test.mjs",
         "status": "MODIFIED",
         "previousSha256": "fdc0ddf2cf5fab717654860bdd89543a70c161cb9fac7ab3fdd0cbc96d1c1e18",
-        "currentSha256": "57d836ff82d6bc059c02272c5f5522dc81cd953ecd720bc673c0601588e4b5a3",
+        "currentSha256": "09c1b24c7ec9b72626540911221d02f7a553100983ecb19b9524037124eb0fde",
         "previousBytes": 44133,
-        "currentBytes": 53048,
+        "currentBytes": 55214,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 71,
@@ -43157,16 +43157,16 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "currentOffsetCharacters": 1779,
-            "currentText": "test('long sector labels distinguish the entrance on the wire and save the selected sector only on confirmation', () => {\n const common = 'Acceso de personal a la ampliación de portería';\n const sectors = ['Norte', 'Sur'].map(side => ({id: 'sector-' + side, name: common + ' · ' + side}));\n const extra = {facts: {...facts, sectors}};\n const menu = say('ENTRADA', null, extra);\n const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;\n assert.notEqual(rows[0].title, rows[1].title);\n assert.deepEqual(rows.map(row => row.description), sectors.map(sector => sector.name));\n assert.match(rows[1].title, /Sur$/);\n const notice = pick(menu, 1, extra), location = pick(notice, 0, extra);\n const confirmation = run({type:'location', timestamp:String(now.getTime()/1000), location:{latitude:0,longitude:0}}, location.state, extra);\n assert.equal(confirmation.command, undefined);\n const saved = pick(confirmation, 0, extra);\n assert.equal(saved.command.action, 'ATTENDANCE');\n assert.equal(saved.command.payload.sectorId, sectors[1].id);\n});\ntest('catalog units stay visible when reporting similar long material names', () => {\n const name = 'Cemento Portland compuesto para mampostería';\n const materials = ['bolsa','kg'].map(unit => ({id:'cemento-' + unit, name, unit, active:true}));\n const extra = {facts:{...facts, inventory:{materials, catalogHash:'a'.repeat(64)}}};\n const task = say('CONSUMO', null, extra);\n const sector = pickValue(task, 'NONE', extra);\n const menu = pickValue(sector, 'sector-a', extra);\n const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;\n assert.match(rows[0].title, /bolsa$/);\n assert.match(rows[1].title, /kg$/);\n assert.equal(rows[1].description, name + ' · kg');\n const selected = pick(menu, 1, extra);\n assert.equal(selected.state.materialId, materials[1].id);\n assert.equal(selected.state.unit, 'kg');\n assert.equal(selected.command, undefined);\n});\ntest('long field options keep a whole displayed character and task progress inside the transport limits', () => {\n const emoji = '👷🏽‍♀️', name = 'Mampostería ' + emoji.repeat(13) + ' Planta Sur';\n const extra = {facts: {...facts, tasks:[{...facts.tasks[0], title:name, progress:25}]}};\n const menu = say('TAREAS', null, extra);\n const row = customerReplyMessage(menu.reply).interactive.action.sections[0].rows[0];\n assert.ok(row.title.length <= 24 && row.description.length <= 72);\n for (const label of [row.title, row.description]) {\n  assert.ok(label.isWellFormed());\n  assert.doesNotMatch(label.replaceAll(emoji, ''), /[👷🏽‍♀️]/u);\n }\n assert.match(row.title, /Sur$/);\n assert.match(row.description, /25%$/);\n assert.equal(menu.state.choices[0].title, name);\n});\ntest('Registrar material without a mandate starts a reviewable consumption from the menu',()=>{\n const catalog={...facts,inventory:{materials:[{id:'cement',name:'Cemento',active:true}]},execution:{mandates:[],mandatesTruncated:false}};\n const extra={facts:catalog};\n const initial=pickValue(say('MENU',null,extra),'EXECUTION',extra);\n assert.equal(initial.state.purpose,'CONSUMPTION');\n assert.equal(initial.state.step,'TASK');\n assert.match(initial.reply.body,/stock se descuenta cuando lo apruebe/);\n assert.equal(initial.command,undefined);\n const next=pickValue(initial,'NONE',extra);\n assert.equal(next.state.purpose,'CONSUMPTION');\n assert.equal(next.state.step,'SECTOR');\n assert.equal(next.command,undefined);\n for(const restricted of [{...catalog,permissions:{report:false}},{...catalog,attendanceOnly:true}]){\n  const denied=say('REPORTAR',null,{facts:restricted});\n  assert.notEqual(denied.state?.purpose,'CONSUMPTION');\n  assert.equal(denied.command,undefined);\n }\n});\n",
+            "currentText": "test('long sector labels distinguish the entrance on the wire and save the selected sector only on confirmation', () => {\n const common = 'Acceso de personal a la ampliación de portería';\n const sectors = ['Norte', 'Sur'].map(side => ({id: 'sector-' + side, name: common + ' · ' + side}));\n const extra = {facts: {...facts, sectors}};\n const menu = say('ENTRADA', null, extra);\n const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;\n assert.notEqual(rows[0].title, rows[1].title);\n assert.deepEqual(rows.map(row => row.description), sectors.map(sector => sector.name));\n assert.match(rows[1].title, /Sur$/);\n const notice = pick(menu, 1, extra), location = pick(notice, 0, extra);\n const confirmation = run({type:'location', timestamp:String(now.getTime()/1000), location:{latitude:0,longitude:0}}, location.state, extra);\n assert.equal(confirmation.command, undefined);\n const saved = pick(confirmation, 0, extra);\n assert.equal(saved.command.action, 'ATTENDANCE');\n assert.equal(saved.command.payload.sectorId, sectors[1].id);\n});\ntest('the WhatsApp sector menu shows the differing middle of a name before the worker chooses', () => {\n const makeName = side => 'Entrada del personal por el edificio ' + side + ' por el pasillo central de planta baja';\n const sectors = ['Sur', 'Norte'].map(side => ({id: 'sector-' + side, name: makeName(side)}));\n assert.ok(sectors.every(sector => sector.name.length <= 80));\n const extra = {facts: {...facts, sectors}};\n const menu = say('ENTRADA', null, extra);\n const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;\n const visible = row => row.title + ' ' + row.description;\n assert.deepEqual(rows.map(row => visible(row).match(/\\b(Sur|Norte)\\b/u)?.[1]), ['Sur', 'Norte']);\n const selected = pick(menu, rows.findIndex(row => /\\bNorte\\b/u.test(visible(row))), extra);\n assert.equal(selected.state.sectorId, sectors[1].id);\n assert.equal(selected.command, undefined);\n assert.deepEqual(menu.state.choices.map(choice => choice.title), sectors.map(sector => sector.name));\n});\ntest('repeated sector names stay visibly distinct across a full page and preserve navigation', () => {\n const name = 'Acceso al depósito 👷🏽‍♀️';\n const sectors = Array.from({length: 20}, (_, index) => ({\n  id: 'sector-' + index, name: index % 2 ? name.normalize('NFD') : name\n }));\n const extra = {facts: {...facts, sectors}};\n const menu = say('ENTRADA', null, extra);\n const page = pickValue(menu, 'NEXT_SECTORS', extra);\n const rows = customerReplyMessage(page.reply).interactive.action.sections[0].rows;\n const visible = rows.map(row => row.title + ' ' + (row.description || ''));\n assert.equal(rows.length, 10);\n assert.equal(new Set(visible.map(label => label.normalize('NFC'))).size, rows.length);\n for (const row of rows) {\n  assert.ok(row.title.length <= 24 && (row.description || '').length <= 72);\n  assert.ok(row.title.isWellFormed() && (row.description || '').isWellFormed());\n }\n assert.equal(rows.at(-2).title, 'Sectores anteriores');\n assert.equal(rows.at(-1).title, 'Más sectores');\n assert.equal(pick(page, 7, extra).state.sectorId, sectors[15].id);\n assert.equal(visible.some(label => label.includes('sector-')), false);\n});\ntest('catalog units stay visible when reporting similar long material names', () => {\n const name = 'Cemento Portland compuesto para mampostería';\n const materials = ['bolsa','kg'].map(unit => ({id:'cemento-' + unit, name, unit, active:true}));\n const extra = {facts:{...facts, inventory:{materials, catalogHash:'a'.repeat(64)}}};\n const task = say('CONSUMO', null, extra);\n const sector = pickValue(task, 'NONE', extra);\n const menu = pickValue(sector, 'sector-a', extra);\n const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;\n assert.match(rows[0].title, /bolsa$/);\n assert.match(rows[1].title, /kg$/);\n assert.equal(rows[1].description, name + ' · kg');\n const selected = pick(menu, 1, extra);\n assert.equal(selected.state.materialId, materials[1].id);\n assert.equal(selected.state.unit, 'kg');\n assert.equal(selected.command, undefined);\n});\ntest('long field options keep a whole displayed character and task progress inside the transport limits', () => {\n const emoji = '👷🏽‍♀️', name = 'Mampostería ' + emoji.repeat(13) + ' Planta Sur';\n const extra = {facts: {...facts, tasks:[{...facts.tasks[0], title:name, progress:25}]}};\n const menu = say('TAREAS', null, extra);\n const row = customerReplyMessage(menu.reply).interactive.action.sections[0].rows[0];\n assert.ok(row.title.length <= 24 && row.description.length <= 72);\n for (const label of [row.title, row.description]) {\n  assert.ok(label.isWellFormed());\n  assert.doesNotMatch(label.replaceAll(emoji, ''), /[👷🏽‍♀️]/u);\n }\n assert.match(row.title, /Sur$/);\n assert.match(row.description, /25%$/);\n assert.equal(menu.state.choices[0].title, name);\n});\ntest('Registrar material without a mandate starts a reviewable consumption from the menu',()=>{\n const catalog={...facts,inventory:{materials:[{id:'cement',name:'Cemento',active:true}]},execution:{mandates:[],mandatesTruncated:false}};\n const extra={facts:catalog};\n const initial=pickValue(say('MENU',null,extra),'EXECUTION',extra);\n assert.equal(initial.state.purpose,'CONSUMPTION');\n assert.equal(initial.state.step,'TASK');\n assert.match(initial.reply.body,/stock se descuenta cuando lo apruebe/);\n assert.equal(initial.command,undefined);\n const next=pickValue(initial,'NONE',extra);\n assert.equal(next.state.purpose,'CONSUMPTION');\n assert.equal(next.state.step,'SECTOR');\n assert.equal(next.command,undefined);\n for(const restricted of [{...catalog,permissions:{report:false}},{...catalog,attendanceOnly:true}]){\n  const denied=say('REPORTAR',null,{facts:restricted});\n  assert.notEqual(denied.state?.purpose,'CONSUMPTION');\n  assert.equal(denied.command,undefined);\n }\n});\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 14924,
+            "currentOffsetCharacters": 17078,
             "currentText": "  const read=say(body,null,{facts:current});assert.equal(read.state.purpose,'TASKS');assert.match(read.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.reply.body,/37%/);assert.match(read.reply.body,/https:\\/\\/obrasaas.com\\/cuenta\\?seccion=cronograma&obra=project-a#schedule-gantt-title/);assert.doesNotMatch(read.reply.body,/PRIVATE_FINANCIAL_AMOUNT/);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.planImport,undefined);\n",
             "previousText": "  const read=say(body,null,{facts:current});assert.equal(read.state.purpose,'TASKS');assert.match(read.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.reply.body,/37%/);assert.match(read.reply.body,/https:\\/\\/obrasaas.com\\/cuenta\\?obra=project-a#schedule-gantt-title/);assert.doesNotMatch(read.reply.body,/PRIVATE_FINANCIAL_AMOUNT/);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.planImport,undefined);\n"
           },
           {
-            "currentOffsetCharacters": 47983,
+            "currentOffsetCharacters": 50137,
             "currentText": "\n\n// UX414 regression proposal: language classification is not a command/name parser.\ntest('greeting variants are a bounded whole-message vocabulary, not prefix or command normalization',()=>{\n for(const body of ['HOLA','Hola!','¡¡hola!!','hola buenas','Hola, buenas!','BUENAS','¡Buen día!','Buen dia','Buenos días.','Buenos dias','Buenas tardes','Buenas noches','  hola   buenas  ']){assert.equal(isMetaGreeting(body),true,body);assert.equal(metaFieldConversationAction(body),'MENU',body);}\n for(const body of ['hola Juan','Hola, soy Juan','Holanda','Buen Díaz','holaaa','Hola 👋','hola buenas 2','IDENTIDAD synthetic-code','ESTADO IDENTIDAD','Frente 2, avance 10%','Nota: hola buenas','CANCELAR!','ENTRADA!',null,23,{},['HOLA']])assert.equal(isMetaGreeting(body),false,String(body));\n assert.equal(metaFieldConversationAction('CANCELAR!'),null);assert.equal(metaFieldConversationAction('ENTRADA!'),null);assert.equal(metaFieldConversationAction('ESTADO IDENTIDAD'),null);assert.equal(metaFieldConversationAction('IDENTIDAD synthetic-code'),null);assert.equal(metaFieldConversationAction('CANCELAR'),'MENU');assert.equal(metaFieldConversationAction('ENTRADA'),'ATTEND_IN');\n});\n\ntest('bounded greeting menus still derive their choices only from current capabilities',()=>{\n for(const body of ['Hola!','hola buenas','¡Buen día!']){\n  const report=say(body,null,{facts:{...facts,permissions:{attendance:false,report:true}}});assert.equal(report.state.purpose,'MENU');assert.ok(report.state.choices.every(c=>!c.value.startsWith('ATTEND_')));assert.ok(report.state.choices.some(c=>c.value==='MEDIA'));assert.equal(report.command,undefined);assert.equal(report.media,undefined);\n  const attendance=say(body,null,{facts:{...facts,permissions:{attendance:true,report:false}}});assert.ok(attendance.state.choices.every(c=>!['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(c.value)));assert.equal(attendance.command,undefined);assert.equal(attendance.media,undefined);\n }\n});\n\ntest('bounded greetings preserve the exact live draft, source, nonce, expiry and revoked-permission refusal',()=>{\n for(const command of ['ENTRADA','EVIDENCIA','MATERIALES'])for(const body of ['Hola!','hola buenas','¡Buen día!']){\n  const initial=say(command),state=Object.freeze({...initial.state,lastEventId:'durable-original-event',lastReceivedAt:'2026-10-01T11:59:59.900Z',lastMessageTimestamp:1790855999,expiresAt:'2026-10-01T12:01:00.000Z'}),before=JSON.stringify(state);\n  const greeting=planMetaFieldConversation({message:{type:'text',text:{body}},state,eventId:'synthetic-variant-greeting',facts,now});assert.equal(greeting.state,state);assert.equal(JSON.stringify(state),before);assert.equal(greeting.preserveConversation,true);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);assert.equal(metaFieldPlanDisclosure(greeting),'GENERIC');\n  const foreign=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:'obra:'+'f'.repeat(20)+':0',title:body}}},state,eventId:'synthetic-foreign-choice',facts,now});assert.equal(foreign.state,state);assert.equal(foreign.command,undefined);assert.equal(foreign.media,undefined);assert.match(foreign.reply.body,/paso anterior/);\n  const changed={...facts,permissions:command==='ENTRADA'?{attendance:false,report:true}:{attendance:true,report:false}},denied=planMetaFieldConversation({message:{type:'text',text:{body}},state,eventId:'synthetic-variant-revoked',facts:changed,now});assert.equal(denied.state,state);assert.equal(denied.preserveConversation,true);assert.equal(denied.command,undefined);assert.equal(denied.media,undefined);assert.match(denied.reply.body,/permisos/);\n  const cancelled=say('CANCELAR',state);assert.equal(cancelled.state.purpose,'MENU');assert.equal(cancelled.command,undefined);assert.equal(cancelled.media,undefined);\n }\n});\n\ntest('a bounded greeting cannot renew an expired field draft or authorize its old interactive choice',()=>{\n const initial=say('ENTRADA'),expired=Object.freeze({...initial.state,expiresAt:now.toISOString(),lastEventId:'expired-original-event'}),before=JSON.stringify(expired);\n for(const body of ['Hola!','hola buenas']){\n  const greeting=planMetaFieldConversation({message:{type:'text',text:{body}},state:expired,eventId:'synthetic-variant-expired',facts,now});assert.equal(JSON.stringify(expired),before);assert.notEqual(greeting.state,expired);assert.equal(greeting.state.step,'MENU');assert.equal(greeting.preserveConversation,undefined);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);\n  const stale=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:initial.reply.sections[0].rows[0].id}}},state:{...greeting.state,version:1,expiresAt:'2026-10-01T12:15:00.000Z'},eventId:'synthetic-old-expired-choice',facts,now});assert.equal(stale.command,undefined);assert.equal(stale.media,undefined);assert.match(stale.reply.body,/paso anterior/);\n }\n});\n",
             "previousText": ""
           }
@@ -54641,7 +54641,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
-            "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+            "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
           },
           {
             "path": "src/lib/meta-greeting.mjs",
@@ -56123,7 +56123,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
-            "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+            "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
           },
           {
             "path": "src/lib/meta-greeting.mjs",
@@ -57469,7 +57469,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
-            "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+            "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
           },
           {
             "path": "src/lib/meta-greeting.mjs",
@@ -64135,7 +64135,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
-            "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+            "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
           },
           {
             "path": "src/lib/meta-greeting.mjs",
@@ -65897,7 +65897,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
-            "sha256": "90524ad637c2f1d9008b27b009c12e69388874fa3488dd111fc4d9355852c100"
+            "sha256": "5eff3bc7fb8e0b304876f4485fac1b18f2ab61182bbf898f97c4a285c26ee54f"
           },
           {
             "path": "src/lib/meta-greeting.mjs",
