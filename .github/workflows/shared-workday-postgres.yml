@@ -5,6 +5,11 @@ on:
     paths:
       - '.github/workflows/shared-workday-postgres.yml'
       - 'scripts/verify-shared-workday-postgres.mjs'
+      - 'scripts/verify-shared-workday-browser.mjs'
+      - 'scripts/verify-field-task-pagination-ui.mjs'
+      - 'scripts/lib/shared-workday-browser-server.mjs'
+      - 'scripts/lib/owned-fixture-cleanup.mjs'
+      - 'scripts/lib/field-task-request-body.mjs'
       - 'scripts/verify-company-onboarding-postgres.mjs'
       - 'scripts/lib/verify-bootstrapped-whatsapp-composition.mjs'
       - 'scripts/lib/company-contact-migration.mjs'
@@ -18,6 +23,7 @@ on:
       - 'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'
       - 'scripts/fixtures/shared-workday-wall.jpg'
       - 'src/lib/**'
+      - 'src/app/(identity)/cuenta/**'
       - 'package.json'
       - 'package-lock.json'
 permissions:
@@ -54,10 +60,29 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - run: node --test tests/shared-workday-postgres-host.test.mjs
-      - name: Exercise signed WhatsApp events and web decisions in one database
+      - name: Approve the signed WhatsApp consumption in Chrome on the same PostgreSQL database
         env:
           WORKDAY_POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
           WORKDAY_POSTGRES_NETWORK: ${{ job.services.postgres.network }}
-        run: node scripts/verify-shared-workday-postgres.mjs
+          PUPPETEER_EXECUTABLE_PATH: /opt/google/chrome/chrome
+        run: |
+          "$PUPPETEER_EXECUTABLE_PATH" --version
+          node scripts/verify-shared-workday-browser.mjs > "$RUNNER_TEMP/shared-workday-browser.json"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          import {join} from 'node:path';
+          const proof = JSON.parse(readFileSync(join(process.env.RUNNER_TEMP, 'shared-workday-browser.json'), 'utf8'));
+          assert.equal(proof.sourceRevision, process.env.GITHUB_SHA);
+          assert.equal(proof.status, 'PASS');
+          console.log(JSON.stringify(proof, null, 2));
+          NODE
+      - name: Retain the synthetic workday receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: shared-workday-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-workday-browser.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Bootstrap a company and connect both WhatsApp number modes in UTC
         run: node scripts/verify-company-onboarding-postgres.mjs --connect-whatsapp

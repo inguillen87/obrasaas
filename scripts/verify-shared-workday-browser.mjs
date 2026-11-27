@@ -103,14 +103,16 @@ export default function Page(){
       /^(?:APPDATA|COMSPEC|LOCALAPPDATA|PATH|PATHEXT|SYSTEMROOT|TEMP|TMP|USERPROFILE|HOME|WINDIR|LANG|LC_ALL)$/i.test(name)));
     env.NEXT_TELEMETRY_DISABLED = '1';
     child = fork(fileURLToPath(new URL('./lib/shared-workday-browser-server.mjs', import.meta.url)), [fixture], {
-      execArgv: [], cwd: fixture, windowsHide: true, env
+      execArgv: [], cwd: fixture, windowsHide: true, env, stdio: ['ignore', 2, 2, 'ipc']
     });
     exited = once(child, 'exit');
     const [port] = await Promise.race([once(child, 'message', {signal: AbortSignal.timeout(75000)}),
       exited.then(() => { throw Error('Next fixture exited before startup'); })]);
     assert.ok(Number.isInteger(port));
     uiOrigin = 'http://127.0.0.1:' + port;
-    browser = await puppeteer.launch({headless: true, env, ...(process.platform === 'win32' ? {channel: 'chrome'} : {})});
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    const chrome = executablePath ? {executablePath} : process.platform === 'win32' ? {channel: 'chrome'} : {};
+    browser = await puppeteer.launch({headless: true, env, ...chrome});
     page = await browser.newPage();
     page.on('pageerror', e => errors.push(e.message));
     await page.setRequestInterception(true);
@@ -172,4 +174,5 @@ export default function Page(){
 
 const proof = await runSharedWorkday({jpeg: readSource('scripts/fixtures/shared-workday-wall.jpg'), approveConsumption});
 console.log(JSON.stringify({status: proof.status, sourceRevision: proof.sourceRevision, browserApproval: proof.browserApproval,
+  businessChecks: proof.steps.map(step => step.step),
   databaseRemoved: true, beforeReplay: proof.beforeReplay, afterReplay: proof.afterReplay, providerRequests: proof.outboundNetworkAttempts}, null, 2));
