@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID, createHmac, createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { isIPv4 } from 'node:net';
 import { Client, Pool } from 'pg';
 import { trackDisposablePool, closeDisposablePool } from './disposable-postgres-cleanup.mjs';
 import { COMPANY_CHANNEL_DISPOSABLE_FIXTURE_SQL } from './company-channel-disposable-fixture.mjs';
@@ -17,12 +18,32 @@ import { createMetaCustomerProcessor } from '../../src/lib/meta-customer-process
 import { createMetaFieldBridge } from '../../src/lib/meta-field-bridge.mjs';
 import { encryptCustomerSecret } from '../../src/lib/meta-customer-credentials.mjs';
 
+export function expectedDatabaseHosts(url, environment = process.env, inspect = execFileSync) {
+  const { GITHUB_ACTIONS, GITHUB_JOB, GITHUB_WORKFLOW, WORKDAY_POSTGRES_SERVICE_ID: serviceId, WORKDAY_POSTGRES_NETWORK: network } = environment;
+  const workdayJob = GITHUB_ACTIONS === 'true' && GITHUB_JOB === 'workday' && GITHUB_WORKFLOW === 'Shared construction workday';
+  if (!serviceId && !network && !workdayJob) return ['127.0.0.1/32', '::1/128'];
+
+  assert.ok(workdayJob, 'PostgreSQL service context requires the shared workday job');
+  assert.equal(url.href, 'postgresql://cutover_test@127.0.0.1:6549/obrasaas_cutover_ci');
+  assert.match(serviceId, /^[0-9a-f]{64}$/);
+  assert.match(network, /^github_network_[0-9a-f]{32}$/);
+  // Read only the network and port metadata of the runner's own service.
+  const format = '{{json .NetworkSettings.Networks}}\n{{json .NetworkSettings.Ports}}';
+  const inspected = inspect('/usr/bin/docker', ['--host=unix:///var/run/docker.sock', 'inspect', '--type=container', '--format', format, serviceId], { encoding: 'utf8' });
+  const [networks, ports] = inspected.trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(ports['5432/tcp'], [{ HostIp: '127.0.0.1', HostPort: '6549' }]);
+  const address = networks[network]?.IPAddress;
+  assert.ok(isIPv4(address), 'Missing PostgreSQL address on the job network');
+  return [address + '/32'];
+}
+
 // Allocate an exclusively owned database. Shared services may host other suites.
 export async function runSharedWorkday({
   jpeg,
   captureInventory
 }) {
   const url = lifecycleDisposableUrl(process.env);
+  const expectedHosts = expectedDatabaseHosts(url);
   const database = 'obrasaas_shared_workday_' + randomUUID().replaceAll('-', '');
   const admin = new Client({
     connectionString: url.href,
@@ -32,7 +53,9 @@ export async function runSharedWorkday({
   let pool,
     created = false;
   try {
-    assert.equal((await admin.query('SELECT current_database() db')).rows[0].db, 'obrasaas_cutover_ci');
+    const target = (await admin.query('SELECT current_database() db, inet_server_addr()::text host')).rows[0];
+    assert.equal(target.db, 'obrasaas_cutover_ci');
+    assert.ok(expectedHosts.includes(target.host), 'Unexpected PostgreSQL server address');
     await admin.query(`CREATE DATABASE "${database}"`);
     created = true;
     const owned = new URL(url);
@@ -45,6 +68,7 @@ export async function runSharedWorkday({
     return await exercise({
       pool,
       database,
+      databaseHost: target.host,
       jpeg,
       captureInventory
     });
@@ -60,6 +84,7 @@ export async function runSharedWorkday({
 async function exercise({
   pool,
   database,
+  databaseHost,
   jpeg,
   captureInventory
 }) {
@@ -313,7 +338,7 @@ async function exercise({
   try {
     const db = (await query('SELECT current_database() db,inet_server_addr()::text host')).rows[0];
     assert.equal(db.db, database);
-    assert.ok(['127.0.0.1/32', '::1/128'].includes(db.host));
+    assert.equal(db.host, databaseHost);
     assert.equal((await query("SELECT to_regclass('public.\"Project\"') AS existing")).rows[0].existing, null);
     await query(COMPANY_CHANNEL_DISPOSABLE_FIXTURE_SQL);
     await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('director','user_Director','director@example.invalid');

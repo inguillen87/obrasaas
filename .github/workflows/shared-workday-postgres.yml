@@ -10,6 +10,7 @@ on:
       - 'scripts/lib/company-contact-migration.mjs'
       - 'scripts/lib/company-channel-migration.mjs'
       - 'scripts/lib/shared-workday-scenario.mjs'
+      - 'tests/shared-workday-postgres-host.test.mjs'
       - 'scripts/lib/company-channel-disposable-fixture.mjs'
       - 'scripts/lib/disposable-postgres-cleanup.mjs'
       - 'scripts/lib/synthetic-capture-quality.mjs'
@@ -52,7 +53,11 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
+      - run: node --test tests/shared-workday-postgres-host.test.mjs
       - name: Exercise signed WhatsApp events and web decisions in one database
+        env:
+          WORKDAY_POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+          WORKDAY_POSTGRES_NETWORK: ${{ job.services.postgres.network }}
         run: node scripts/verify-shared-workday-postgres.mjs
       - name: Bootstrap a company and connect both WhatsApp number modes in UTC
         run: node scripts/verify-company-onboarding-postgres.mjs --connect-whatsapp
