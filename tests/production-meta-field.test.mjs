@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {planMetaFieldConversation,metaFieldConversationAction,metaFieldPlanDisclosure} from '../src/lib/meta-field-conversation.mjs';
 import {isMetaGreeting} from '../src/lib/meta-greeting.mjs';
+import {customerReplyMessage} from '../src/lib/meta-customer-provider.mjs';
 import {metaFieldOperationId} from '../src/lib/meta-field-bridge.mjs';
 import {operationId} from '../src/lib/workspace-policy.mjs';
 import {fieldTransition,FIELD_ACTIONS} from '../src/lib/field-operations-policy.mjs';
@@ -14,6 +15,52 @@ const run=(message,state=null,extra={})=>{const result=planMetaFieldConversation
 const say=(body,state,extra)=>run({type:'text',text:{body}},state,extra);
 const pick=(plan,index=0,extra)=>run({type:'interactive',interactive:{type:'list_reply',list_reply:{id:plan.reply.sections[0].rows[index].id}}},plan.state,extra);
 const pickValue=(plan,value,extra)=>pick(plan,plan.state.choices.findIndex(choice=>choice.value===value),extra);
+test('long sector labels distinguish the entrance on the wire and save the selected sector only on confirmation', () => {
+ const common = 'Acceso de personal a la ampliación de portería';
+ const sectors = ['Norte', 'Sur'].map(side => ({id: 'sector-' + side, name: common + ' · ' + side}));
+ const extra = {facts: {...facts, sectors}};
+ const menu = say('ENTRADA', null, extra);
+ const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;
+ assert.notEqual(rows[0].title, rows[1].title);
+ assert.deepEqual(rows.map(row => row.description), sectors.map(sector => sector.name));
+ assert.match(rows[1].title, /Sur$/);
+ const notice = pick(menu, 1, extra), location = pick(notice, 0, extra);
+ const confirmation = run({type:'location', timestamp:String(now.getTime()/1000), location:{latitude:0,longitude:0}}, location.state, extra);
+ assert.equal(confirmation.command, undefined);
+ const saved = pick(confirmation, 0, extra);
+ assert.equal(saved.command.action, 'ATTENDANCE');
+ assert.equal(saved.command.payload.sectorId, sectors[1].id);
+});
+test('catalog units stay visible when reporting similar long material names', () => {
+ const name = 'Cemento Portland compuesto para mampostería';
+ const materials = ['bolsa','kg'].map(unit => ({id:'cemento-' + unit, name, unit, active:true}));
+ const extra = {facts:{...facts, inventory:{materials, catalogHash:'a'.repeat(64)}}};
+ const task = say('CONSUMO', null, extra);
+ const sector = pickValue(task, 'NONE', extra);
+ const menu = pickValue(sector, 'sector-a', extra);
+ const rows = customerReplyMessage(menu.reply).interactive.action.sections[0].rows;
+ assert.match(rows[0].title, /bolsa$/);
+ assert.match(rows[1].title, /kg$/);
+ assert.equal(rows[1].description, name + ' · kg');
+ const selected = pick(menu, 1, extra);
+ assert.equal(selected.state.materialId, materials[1].id);
+ assert.equal(selected.state.unit, 'kg');
+ assert.equal(selected.command, undefined);
+});
+test('long field options keep a whole displayed character and task progress inside the transport limits', () => {
+ const emoji = '👷🏽‍♀️', name = 'Mampostería ' + emoji.repeat(13) + ' Planta Sur';
+ const extra = {facts: {...facts, tasks:[{...facts.tasks[0], title:name, progress:25}]}};
+ const menu = say('TAREAS', null, extra);
+ const row = customerReplyMessage(menu.reply).interactive.action.sections[0].rows[0];
+ assert.ok(row.title.length <= 24 && row.description.length <= 72);
+ for (const label of [row.title, row.description]) {
+  assert.ok(label.isWellFormed());
+  assert.doesNotMatch(label.replaceAll(emoji, ''), /[👷🏽‍♀️]/u);
+ }
+ assert.match(row.title, /Sur$/);
+ assert.match(row.description, /25%$/);
+ assert.equal(menu.state.choices[0].title, name);
+});
 test('Registrar material without a mandate starts a reviewable consumption from the menu',()=>{
  const catalog={...facts,inventory:{materials:[{id:'cement',name:'Cemento',active:true}]},execution:{mandates:[],mandatesTruncated:false}};
  const extra={facts:catalog};

@@ -9,7 +9,7 @@ import {canImportPlan} from './plan-import-policy.mjs';
 import {startMetaPlanImportConversation,continueMetaPlanImportConversation} from './meta-plan-import-conversation.mjs';
 import {voiceProgressDraftForEvidence,prepareVoiceProgressDraft,voiceProgressDraftReady,UNKNOWN_VOICE_VALUE,voiceQuantityScopeLabel,voiceProgressQuantityLabel,voiceProgressUnitLabel} from './voice-progress-draft.mjs';
 import {deriveTaskMeasurement} from './task-progress-measurement.js';
-import {planMetaFieldExecution,hasMetaFieldExecutionMandate} from './meta-field-execution-conversation.mjs';
+import {planMetaFieldExecution,hasMetaFieldExecutionMandate,fieldChoices as choices} from './meta-field-execution-conversation.mjs';
 import {identityAccountReturnPath} from './identity-return-path.mjs';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['EXECUTION','Registrar material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
@@ -47,7 +47,6 @@ function withAttendanceWebGuidance(body,facts){
 }
 const progressHint='Usá el formato 25% o 2.5 / 10 M2. La base debe ser mayor que cero y la cantidad no puede superarla. Usá punto, hasta 4 decimales y hasta 14 cifras enteras, sin ceros a la izquierda. El borrador se conserva. Escribí CANCELAR para volver al menú.';
 const inputHints={INCIDENT_TITLE:'Escribí un título de 3 a 160 caracteres.',INCIDENT_DESCRIPTION:'Escribí un detalle de 8 a 2000 caracteres.',MATERIAL_NAME:'Escribí el nombre del material de 2 a 160 caracteres.',MATERIAL_QUANTITY:'Escribí una cantidad mayor que cero, por ejemplo 12 o 2.5. Usá punto, hasta 3 decimales y hasta 9 cifras enteras.',MEDIA:'Volvé a enviar la foto, audio o video con una descripción de hasta 1000 caracteres.',MEDIA_FILE:'Volvé a enviar la foto, audio o video con una descripción de hasta 1000 caracteres.'};
-function choices(state,eventId,body,rows){const nonce=digest([eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Opciones',rows:rows.map(([,title,description],i)=>({id:'obra:'+nonce+':'+i,title:title.slice(0,24),...(description?{description:description.slice(0,72)}:{})}))}]}};}
 function chooseSector(state,eventId,facts){
  if(!facts.sectors.length)return {state:null,reply:text('Pedí al administrador o director que prepare al menos un sector de la obra en Mi cuenta. Después volvé a iniciar este registro.')};
  const offset=Math.min(state.sectorOffset||0,Math.floor((facts.sectors.length-1)/8)*8),rows=facts.sectors.slice(offset,offset+8).map(s=>[s.id,s.name]);

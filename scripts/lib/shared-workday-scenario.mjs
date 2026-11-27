@@ -41,7 +41,8 @@ export function expectedDatabaseHosts(url, environment = process.env, inspect = 
 export async function runSharedWorkday({
   jpeg,
   captureInventory,
-  approveConsumption
+  approveConsumption,
+  approveProgress
 }) {
   const url = lifecycleDisposableUrl(process.env);
   const expectedHosts = expectedDatabaseHosts(url);
@@ -72,7 +73,8 @@ export async function runSharedWorkday({
       databaseHost: target.host,
       jpeg,
       captureInventory,
-      approveConsumption
+      approveConsumption,
+      approveProgress
     });
   } finally {
     try {
@@ -89,7 +91,8 @@ async function exercise({
   databaseHost,
   jpeg,
   captureInventory,
-  approveConsumption
+  approveConsumption,
+  approveProgress
 }) {
   const query = (...args) => pool.query(...args);
   const connect = () => pool.connect();
@@ -198,7 +201,8 @@ async function exercise({
     sector = 'sector-a',
     workerId = 'worker-a';
   const taskTitle = 'Muro de planta baja',
-    sectorTitle = 'Planta baja',
+    sectorTitle = 'Acceso de personal a la ampliación de portería · Sur',
+    northEntrance = 'Acceso de personal a la ampliación de portería · Norte',
     materialTitle = 'Cemento';
   async function web(actor, route, method = 'GET', input = {}, expected = 200) {
     const verify = async () => actor;
@@ -297,8 +301,10 @@ async function exercise({
     };
   }
   async function choose(prior, title) {
-    const row = prior.result.reply.sections?.flatMap(s => s.rows).find(r => r.title === title);
-    assert.ok(row, 'Missing ' + title + ' among ' + JSON.stringify(prior.result.reply));
+    const matches = prior.result.reply.sections.flatMap(s => s.rows)
+      .filter(row => row.title === title || row.description === title);
+    assert.equal(matches.length, 1, 'Expected one visible choice matching ' + title);
+    const [row] = matches;
     return send({
       type: 'interactive',
       interactive: {
@@ -393,6 +399,12 @@ async function exercise({
     await save(owner, 'CONFIGURE_SITE', {
       revision: first.projectRevision,
       sectors: [{
+        id: 'north-access',
+        name: northEntrance,
+        latitude: 0.01,
+        longitude: 0,
+        radius: 100
+      }, {
         id: sector,
         name: sectorTitle,
         latitude: 0,
@@ -469,9 +481,11 @@ async function exercise({
     const entry = await attendance('ENTRADA');
     const firstAttendance = (await read()).attendance[0];
     assert.equal(firstAttendance.eventType, 'CHECK_IN');
+    assert.equal(firstAttendance.sectorId, sector);
     assert.equal(firstAttendance.verificationStatus, 'REVIEW_REQUIRED');
     mark('Entrada recibida por WhatsApp y visible en web', {
-      estado: firstAttendance.verificationStatus
+      estado: firstAttendance.verificationStatus,
+      sectorElegido: sectorTitle
     });
     let step = await send('EVIDENCIA');
     step = await choose(step, taskTitle);
@@ -522,6 +536,10 @@ async function exercise({
     const reviewed = await post(owner, reviewCmd);
     assert.equal(reviewed.evidence.review.decision, 'APPROVE');
     mark('Revisión de la foto en la web');
+    const scheduledTask = async () => (await query(`SELECT progress, to_char("startsAt",'YYYY-MM-DD') AS "startsOn",
+      to_char("endsAt",'YYYY-MM-DD') AS "endsOn" FROM "Task" WHERE id=$1 AND "projectId"=$2`, [task, project])).rows[0];
+    const originalSchedule = await scheduledTask();
+    assert.deepEqual(originalSchedule, {progress: 0, startsOn: '2026-10-01', endsOn: '2026-10-10'});
     step = await send('AVANCE');
     step = await choose(step, taskTitle);
     step = await choose(step, sectorTitle);
@@ -531,21 +549,41 @@ async function exercise({
     const proposed = await choose(step, 'Guardar');
     assert.equal(proposed.result.kind, 'PROGRESS_PROPOSAL');
     assert.equal(await taskProgress(), 0);
-    const proposal = (await read()).proposals[0];
+    const source = (await query(`SELECT metadata->'outcome'->'proposal'->>'id' AS id FROM "AuditLog"
+      WHERE id=$1 AND "entityId"=$2 AND action='field.operation.recorded'`, [proposed.result.receiptId, project])).rows[0];
+    const proposal = (await read()).proposals.find(row => row.id === source.id);
+    assert.ok(proposal);
+    assert.equal(proposal.status, 'PENDING');
+    assert.equal(proposal.taskId, task);
+    assert.equal(proposal.progress, 25);
+    assert.deepEqual(await scheduledTask(), originalSchedule);
     const links = await (await web(owner, 'field-operations', 'GET', {
       ...context(owner),
       proposalId: proposal.id
     })).json();
     assert.deepEqual(links.evidence.map(row => row.id), [evidence.id]);
     assert.equal(links.evidence[0].review.decision, 'APPROVE');
-    const approvalCmd = payload(owner, 'DECIDE_PROGRESS', {
+    const progressReviewer = approveProgress ? director : owner;
+    const progressPayload = {
       proposalId: proposal.id,
       revision: proposal.revision,
       decision: 'APPROVE',
       reason: 'Verificada la evidencia sintética asociada al avance declarado.'
+    };
+    const browserProgress = approveProgress && await approveProgress({
+      web, director, scope: context(director), observer: owner, observerScope: context(owner), task,
+      decisionPayload: progressPayload, proposalReceiptId: proposed.result.receiptId, originalSchedule
     });
-    const decision = await post(owner, approvalCmd);
+    const approvalCmd = approveProgress ? browserProgress.command : payload(progressReviewer, 'DECIDE_PROGRESS', progressPayload);
+    const decision = approveProgress ? browserProgress.response : await post(progressReviewer, approvalCmd);
+    assert.equal(decision.proposal.id, proposal.id);
+    assert.equal(decision.proposal.status, 'APPLIED');
+    const recordedDecisions = await query(`SELECT id,"actorId" FROM "AuditLog" WHERE "entityId"=$1
+      AND action='field.operation.recorded' AND metadata->>'command'='DECIDE_PROGRESS'
+      AND metadata->'outcome'->'proposal'->>'id'=$2`, [project, proposal.id]);
+    assert.deepEqual(recordedDecisions.rows, [{id: decision.receiptId, actorId: approveProgress ? 'director' : 'owner'}]);
     assert.equal(await taskProgress(), 25);
+    assert.deepEqual(await scheduledTask(), {...originalSchedule, progress: 25});
     mark('Propuesta WhatsApp y aprobación web sobre la misma evidencia', {
       porcentajePendiente: 0,
       porcentajeAprobado: 25,
@@ -605,7 +643,7 @@ async function exercise({
     });
     const before = await counts();
     for (const op of [entry, reference, photo, proposed, consumption, checkout]) assert.equal(await receive(op.wire), op.eventId);
-    for (const [actor, cmd, receipt] of [[owner, reviewCmd, reviewed], [owner, approvalCmd, decision], [director, consumptionCmd, approved]]) {
+    for (const [actor, cmd, receipt] of [[owner, reviewCmd, reviewed], [progressReviewer, approvalCmd, decision], [director, consumptionCmd, approved]]) {
       assert.equal((await post(actor, cmd)).receiptId, receipt.receiptId);
     }
     const after = await counts();
@@ -658,6 +696,8 @@ async function exercise({
       steps,
       messages,
       browserInventory,
+      attendanceSector: {selectedLabel: sectorTitle, recordedId: firstAttendance.sectorId, verification: firstAttendance.verificationStatus},
+      browserProgress: browserProgress?.proof ?? null,
       browserApproval: browserDecision ? {...browserDecision.proof, databaseOutflowsForProposal: movements.rowCount, databaseDecisionReceipts: decisionReceipts.rowCount} : null,
       outboundNetworkAttempts: networkAttempts,
       beforeReplay: before,

@@ -60,7 +60,7 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - run: node --test tests/shared-workday-postgres-host.test.mjs
-      - name: Approve the signed WhatsApp consumption in Chrome on the same PostgreSQL database
+      - name: Approve WhatsApp progress and consumption in Chrome and verify the Gantt on the same PostgreSQL database
         env:
           WORKDAY_POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
           WORKDAY_POSTGRES_NETWORK: ${{ job.services.postgres.network }}

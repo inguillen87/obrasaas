@@ -6,9 +6,50 @@ import {deriveTaskMeasurement} from './task-progress-measurement.js';
 import {normalizeExecutionPayload} from './field-execution-policy.mjs';
 import {parseProgressMeasurementQuantity} from './progress-measurement-quantity.js';
 
+const graphemes = new Intl.Segmenter('es', {granularity: 'grapheme'});
+
+function fit(parts, budget) {
+  let text = '';
+  for (const part of parts) {
+    if (text.length + part.length > budget) break;
+    text += part;
+  }
+  return text;
+}
+
+// The transport counts UTF-16 units. Keep the ends where floor, sector,
+// unit and expiration often differ, without splitting a displayed character.
+function labelWithin(label, limit) {
+  const text = label.replace(/\s+/gu, ' ').trim();
+  if (text.length <= limit) return text;
+  const parts = Array.from(graphemes.segment(text), entry => entry.segment);
+  const head = fit(parts, Math.ceil((limit - 1) / 2));
+  let tail = '';
+  for (let index = parts.length - 1; index >= 0; index--) {
+    if (tail.length + parts[index].length > limit - 1 - head.length) break;
+    tail = parts[index] + tail;
+  }
+  return head.trimEnd() + '…' + tail.trimStart();
+}
+
+function choices(state, eventId, body, rows) {
+  const nonce = digest([eventId, state.step]).slice(0, 20);
+  const options = rows.map(([, name, detail], index) => {
+    const title = labelWithin(name, 24);
+    const description = detail || (name.length > 24 ? name : '');
+    return {id: 'obra:' + nonce + ':' + index, title,
+      ...(description && {description: labelWithin(description, 72)})};
+  });
+  return {
+    state: {...state, nonce, choices: rows.map(([value, title]) => ({value, title}))},
+    reply: {type: 'interactive', body, button: 'Elegir', sections: [{title: 'Opciones', rows: options}]}
+  };
+}
+
+export {choices as fieldChoices};
+
 const text=body=>({type:'text',body});
 const uuid=value=>{const h=digest(value);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;};
-function choices(state,eventId,body,rows){const nonce=digest([eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Opciones',rows:rows.map(([,title],index)=>({id:`obra:${nonce}:${index}`,title:title.slice(0,24)}))}]}};}
 const taskFor=(facts,id)=>facts.executionTasks?.find(task=>task.id===id);
 const liveMandates=(facts,now)=>(facts.execution?.mandates||[]).filter(m=>m.state==='ACTIVE'&&m.workerId===facts.workerId&&Date.parse(m.validUntil)>now.getTime()&&m.catalogHash===facts.inventory?.catalogHash);
 export const hasMetaFieldExecutionMandate=(facts,now)=>liveMandates(facts,now).length>0;

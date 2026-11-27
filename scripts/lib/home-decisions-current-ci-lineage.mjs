@@ -4455,7 +4455,12 @@ function companyNativeSourceFrame(manifest,readSource,run){
   for(const file of [...new Set(authorityFiles)].sort())snapshot(file);
   verifyOwners=()=>{try{
    if(hours)verifyWorksiteLiveHoursCurrentSources(contract,checkedRead);if(budget)verifyPlanBudgetCurrentSources(contract,checkedRead);
-   if(materials)for(const file of materialPaths){const row=own.sourceChanges.find(row=>row.path===file),bytes=checkedRead(file);r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(bytes.toString('utf8').replaceAll('\r\n','\n')),'MATERIAL_SOURCE_AUTHORITY');}
+   if(materials)for(const file of materialPaths){
+    const row=own.sourceChanges.find(row=>row.path===file);
+    const currentText=checkedRead(file).toString('utf8').replaceAll('\r\n','\n');
+    const originalText=restorePilotCompletionPreviousSourceText(contract,file,currentText);
+    r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(originalText),'MATERIAL_SOURCE_AUTHORITY');
+   }
    if(kyc)for(const file of kycPaths){const row=own.sourceChanges.find(row=>row.path===file),bytes=checkedRead(file);r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(bytes.toString('utf8').replaceAll('\r\n','\n')),'MATERIAL_SOURCE_AUTHORITY');}
   }catch(error){ownerFailure(error);}};
   verifyOwners();
