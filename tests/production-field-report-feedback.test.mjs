@@ -74,6 +74,31 @@ test('history aliases and ESTADO preserve every open business draft, original no
   const draft={version:1,purpose,step:'REASON',nonce:'b'.repeat(20),choices:[{value:'CONFIRM',title:'Guardar'}],expiresAt:'2026-10-14T12:15:00.000Z'};const result=say(command,draft);assert.equal(result.state,draft);assert.equal(result.preserveConversation,true);assert.match(result.reply.body,/Conservamos el borrador/);
  }
 });
+test('the four visible read labels accept text in navigation and remain literal reasons inside a draft',async()=>{
+ const menu=say('MENU'),status=select(menu,'STATUS');
+ assert.equal(say('Consultar estado',menu.state).reply.body,status.reply.body);
+ const pages={EVIDENCE:await read(database([report('EVIDENCE',1)]),'EVIDENCE'),PROGRESS:await read(database([report('PROGRESS',1)]),'PROGRESS')};
+ for(const [label,action,page] of [['Mis evidencias','OWN_EVIDENCE',pages.EVIDENCE],['Mis avances','OWN_PROGRESS',pages.PROGRESS],['Mis consumos','OWN_CONSUMPTIONS',null]]){
+  const button=select(status,action,page);
+  for(const state of [null,status.state,button.state]){
+   const typed=say(label,state,page);
+   assert.equal(typed.reply.body,button.reply.body);assert.deepEqual(typed.state.choices,button.state.choices);
+  }
+  assert.equal(say(label,status.state,page,{permissions:{attendance:true,report:false}}).state,null);
+  const wrongTitle=say('Opción anterior',button.state,page);
+  assert.equal(wrongTitle.state,button.state);assert.equal(wrongTitle.preserveConversation,true);
+  assert.match(wrongTitle.reply.body,new RegExp(action==='OWN_EVIDENCE'?'una evidencia':action==='OWN_PROGRESS'?'un avance':'un consumo'));
+ }
+ const unknown=say('Directora',status.state);
+ assert.equal(unknown.state,status.state);assert.equal(unknown.preserveConversation,true);
+ assert.match(unknown.reply.body,/mensaje de estado/);assert.doesNotMatch(unknown.reply.body,/stock/);
+ const draft={version:1,purpose:'MATERIAL',step:'REASON',name:'Cemento',quantity:'3',unit:'bolsa',expiresAt:'2026-10-14T12:15:00.000Z'};
+ for(const label of ['Consultar estado','Mis evidencias','Mis avances','Mis consumos']){
+  const result=say(label,draft);
+  assert.equal(result.state.purpose,'MATERIAL');assert.equal(result.state.step,'CONFIRM');assert.equal(result.state.reason,label);
+  assert.equal(result.reportRead,undefined);assert.equal(result.consumptionRead,undefined);
+ }
+});
 test('expired or stale prompt, missing directed facts and revoked report capability do not disclose report detail',async()=>{
  const page=await read(database([report('PROGRESS',1)]),'PROGRESS'),list=say('AVANCES',null,page),message={type:'interactive',interactive:{type:'list_reply',list_reply:{id:list.reply.sections[0].rows[0].id}}};
  const stale=plan(message,{...list.state,nonce:'c'.repeat(20)},page);assert.doesNotMatch(stale.reply.body,/progress-1|original-/);const expired=plan(message,{...list.state,expiresAt:now.toISOString()},page);assert.doesNotMatch(expired.reply.body,/progress-1|original-/);
@@ -117,5 +142,26 @@ test('actual bridge handles a lost own cursor/author with a generic reply, prese
 test('actual bridge caches an exact report reply and denies revoked reporting or canonical identity before decrypting it',async()=>{
  for(const revoke of [f=>{f.worker.metadata.participant.permissions.report=false;},f=>{f.worker.metadata.participant.kyc.status='REVOKED';},f=>{f.worker.active=false;}]){
   const f=bridgeFixture([report('PROGRESS',1)]),context=f.inbound('AVANCES'),first=await f.bridge.execute(context),count=f.ownQueries();assert.equal(first.kind,'FIELD_REPORT_READ');assert.deepEqual(await f.bridge.execute(context),first);assert.equal(f.ownQueries(),count);revoke(f);await assert.rejects(f.bridge.execute(context));assert.equal(f.ownQueries(),count);assert.equal(f.audits.size,1);assert.equal(f.externalCalls(),0);
+ }
+});
+test('actual bridge binds typed read labels to the same current records as buttons and preserves scoped access on replay',async()=>{
+ for(const label of ['Consultar estado','Mis evidencias','Mis avances','Mis consumos']){
+  async function exercise(useButton){
+   const f=bridgeFixture([report('EVIDENCE',1),report('PROGRESS',1)]);
+   const initial=await f.bridge.execute(f.inbound(label==='Consultar estado'?'MENU':'ESTADO'));
+   const row=initial.reply.sections[0].rows.find(row=>row.title===label);assert.ok(row,label);
+   const select=id=>({type:'interactive',interactive:{type:'list_reply',list_reply:{id,title:label}}});
+   const message=f.inbound(useButton?select(row.id):label);
+   const reply=await f.bridge.execute(message);
+   assert.equal(reply.businessApplied,false);assert.equal(reply.replySent,false);
+   assert.ok(reply.reply.sections[0].rows.length);assert.equal(f.externalCalls(),0);
+   assert.deepEqual(await f.bridge.execute(message),reply);
+   if(!useButton){
+    f.worker.metadata.participant.permissions[label==='Consultar estado'?'attendance':'report']=false;
+    await assert.rejects(f.bridge.execute(message),{code:'WORKER_CHANNEL_PERMISSION_REQUIRED'});
+   }
+   return {kind:reply.kind,body:reply.reply.body,rows:reply.reply.sections[0].rows.map(r=>[r.title,r.description])};
+  }
+  assert.deepEqual(await exercise(false),await exercise(true));
  }
 });

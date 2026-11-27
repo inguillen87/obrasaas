@@ -585,6 +585,27 @@ async function exercise({
         movimientos: 2
       });
     }
+    const status = await send('ESTADO');
+    const history = await choose(status, 'Mis consumos');
+    const materialRow = history.result.reply.sections.flatMap(section => section.rows)
+      .find(row => row.title === materialTitle);
+    assert.ok(materialRow);
+    assert.ok(materialRow.description.startsWith('3 bolsa · Aprobado'));
+    const detail = await choose(history, materialTitle);
+    const feedback = detail.result.reply.body;
+    assert.ok(feedback.includes('Estado vigente: Aprobado'));
+    assert.ok(feedback.includes(consumptionCmd.payload.reason));
+    assert.ok(feedback.includes(approved.receiptId));
+    assert.ok(feedback.includes(consumption.result.receiptId));
+    assert.equal(detail.result.businessApplied, false);
+    assert.equal((await inv()).materials[0].balance, '17.000');
+    assert.equal(await taskProgress(), 25);
+    assert.equal(networkAttempts, 0);
+    mark('El operario consultó en WhatsApp la decisión tomada en la web', {
+      estado: 'Aprobado',
+      reciboDePropuestaYDecision: true,
+      saldoBolsas: 17
+    });
     return {
       status: 'PASS',
       sourceRevision,

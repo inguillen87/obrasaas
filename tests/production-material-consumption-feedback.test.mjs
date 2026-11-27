@@ -73,7 +73,7 @@ const pageFor=async(records,options={})=>readOwnConsumptions(database(records),m
 
 test('manual consumption displays a localized quantity and retains the exact command and catalog unit',()=>{
  const state={version:1,purpose:'CONSUMPTION',step:'CONSUMPTION_QUANTITY',expiresAt:'2026-10-12T12:15:00.000Z',workerId:'worker-a',taskId:null,sectorId:'sector-a',materialId:material.id,name:'Material local',unit:'m3',catalogHash:'a'.repeat(64)};
- for(const [input,canonical,display] of [['17','17.000','17'],['1.5','1.500','1,5'],['0.001','0.001','0,001']]){
+ for(const [input,canonical,display] of [['17','17.000','17'],['1.5','1.500','1,5'],['1,5','1.500','1,5'],['0.001','0.001','0,001'],['0,001','0.001','0,001']]){
   const reason=say(input,state);
   const confirmation=say('Usado para la obra sintética.',reason.state);
   assert.ok(confirmation.reply.body.includes('Consumo propuesto: '+display+' m3 de Material local'));
@@ -81,9 +81,26 @@ test('manual consumption displays a localized quantity and retains the exact com
   const saved=planMetaFieldConversation({state:confirmation.state,facts:baseFacts,eventId:'save-localized',now,message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:selected.id}}}});
   assert.equal(saved.command.payload.quantity,canonical);
  }
- const invalid=say('1,5',state);
- assert.equal(invalid.state.step,'CONSUMPTION_QUANTITY');
- assert.match(invalid.reply.body,/con punto/);
+ for(const input of ['1.000,50','1,000.50','1,2,3','0,000','1,2345']){
+  const invalid=say(input,state);
+  assert.equal(invalid.state.step,'CONSUMPTION_QUANTITY');
+  assert.equal(invalid.command,undefined);
+  assert.match(invalid.reply.body,/1,5/);
+ }
+});
+
+test('own consumption summaries, rows and receipts use the same decimal display',async()=>{
+ for(const [quantity,display] of [['3.000','3'],['1.500','1,5'],['0.001','0,001']]){
+  const page=await pageFor([consumption(1,{quantity})]);
+  const status=say('ESTADO',null,page);
+  const list=pick(status,'OWN_CONSUMPTIONS',page);
+  const detail=pick(list,'consumption-1',page);
+  for(const message of [status.reply.body,list.reply.sections[0].rows[0].description,detail.reply.body]){
+   assert.ok(message.includes(display+' bolsa'),message);
+   assert.ok(!message.includes(quantity+' bolsa'),message);
+  }
+  assert.equal(page.records[0].quantity,quantity);
+ }
 });
 
 test('ESTADO discovers own history with a button; page/detail reads never propose/approve/reverse stock and preserve every state',async()=>{

@@ -15,6 +15,13 @@ import {identityAccountReturnPath} from './identity-return-path.mjs';
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['EXECUTION','Registrar material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU','MENÚ':'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',CRONOGRAMA:'TASKS',GANTT:'TASKS','IMPORTAR CRONOGRAMA':'PLAN_IMPORT','IMPORTAR PLAN':'PLAN_IMPORT',EVIDENCIA:'MEDIA',EVIDENCIAS:'OWN_EVIDENCE',AVANCES:'OWN_PROGRESS',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',EJECUCION:'EXECUTION','EJECUCIÓN':'EXECUTION',REPORTAR:'EXECUTION',EJECUCIONES:'OWN_EXECUTIONS',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
 export const metaFieldConversationAction=body=>typeof body==='string'?(isMetaGreeting(body)?'MENU':aliases[body.trim().toUpperCase()]||null):null;
+const readLabels=new Map([['CONSULTAR ESTADO','STATUS'],['MIS EVIDENCIAS','OWN_EVIDENCE'],['MIS AVANCES','OWN_PROGRESS'],['MIS CONSUMOS','OWN_CONSUMPTIONS']]);
+export function metaFieldPromptAction(body,active){
+ const command=metaFieldConversationAction(body);
+ if(command||typeof body!=='string')return command;
+ if(active&&active.purpose!=='MENU'&&!ownReadPurposes.includes(active.purpose))return null;
+ return readLabels.get(body.trim().toUpperCase())||null;
+}
 // A read requirement, never participant authority. The signed bridge proves
 // the recovery origin/binding and current permission before using this scope.
 export function metaFieldRecoveryCatalogRead({message,state,recovery,now,attendanceOnly=false}){
@@ -77,7 +84,7 @@ function chooseTask(state,eventId,facts,detail=''){
  if(page.hasPrevious)rows.push(['PREVIOUS_TASKS','Tareas anteriores']);if(page.hasNext)rows.push(['NEXT_TASKS','Más tareas']);
  return choices({...state,step:'TASK',taskPage:page},eventId,state.purpose==='TASKS'?scheduleReadBody(facts,detail):detail||'Elegí la tarea de este registro. Podés recorrer todas las páginas.',rows);
 }
-function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return state.consumptionRecovery?{state,preserveConversation:true,reply:text('El catálogo no tiene materiales disponibles. Conservamos el borrador y su plazo; pedí al responsable que revise el catálogo o descartalo con CANCELAR.') }:{state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=Math.min(state.materialOffset||0,Math.floor((materials.length-1)/8)*8),rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);const previous=state.recoverySuggestion;return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,(previous?'Borrador anterior: '+previous.quantity+' '+previous.unit+' de '+previous.name+'. Es una sugerencia, sin conversión ni aplicación automática.\n':'')+'Elegí el material del catálogo vigente. La propuesta requiere revisión antes de descontar stock.',rows);}
+function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return state.consumptionRecovery?{state,preserveConversation:true,reply:text('El catálogo no tiene materiales disponibles. Conservamos el borrador y su plazo; pedí al responsable que revise el catálogo o descartalo con CANCELAR.') }:{state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=Math.min(state.materialOffset||0,Math.floor((materials.length-1)/8)*8),rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);const previous=state.recoverySuggestion;return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,(previous?'Borrador anterior: '+voiceProgressQuantityLabel(previous.quantity)+' '+previous.unit+' de '+previous.name+'. Es una sugerencia, sin conversión ni aplicación automática.\n':'')+'Elegí el material del catálogo vigente. La propuesta requiere revisión antes de descontar stock.',rows);}
 function consumptionReasonPrompt(state,eventId){return state.consumptionRecovery?choices({...state,step:'CONSUMPTION_RECOVERY_REASON'},eventId,'Motivo anterior: '+state.recoverySuggestion.reason.slice(0,550)+(state.recoverySuggestion.reason.length>550?'…':'')+'\nConfirmá si sigue correspondiendo al material y la cantidad elegidos.',[['KEEP_REASON','Usar motivo anterior'],['NEW_REASON','Escribir otro motivo']]):{state:{...state,step:'REASON'},reply:text('Explicá para qué se usó el material. Todavía no se descuenta stock.')};}
 function consumptionConfirmation(state,eventId){return confirm(state,eventId,'Consumo propuesto: '+voiceProgressQuantityLabel(state.quantity)+' '+state.unit+' de '+state.name+'\nEl stock se conserva hasta revisión del responsable.\nMotivo: '+state.reason.slice(0,550)+(state.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
 const consumptionState=state=>({PENDING:'Pendiente de revisión',APPROVED:'Aprobado',REJECTED:'Rechazado',REVERSED:'Revertido'}[state]||'Estado no confirmado');
@@ -86,13 +93,13 @@ const consumptionReason=value=>value.length>600?value.slice(0,600)+'… (motivo 
 export function metaFieldConsumptionAcknowledgement(outcome,projectName){const c=outcome.recordedConsumptionSnapshot||outcome.consumption;return 'Consumo informado en '+projectName+': '+voiceProgressQuantityLabel(c.quantity)+' '+c.unit+' de '+consumptionName(c)+'.\nReferencia del informe: '+c.id+'\nRecibo de propuesta: '+outcome.receiptId+'\nInformado: '+c.submittedAt+'\nQuedó pendiente de revisión. Este recibo no descuenta stock; otro responsable autorizado debe decidir.\nEscribí ESTADO para consultar la decisión vigente o CONSUMOS para recorrer tus informes.';}
 function ownConsumptionList(state,eventId,facts){
  const page=facts.ownConsumptions;if(!page)return {state:null,reply:text('No se pudo confirmar la consulta de consumos. Escribí ESTADO para volver a intentar.')};
- const rows=page.records.map(c=>[c.id,consumptionName(c),c.quantity+' '+c.unit+' · '+consumptionState(c.state)+' · '+c.submittedAt.slice(0,10)]);
+ const rows=page.records.map(c=>[c.id,consumptionName(c),voiceProgressQuantityLabel(c.quantity)+' '+c.unit+' · '+consumptionState(c.state)+' · '+c.submittedAt.slice(0,10)]);
  if(page.nextCursor)rows.push(['NEXT_CONSUMPTIONS','Más consumos']);if(page.afterConsumption)rows.push(['FIRST_CONSUMPTIONS','Volver al inicio']);rows.push(['MENU','Volver al menú']);
  return {...choices({...state,purpose:'OWN_CONSUMPTIONS',step:'OWN_CONSUMPTION_LIST',consumptionAfter:page.afterConsumption,nextConsumptionCursor:page.nextCursor},eventId,'Consumos informados por tu cuenta en '+facts.projectName+'.\n'+(page.records.length?'Elegí un informe para consultar su estado vigente, motivo, fechas y recibos.':page.afterConsumption?'No hay más informes en esta página.':'No hay consumos informados por tu cuenta en esta obra.')+'\nLa consulta no mueve stock.',rows),consumptionRead:true};
 }
 function ownConsumptionDetail(state,eventId,facts,id){
  const c=facts.ownConsumptions?.records.find(row=>row.id===id);if(!c)throw new WorkspaceError('INVENTORY_CURSOR_UNAVAILABLE',404);
- let body='Obra: '+facts.projectName+'\n'+consumptionName(c)+': '+c.quantity+' '+c.unit+'\nReferencia del informe: '+c.id+'\nInformado: '+c.submittedAt+'\nEstado vigente: '+consumptionState(c.state)+'\nMotivo del informe: '+consumptionReason(c.reason);
+ let body='Obra: '+facts.projectName+'\n'+consumptionName(c)+': '+voiceProgressQuantityLabel(c.quantity)+' '+c.unit+'\nReferencia del informe: '+c.id+'\nInformado: '+c.submittedAt+'\nEstado vigente: '+consumptionState(c.state)+'\nMotivo del informe: '+consumptionReason(c.reason);
  if(c.proposalReceiptId)body+='\nRecibo de propuesta: '+c.proposalReceiptId;
  for(const [label,event] of [['Decisión registrada',c.decision],['Reversión registrada',c.reversal]])if(event)body+='\n'+label+': '+(event.decision==='REJECT'?'Rechazado':event.decision==='APPROVE'?'Aprobado':'Revertido')+'\nFecha: '+event.recordedAt+'\nMotivo: '+consumptionReason(event.reason)+'\nRecibo: '+event.receiptId;
  body+='\nEl recibo de propuesta conserva el informe original. Las decisiones y sus movimientos tienen sus propios recibos.\nPara seguir recorriendo informes, usá las opciones de la lista anterior o escribí CONSUMOS para volver al inicio.';
@@ -121,7 +128,7 @@ function ownReportDetail(state,facts,id){
 function statusReply(facts){const e=facts.latest,page=facts.ownConsumptions;let body='Obra: '+compactReadText(facts.projectName,160);
  if(facts.permissions.attendance===true)body+='\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.effectiveClosed===true?'cierre efectivo aprobado':e.phase==='ON_BREAK'?'en pausa':'en curso');
  if(facts.permissions.report===true)body+='\nEvidencias y avances: consultá tus informes para ver la revisión vigente, su motivo y sus recibos.';
- if(facts.permissions.report===true&&page)body+='\nConsumos informados por tu cuenta (últimos '+page.records.length+'):'+(page.records.length?'\n'+page.records.map(c=>consumptionName(c).slice(0,45)+' · '+c.quantity+' '+c.unit+' · '+consumptionState(c.state)).join('\n'):' ninguno.')+(page.nextCursor?'\nHay más informes para consultar.':'');
+ if(facts.permissions.report===true&&page)body+='\nConsumos informados por tu cuenta (últimos '+page.records.length+'):'+(page.records.length?'\n'+page.records.map(c=>consumptionName(c).slice(0,45)+' · '+voiceProgressQuantityLabel(c.quantity)+' '+c.unit+' · '+consumptionState(c.state)).join('\n'):' ninguno.')+(page.nextCursor?'\nHay más informes para consultar.':'');
  return withAttendanceWebGuidance(boundedReadBody(body+(facts.permissions.report===true?'\nEscribí EVIDENCIAS, AVANCES o CONSUMOS para consultar tus informes.':'\nConsultá los recibos de jornada en Mi cuenta.'),Number.isSafeInteger(facts.replyBodyLimit)?facts.replyBodyLimit:1024),facts);
 }
 function confirm(state,eventId,body){return choices({...state,step:'CONFIRM'},eventId,body,[['CONFIRM','Guardar'],['CANCEL','Cancelar']]);}
@@ -214,8 +221,9 @@ export function metaFieldMenuDisclosure(choices,base='MENU'){
 export const metaFieldPlanDisclosure=plan=>canonicalPlanDisclosures.get(plan)||null;
 function markMetaFieldDisclosure(plan,disclosure){canonicalPlanDisclosures.set(plan,disclosure);return plan;}
 function classifyPlan(input,plan){
- const {message,state,facts,now}=input,body=message.type==='text'?message.text?.body?.trim().toUpperCase():null,action=metaFieldConversationAction(body);
+ const {message,state,facts,now}=input,body=message.type==='text'?message.text?.body?.trim().toUpperCase():null;
  const active=state?.version===1&&Date.parse(state.expiresAt)>now.getTime()?state:null;
+ const action=metaFieldPromptAction(body,active);
  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^obra:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
  const selected=active&&match&&match[1]===active.nonce?active.choices?.[Number(match[2])]?.value:null;
  let disclosure=canonicalPlanDisclosures.get(plan);
@@ -251,7 +259,7 @@ function planMetaFieldConversationInput({message,state,eventId,facts,now}){
   const step=state.step;
   if(step==='MEASUREMENT_QUANTITY'&&(error.name==='TaskProgressMeasurementError'||error.code==='PROGRESS_MEASUREMENT_QUANTITY_INVALID'))return {state,reply:text('Ingresá sólo una cantidad exacta, con punto y hasta cuatro decimales. El total no puede superar la base ni ser menor al acumulado aprobado. Conservamos el borrador; escribí CANCELAR para volver al menú.')};
   if(step==='MEASUREMENT'&&['FIELD_QUANTITY_INVALID','PROGRESS_MEASUREMENT_QUANTITY_INVALID'].includes(error.code))return {state,reply:text(progressHint)};
-  if(step==='CONSUMPTION_QUANTITY'&&error.code==='INVENTORY_QUANTITY_INVALID')return {state,reply:text('Ingresá una cantidad positiva con punto y hasta tres decimales. El borrador y el stock se conservan.')};
+  if(step==='CONSUMPTION_QUANTITY'&&error.code==='INVENTORY_QUANTITY_INVALID')return {state,reply:text('Ingresá una cantidad mayor que cero, sin separador de miles y con hasta tres decimales. Podés escribir 1,5 o 1.5. El borrador y el stock se conservan.')};
   const hint=step==='REASON'&&['MATERIAL','PROGRESS','CONSUMPTION'].includes(state.purpose)?'Escribí el motivo de 8 a '+(state.purpose==='MATERIAL'?2000:1000)+' caracteres.':inputHints[step];
   if(hint&&(error.code==='SITE_INPUT_INVALID'||step==='MATERIAL_QUANTITY'&&error.code==='SITE_QUANTITY_INVALID'))return {state,reply:text(hint+' El borrador se conserva. Corregí este dato para continuar, o escribí CANCELAR.')};
   throw error;
@@ -260,7 +268,7 @@ function planMetaFieldConversationInput({message,state,eventId,facts,now}){
 function planConversation({message,state,eventId,facts,now}){
  const body=message.type==='text'?message.text?.body?.trim():null;
  const active=state?.version===1&&Date.parse(state.expiresAt)>now.getTime()?state:null;
- const alias=metaFieldConversationAction(body);
+ const alias=metaFieldPromptAction(body,active);
  if((alias==='TASKS'||!alias&&active?.purpose==='TASKS')&&facts.attendanceOnly)return limitedTaskRead(active);
  if(alias==='TASKS'&&active&&!['MENU','TASKS'].includes(active.purpose))return {state:active,preserveConversation:true,reply:text(scheduleReadBody(facts,'','\nConservamos el borrador y su mensaje original. Respondé a ese paso para continuar; esta consulta no guarda ni extrae otro archivo.'+(active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?' El archivo ya fue autorizado: comprobá el mismo intento desde Cuenta.':'')))};
  // A greeting is a read, never a replacement prompt for an open draft.
@@ -315,13 +323,16 @@ function planConversation({message,state,eventId,facts,now}){
   if(['NEXT_REPORTS','FIRST_REPORTS'].includes(selected))return ownReportList(s,eventId,facts,s.purpose);
   if(selected==='MENU')return start('MENU',eventId,facts,now);
   if(selected&&s.step==='OWN_REPORT_LIST')return ownReportDetail(active,facts,selected);
-  return {state:active,reply:text('Elegí un informe o una página en el mensaje vigente. Consultar no modifica la tarea.')};
+  return {state:active,preserveConversation:true,reply:text(s.purpose==='OWN_EVIDENCE'?'Elegí una evidencia del mensaje vigente para ver su revisión y sus recibos.':'Elegí un avance del mensaje vigente para ver su decisión y sus recibos.')};
  }
  if(s.purpose==='OWN_CONSUMPTIONS'){
   if(['OWN_CONSUMPTIONS','NEXT_CONSUMPTIONS','FIRST_CONSUMPTIONS','BACK_CONSUMPTIONS'].includes(selected))return ownConsumptionList(s,eventId,facts);
   if(selected==='MENU')return start('MENU',eventId,facts,now);
   if(selected&&s.step==='OWN_CONSUMPTION_LIST')return ownConsumptionDetail(active,eventId,facts,selected);
-  return {state:active,reply:text('Elegí un informe o una página en el mensaje vigente. La consulta no modifica stock.')};
+  if(s.step==='OWN_CONSUMPTION_STATUS'){
+   return {state:active,preserveConversation:true,reply:text('En el mensaje de estado, elegí Mis evidencias, Mis avances o Mis consumos. También podés escribir el nombre de la consulta.')};
+  }
+  return {state:active,preserveConversation:true,reply:text('Elegí un consumo del mensaje vigente para ver su estado y sus recibos.')};
  }
  if(s.step==='TASK'){
   if(!selected)return {state:active,reply:text('Elegí una tarea en el menú anterior, o escribí CANCELAR.')};
@@ -409,9 +420,9 @@ function planConversation({message,state,eventId,facts,now}){
  if(s.step==='MATERIAL_NAME'){s.name=siteText(body,160,2);return {state:{...s,step:'MATERIAL_QUANTITY'},reply:text('Escribí la cantidad exacta, por ejemplo 12 o 2.5. Usá punto para los decimales.')};}
  if(s.step==='MATERIAL_QUANTITY'){s.quantity=siteQuantity(body);return choices({...s,step:'MATERIAL_UNIT'},eventId,'Elegí la unidad.',MATERIAL_UNITS.map(u=>[u,u]));}
  if(s.step==='MATERIAL_UNIT'){if(!selected)return {state:active,reply:text('Elegí la unidad del menú anterior.')};s.unit=selected;return {state:{...s,step:'REASON'},reply:text('Explicá para qué necesitás el material. El pedido requiere autorización de compra.')};}
- if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};const next={...s,step:'CONSUMPTION_QUANTITY',materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash};if(s.consumptionRecovery&&s.recoverySuggestion.unit===material.unit)return choices({...next,step:'CONSUMPTION_RECOVERY_QUANTITY'},eventId,'Material elegido: '+material.name+'\nUnidad: '+material.unit+'\nCantidad anterior sugerida: '+s.recoverySuggestion.quantity+' '+s.recoverySuggestion.unit+'. Elegí si corresponde usarla.',[['KEEP_QUANTITY','Usar cantidad anterior'],['NEW_QUANTITY','Escribir otra cantidad']]);return {state:next,reply:text('Material: '+material.name+'\nUnidad: '+material.unit+'\n'+(s.consumptionRecovery?'La unidad anterior era '+s.recoverySuggestion.unit+'. No convertimos la cantidad.\n':'')+'Escribí la cantidad consumida, con punto y hasta tres decimales.')};}
- if(s.step==='CONSUMPTION_RECOVERY_QUANTITY'){if(selected==='NEW_QUANTITY')return {state:{...s,step:'CONSUMPTION_QUANTITY'},reply:text('Escribí la cantidad consumida en '+s.unit+', con punto y hasta tres decimales.')};if(selected!=='KEEP_QUANTITY'||s.unit!==s.recoverySuggestion.unit)return {state:active,reply:text('Elegí una cantidad desde el mensaje vigente.')};s.quantity=inventoryQuantity(s.recoverySuggestion.quantity);return consumptionReasonPrompt(s,eventId);}
- if(s.step==='CONSUMPTION_QUANTITY'){s.quantity=inventoryQuantity(body);return consumptionReasonPrompt(s,eventId);}
+ if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};const next={...s,step:'CONSUMPTION_QUANTITY',materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash};if(s.consumptionRecovery&&s.recoverySuggestion.unit===material.unit)return choices({...next,step:'CONSUMPTION_RECOVERY_QUANTITY'},eventId,'Material elegido: '+material.name+'\nUnidad: '+material.unit+'\nCantidad anterior sugerida: '+voiceProgressQuantityLabel(s.recoverySuggestion.quantity)+' '+s.recoverySuggestion.unit+'. Elegí si corresponde usarla.',[['KEEP_QUANTITY','Usar cantidad anterior'],['NEW_QUANTITY','Escribir otra cantidad']]);return {state:next,reply:text('Material: '+material.name+'\nUnidad: '+material.unit+'\n'+(s.consumptionRecovery?'La unidad anterior era '+s.recoverySuggestion.unit+'. No convertimos la cantidad.\n':'')+'Escribí la cantidad consumida sin separador de miles. Para una unidad y media, ingresá 1,5 o 1.5.')};}
+ if(s.step==='CONSUMPTION_RECOVERY_QUANTITY'){if(selected==='NEW_QUANTITY')return {state:{...s,step:'CONSUMPTION_QUANTITY'},reply:text('Escribí la cantidad consumida en '+s.unit+', sin separador de miles. Por ejemplo, 1,5 o 1.5.')};if(selected!=='KEEP_QUANTITY'||s.unit!==s.recoverySuggestion.unit)return {state:active,reply:text('Elegí una cantidad desde el mensaje vigente.')};s.quantity=inventoryQuantity(s.recoverySuggestion.quantity);return consumptionReasonPrompt(s,eventId);}
+ if(s.step==='CONSUMPTION_QUANTITY'){s.quantity=inventoryQuantity(body?.replace(',', '.'));return consumptionReasonPrompt(s,eventId);}
  if(s.step==='CONSUMPTION_RECOVERY_REASON'){if(selected==='NEW_REASON')return {state:{...s,step:'REASON'},reply:text('Escribí el motivo vigente, de 8 a 1000 caracteres.')};if(selected!=='KEEP_REASON')return {state:active,reply:text('Elegí el motivo desde el mensaje vigente.')};s.reason=siteText(s.recoverySuggestion.reason,1000,8,true);return consumptionConfirmation(s,eventId);}
  if(s.step==='MEASUREMENT_SCOPE'){
   if(!['DELTA','CUMULATIVE'].includes(selected))return {state:active,reply:text('Elegí Realizado hoy o Total acumulado en el menú anterior.')};
