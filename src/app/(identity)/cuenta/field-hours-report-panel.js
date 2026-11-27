@@ -10,6 +10,20 @@ const statuses={CLOSED:'Cerrada',OPEN:'Abierta',ON_BREAK:'En pausa',INTEGRITY_RE
 const validId=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
 const validMs=value=>Number.isSafeInteger(value)&&value>=0;
 const zoneLabel=value=>value==='America/Argentina/Buenos_Aires'?'Argentina (Buenos Aires)':value;
+function shiftClock(timeZone){
+ let formatter;
+ try {
+  formatter=new Intl.DateTimeFormat('es-AR',{timeZone,day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'shortOffset'});
+ } catch {
+  return ()=>'Zona horaria por revisar';
+ }
+ return value=>{
+  if(value==null)return 'Sin registro';
+  const date=new Date(value);
+  if(typeof value!=='string'||!Number.isFinite(date.getTime())||date.toISOString()!==value)return 'Fecha por revisar';
+  return formatter.format(date);
+ };
+}
 function reportMatches(value,expected){
  if(value?.version!==1||value.kind!=='FIELD_HOURS_REPORT'||value.scope!==expected.scope||value.projectId!==expected.projectId||value.period?.fromDate!==expected.fromDate||value.period?.untilDate!==expected.untilDate||value.period?.timeZone!==expected.timeZone||value.period.untilExclusive!==true||value.period.selection!=='SHIFT_CHECK_IN_RECORDED_AT_LOCAL_DATE'||value.period.allocation!=='WHOLE_SHIFT_NOT_SPLIT_AT_PERIOD_BOUNDARIES'||value.salaryCalculated!==false||value.paymentEnabled!==false||!Array.isArray(value.rows)||value.rows.length>200)return false;
  if(value.state==='INCOMPLETE')return value.complete===false&&value.exportable===false&&value.rows.length===0&&value.totals===null;
@@ -33,6 +47,7 @@ export function FieldHoursReportPanel({projectId,scope,getSessionToken,disabled,
   if(busy||disabled||!result?.exportable)return;const current=++sequence.current,selected=result;setBusy(true);setNotice('');
   try{const blob=await request(endpoint+'?'+new URLSearchParams({projectId,scope,hoursFrom:selected.period.fromDate,hoursUntil:selected.period.untilDate,hoursTimeZone:selected.period.timeZone,hoursFormat:'csv',expectedHoursDigest:selected.reportDigest}),{},async response=>{await consume(response);if(response.headers.get('x-obrasaas-hours-digest')!==selected.reportDigest)throw new Error('Resumen cambiado');const value=await response.blob();if(!value.size||value.size>3*1024*1024||value.type.split(';')[0]!=='text/csv')throw new Error('Archivo no coincidente');return value;});if(!alive.current||sequence.current!==current)return;clearTimeout(timer.current);if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);const href=URL.createObjectURL(blob);objectUrl.current=href;const link=document.createElement('a');link.href=href;link.download=`jornadas-${selected.period.fromDate}-${selected.period.untilDate}-hasta-exclusivo.csv`;link.rel='noopener';document.body.append(link);link.click();link.remove();timer.current=setTimeout(()=>{URL.revokeObjectURL(href);if(objectUrl.current===href)objectUrl.current=null;},250);setNotice('CSV obtenido con los mismos fichajes y revisiones consultados.');}catch(error){if(sequence.current===current){if(['FIELD_HOURS_SOURCE_CHANGED','FIELD_HOURS_INCOMPLETE'].includes(error.code))setResult(null);fail(error);}}finally{if(alive.current&&sequence.current===current)setBusy(false);}
  }
+ const localTime=result?.complete?shiftClock(result.period.timeZone):null;
  return <details className={styles.panel}>
   <summary>Resumen de jornadas</summary>
   <p className={styles.intro}>Elegí el período por fecha de ingreso para consultar las jornadas y preparar su archivo.</p>
@@ -52,7 +67,20 @@ export function FieldHoursReportPanel({projectId,scope,getSessionToken,disabled,
    <dl className={styles.metrics}><div><dt>Netas observadas</dt><dd>{recordedDuration(result.totals.closedObservedNetMs)}<small>Según fichajes de jornadas cerradas</small></dd></div><div><dt>Con respaldo confirmado</dt><dd>{recordedDuration(result.totals.closedEvidenceReadyNetMs)}<small>Fichajes y recibos confirmados</small></dd></div><div><dt>Netas efectivas</dt><dd>{result.totals.effectiveTotalsComplete?recordedDuration(result.totals.closedEffectiveNetMs):'Sin confirmar'}<small>{result.totals.effectiveTotalsComplete?`Incluyen ${result.totals.humanCorrectedShifts} cierres aprobados por un responsable`:`${result.totals.effectiveUnconfirmedShifts} jornadas necesitan revisar su respaldo efectivo`}</small></dd></div></dl>
    {[result.totals.open,result.totals.pendingAttendanceReview,result.totals.rejectedAttendance,result.totals.integrityReview,result.totals.auditReview].some(count=>count>0)?<ul className={styles.pending} aria-label="Jornadas que requieren atención">{[[result.totals.open,'Abiertas'],[result.totals.pendingAttendanceReview,'Fichajes por revisar'],[result.totals.rejectedAttendance,'Revisión rechazada'],[result.totals.integrityReview,'Integridad por revisar'],[result.totals.auditReview,'Recibos por revisar']].filter(([count])=>count>0).map(([count,label])=><li key={label}><span>{label}</span><span>{count}</span></li>)}</ul>:<p className={styles.clear}>Sin pendientes en los estados informados.</p>}
    <button className={styles.download} type="button" disabled={disabled||busy} onClick={download}>Descargar CSV de esta consulta</button>
-   <details className={styles.rows}><summary>Ver jornadas y sus estados ({result.rows.length})</summary><p>Los nombres corresponden a la ficha actual; el archivo conserva el autor original de cada jornada.</p>{result.rows.map(row=><article className={styles.card} key={row.checkInEventId}><strong>{row.workerCurrentName||'Ficha sin nombre disponible'}</strong><p>{row.localStartDate} · {statuses[row.status]||'Estado por revisar'} · neto observado {recordedDuration(row.netMs)}</p>{row.effective.state==='UNCONFIRMED'&&<p>Las horas efectivas de esta jornada siguen sin confirmar. Se conservan los fichajes y sus tiempos observados para revisar.</p>}{row.effective.basis==='HUMAN_APPROVED'&&<p>Cierre efectivo aprobado: {row.effective.endedAt} (UTC). Neto efectivo {recordedDuration(row.effective.netMs)}. Los fichajes originales se conservan.</p>}{row.durationScope==='RECORDED_INTERVALS_ONLY_OPEN_SHIFT'&&!row.effective.closed&&<p>Tiempo parcial hasta el último fichaje {row.lastRecordedAt} (UTC). Falta registrar la salida.</p>}<p>{row.evidenceStatus==='READY'?'Fichajes verificados o aprobados':row.evidenceStatus==='PENDING_REVIEW'?'Faltan revisiones':row.evidenceStatus==='REJECTED'?'Revisión rechazada':'Integridad pendiente'} · {row.auditStatus==='CONFIRMED'?'Recibos confirmados':'Recibos por revisar'}.</p><details><summary>Referencias del registro</summary><small className={styles.sourceReference}>Persona que registró: {row.recordedBy}. Ficha actual: {row.workerId}. Jornada: {row.shiftId}. {row.sourceEventIds.length} fichajes fuente.</small></details></article>)}</details>
+   <details className={styles.rows}>
+    <summary>Ver jornadas y sus estados ({result.rows.length})</summary>
+    <p>Horarios de {zoneLabel(result.period.timeZone)}. Los nombres corresponden a la ficha actual.</p>
+    {result.rows.map(row=><article className={styles.card} key={row.checkInEventId}>
+     <strong>{row.workerCurrentName||'Ficha sin nombre disponible'}</strong>
+     <p>{row.localStartDate} · {statuses[row.status]||'Estado por revisar'} · neto observado {recordedDuration(row.netMs)}</p>
+     <p>Entrada registrada: {localTime(row.startedAt)}<br/>Salida registrada: {localTime(row.endedAt)}<br/>Pausas registradas: {recordedDuration(row.breakMs)}</p>
+     {row.effective.state==='UNCONFIRMED'&&<p>Las horas efectivas de esta jornada siguen sin confirmar. Se conservan los fichajes y sus tiempos observados para revisar.</p>}
+     {row.effective.basis==='HUMAN_APPROVED'&&<p>Cierre efectivo aprobado: {localTime(row.effective.endedAt)}. Neto efectivo {recordedDuration(row.effective.netMs)}. Los fichajes originales se conservan.</p>}
+     {row.durationScope==='RECORDED_INTERVALS_ONLY_OPEN_SHIFT'&&!row.effective.closed&&<p>Tiempo parcial hasta el último fichaje {localTime(row.lastRecordedAt)}. {row.status==='ON_BREAK'&&'Pausa en curso. '}Falta registrar la salida. Neto definitivo pendiente.</p>}
+     <p>{row.evidenceStatus==='READY'?'Fichajes verificados o aprobados':row.evidenceStatus==='PENDING_REVIEW'?'Faltan revisiones':row.evidenceStatus==='REJECTED'?'Revisión rechazada':'Integridad pendiente'} · {row.auditStatus==='CONFIRMED'?'Recibos confirmados':'Recibos por revisar'}.</p>
+     <details><summary>Referencias del registro</summary><small className={styles.sourceReference}>Persona que registró: {row.recordedBy}. Ficha actual: {row.workerId}. Jornada: {row.shiftId}. {row.sourceEventIds.length} fichajes fuente.</small></details>
+    </article>)}
+   </details>
    <details className={styles.reference}><summary>Referencias de la consulta</summary><small className={styles.sourceReference}>Referencia de consulta: {result.reportDigest}.</small></details>
   </>:<p className={styles.alert} role="alert">{incompleteLabels[result.completeness?.reason]||'No se confirmó la integridad y completitud de la fuente.'} No se muestran totales ni una exportación parcial.</p>}</div>}
  </details>;

@@ -1250,7 +1250,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-          "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+          "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -2117,7 +2117,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-          "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+          "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -2786,7 +2786,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-          "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+          "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -3747,7 +3747,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-          "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+          "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -4773,7 +4773,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-          "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+          "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
         },
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -38396,9 +38396,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
         "status": "MODIFIED",
         "previousSha256": "d91074b8b1693c95dcf80a86fc73711fbd98a7ba482251ade68fd227166fb748",
-        "currentSha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70",
+        "currentSha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54",
         "previousBytes": 13729,
-        "currentBytes": 15272,
+        "currentBytes": 16200,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 872,
@@ -38406,18 +38406,28 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": "const incompleteLabels={PROJECT_LEDGER_LIMIT:'La obra supera el límite de registros de esta consulta acotada. Hace falta ampliar y verificar el circuito antes de exportar.',UNSUPPORTED_LEDGER_RECORDS:'Hay fichajes fuera del circuito de jornadas actual. El responsable debe revisar su alcance antes de exportar.',UNLOCATABLE_LEDGER_RECORD:'Hay un registro sin referencias o fecha verificables.',SHIFT_ANCHOR_INTEGRITY_REQUIRED:'Hay una jornada sin un único ingreso verificable.',PERIOD_SHIFT_LIMIT:'El período supera 200 jornadas. Elegí un intervalo menor.',SOURCE_AUDIT_CARDINALITY_REQUIRED:'Los recibos de una fuente requieren revisión de integridad.'};\n"
           },
           {
-            "currentOffsetCharacters": 3141,
+            "currentOffsetCharacters": 2069,
+            "currentText": "function shiftClock(timeZone){\n let formatter;\n try {\n  formatter=new Intl.DateTimeFormat('es-AR',{timeZone,day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'shortOffset'});\n } catch {\n  return ()=>'Zona horaria por revisar';\n }\n return value=>{\n  if(value==null)return 'Sin registro';\n  const date=new Date(value);\n  if(typeof value!=='string'||!Number.isFinite(date.getTime())||date.toISOString()!==value)return 'Fecha por revisar';\n  return formatter.format(date);\n };\n}\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 3689,
             "currentText": " if(!['humanCorrectedShifts','effectiveUnconfirmedShifts','closed','open','integrityReview','pendingAttendanceReview','rejectedAttendance','auditReview','closedElapsedMs','closedBreakMs','closedObservedNetMs','closedEvidenceReadyNetMs'].every(key=>validMs(value.totals[key])))return false;\n if(typeof value.totals.effectiveTotalsComplete!=='boolean'||(value.totals.effectiveTotalsComplete?![value.totals.closedEffectiveNetMs,value.totals.closedEffectiveEvidenceReadyNetMs].every(validMs):value.totals.closedEffectiveNetMs!==null||value.totals.closedEffectiveEvidenceReadyNetMs!==null))return false;\n return value.rows.every(row=>row.effective&&typeof row.effective.closed==='boolean'&&['RECORDED_OPEN','RECORDED_CLOSED','HUMAN_CORRECTED_CLOSED','UNCONFIRMED'].includes(row.effective.state)&&(row.effective.netMs===null||validMs(row.effective.netMs))&&validId(row?.workerId)&&validId(row.shiftId)&&validId(row.checkInEventId)&&(row.recordedBy===null||validId(row.recordedBy))&&(row.workerCurrentName===null||typeof row.workerCurrentName==='string')&&Object.hasOwn(statuses,row.status)&&['READY','BLOCKED','PENDING_REVIEW','REJECTED'].includes(row.evidenceStatus)&&['CONFIRMED','REVIEW_REQUIRED'].includes(row.auditStatus)&&['FULL_CLOSED_SHIFT','RECORDED_INTERVALS_ONLY_OPEN_SHIFT','UNCONFIRMED'].includes(row.durationScope)&&(row.lastRecordedAt===null||typeof row.lastRecordedAt==='string'&&/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(row.lastRecordedAt)&&Number.isFinite(Date.parse(row.lastRecordedAt)))&&[row.elapsedMs,row.breakMs,row.netMs].every(ms=>ms===null||validMs(ms))&&Array.isArray(row.sourceEventIds)&&row.sourceEventIds.every(validId));\n",
             "previousText": " if(!['closed','open','integrityReview','pendingAttendanceReview','rejectedAttendance','auditReview','closedElapsedMs','closedBreakMs','closedObservedNetMs','closedEvidenceReadyNetMs'].every(key=>validMs(value.totals[key])))return false;\n return value.rows.every(row=>validId(row?.workerId)&&validId(row.shiftId)&&validId(row.checkInEventId)&&(row.recordedBy===null||validId(row.recordedBy))&&(row.workerCurrentName===null||typeof row.workerCurrentName==='string')&&Object.hasOwn(statuses,row.status)&&['READY','BLOCKED','PENDING_REVIEW','REJECTED'].includes(row.evidenceStatus)&&['CONFIRMED','REVIEW_REQUIRED'].includes(row.auditStatus)&&['FULL_CLOSED_SHIFT','RECORDED_INTERVALS_ONLY_OPEN_SHIFT','UNCONFIRMED'].includes(row.durationScope)&&(row.lastRecordedAt===null||typeof row.lastRecordedAt==='string'&&/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(row.lastRecordedAt)&&Number.isFinite(Date.parse(row.lastRecordedAt)))&&[row.elapsedMs,row.breakMs,row.netMs].every(ms=>ms===null||validMs(ms))&&Array.isArray(row.sourceEventIds)&&row.sourceEventIds.every(validId));\n"
           },
           {
-            "currentOffsetCharacters": 11644,
+            "currentOffsetCharacters": 9510,
+            "currentText": " const localTime=result?.complete?shiftClock(result.period.timeZone):null;\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 12267,
             "currentText": "   <dl className={styles.metrics}><div><dt>Netas observadas</dt><dd>{recordedDuration(result.totals.closedObservedNetMs)}<small>Según fichajes de jornadas cerradas</small></dd></div><div><dt>Con respaldo confirmado</dt><dd>{recordedDuration(result.totals.closedEvidenceReadyNetMs)}<small>Fichajes y recibos confirmados</small></dd></div><div><dt>Netas efectivas</dt><dd>{result.totals.effectiveTotalsComplete?recordedDuration(result.totals.closedEffectiveNetMs):'Sin confirmar'}<small>{result.totals.effectiveTotalsComplete?`Incluyen ${result.totals.humanCorrectedShifts} cierres aprobados por un responsable`:`${result.totals.effectiveUnconfirmedShifts} jornadas necesitan revisar su respaldo efectivo`}</small></dd></div></dl>\n",
             "previousText": "   <dl className={styles.metrics}><div><dt>Netas observadas</dt><dd>{recordedDuration(result.totals.closedObservedNetMs)}<small>En jornadas cerradas</small></dd></div><div><dt>Con respaldo confirmado</dt><dd>{recordedDuration(result.totals.closedEvidenceReadyNetMs)}<small>Fichajes y recibos confirmados</small></dd></div></dl>\n"
           },
           {
-            "currentOffsetCharacters": 13213,
-            "currentText": "   <details className={styles.rows}><summary>Ver jornadas y sus estados ({result.rows.length})</summary><p>Los nombres corresponden a la ficha actual; el archivo conserva el autor original de cada jornada.</p>{result.rows.map(row=><article className={styles.card} key={row.checkInEventId}><strong>{row.workerCurrentName||'Ficha sin nombre disponible'}</strong><p>{row.localStartDate} · {statuses[row.status]||'Estado por revisar'} · neto observado {recordedDuration(row.netMs)}</p>{row.effective.state==='UNCONFIRMED'&&<p>Las horas efectivas de esta jornada siguen sin confirmar. Se conservan los fichajes y sus tiempos observados para revisar.</p>}{row.effective.basis==='HUMAN_APPROVED'&&<p>Cierre efectivo aprobado: {row.effective.endedAt} (UTC). Neto efectivo {recordedDuration(row.effective.netMs)}. Los fichajes originales se conservan.</p>}{row.durationScope==='RECORDED_INTERVALS_ONLY_OPEN_SHIFT'&&!row.effective.closed&&<p>Tiempo parcial hasta el último fichaje {row.lastRecordedAt} (UTC). Falta registrar la salida.</p>}<p>{row.evidenceStatus==='READY'?'Fichajes verificados o aprobados':row.evidenceStatus==='PENDING_REVIEW'?'Faltan revisiones':row.evidenceStatus==='REJECTED'?'Revisión rechazada':'Integridad pendiente'} · {row.auditStatus==='CONFIRMED'?'Recibos confirmados':'Recibos por revisar'}.</p><details><summary>Referencias del registro</summary><small className={styles.sourceReference}>Persona que registró: {row.recordedBy}. Ficha actual: {row.workerId}. Jornada: {row.shiftId}. {row.sourceEventIds.length} fichajes fuente.</small></details></article>)}</details>\n",
+            "currentOffsetCharacters": 13836,
+            "currentText": "   <details className={styles.rows}>\n    <summary>Ver jornadas y sus estados ({result.rows.length})</summary>\n    <p>Horarios de {zoneLabel(result.period.timeZone)}. Los nombres corresponden a la ficha actual.</p>\n    {result.rows.map(row=><article className={styles.card} key={row.checkInEventId}>\n     <strong>{row.workerCurrentName||'Ficha sin nombre disponible'}</strong>\n     <p>{row.localStartDate} · {statuses[row.status]||'Estado por revisar'} · neto observado {recordedDuration(row.netMs)}</p>\n     <p>Entrada registrada: {localTime(row.startedAt)}<br/>Salida registrada: {localTime(row.endedAt)}<br/>Pausas registradas: {recordedDuration(row.breakMs)}</p>\n     {row.effective.state==='UNCONFIRMED'&&<p>Las horas efectivas de esta jornada siguen sin confirmar. Se conservan los fichajes y sus tiempos observados para revisar.</p>}\n     {row.effective.basis==='HUMAN_APPROVED'&&<p>Cierre efectivo aprobado: {localTime(row.effective.endedAt)}. Neto efectivo {recordedDuration(row.effective.netMs)}. Los fichajes originales se conservan.</p>}\n     {row.durationScope==='RECORDED_INTERVALS_ONLY_OPEN_SHIFT'&&!row.effective.closed&&<p>Tiempo parcial hasta el último fichaje {localTime(row.lastRecordedAt)}. {row.status==='ON_BREAK'&&'Pausa en curso. '}Falta registrar la salida. Neto definitivo pendiente.</p>}\n     <p>{row.evidenceStatus==='READY'?'Fichajes verificados o aprobados':row.evidenceStatus==='PENDING_REVIEW'?'Faltan revisiones':row.evidenceStatus==='REJECTED'?'Revisión rechazada':'Integridad pendiente'} · {row.auditStatus==='CONFIRMED'?'Recibos confirmados':'Recibos por revisar'}.</p>\n     <details><summary>Referencias del registro</summary><small className={styles.sourceReference}>Persona que registró: {row.recordedBy}. Ficha actual: {row.workerId}. Jornada: {row.shiftId}. {row.sourceEventIds.length} fichajes fuente.</small></details>\n    </article>)}\n   </details>\n",
             "previousText": "   <details className={styles.rows}><summary>Ver jornadas y sus estados ({result.rows.length})</summary><p>Los nombres corresponden a la ficha actual; el archivo conserva el autor original de cada jornada.</p>{result.rows.map(row=><article className={styles.card} key={row.checkInEventId}><strong>{row.workerCurrentName||'Ficha sin nombre disponible'}</strong><p>{row.localStartDate} · {statuses[row.status]||'Estado por revisar'} · neto observado {recordedDuration(row.netMs)}</p>{row.durationScope==='RECORDED_INTERVALS_ONLY_OPEN_SHIFT'&&<p>Tiempo parcial hasta el último fichaje {row.lastRecordedAt} (UTC). Falta registrar la salida.</p>}<p>{row.evidenceStatus==='READY'?'Fichajes verificados o aprobados':row.evidenceStatus==='PENDING_REVIEW'?'Faltan revisiones':row.evidenceStatus==='REJECTED'?'Revisión rechazada':'Integridad pendiente'} · {row.auditStatus==='CONFIRMED'?'Recibos confirmados':'Recibos por revisar'}.</p><details><summary>Referencias del registro</summary><small className={styles.sourceReference}>Persona que registró: {row.recordedBy}. Ficha actual: {row.workerId}. Jornada: {row.shiftId}. {row.sourceEventIds.length} fichajes fuente.</small></details></article>)}</details>\n"
           }
         ]
@@ -41336,13 +41346,13 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-attendance-effective-hours-ui.test.mjs",
         "status": "ADDED",
         "previousSha256": null,
-        "currentSha256": "dd048ad513ffc3412cdb7fd9f87da5e8eb1c0588879f5978ea99ed3b163a3c48",
+        "currentSha256": "25d61b861b402e5d445a48b88c6bc5b9dc7787821e97836b01a21f6b301f40e3",
         "previousBytes": 0,
-        "currentBytes": 1213,
+        "currentBytes": 3090,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 0,
-            "currentText": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {reportFixture,shift} from './helpers/field-hours-fixture.mjs';\nimport {createHoursUiHarness,text,one,configure,json} from './helpers/field-hours-ui-harness.mjs';\nconst {panel}=await createHoursUiHarness(),props={projectId:'project-a',scope:'a'.repeat(64),disabled:false,getSessionToken:async()=> 'synthetic-ui-token'};\ntest('actual hours JSX keeps observed diagnostics while explicitly withholding uncertified effective totals',async()=>{\n const f=reportFixture(),events=shift();events[1].metadata.fieldOperations.recordedBy='actor-other';f.add(events);const report=await f.read();assert.equal(report.totals.closedEffectiveNetMs,null);\n panel.reset({},[json(report)]);await one(configure(panel,props),node=>node.type==='form').props.onSubmit({preventDefault(){}});const tree=panel.render(props);\n assert.equal(panel.state().result.rows.length,1);assert.match(text(tree),/Netas observadas/);assert.match(text(tree),/Netas efectivasSin confirmar/);assert.match(text(tree),/1 jornadas necesitan revisar su respaldo efectivo/);assert.match(text(tree),/Integridad por revisar/);assert.equal(panel.requests().length,1);panel.unmount();\n});\n",
+            "currentText": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {reportFixture,shift} from './helpers/field-hours-fixture.mjs';\nimport {createHoursUiHarness,text,one,configure,json} from './helpers/field-hours-ui-harness.mjs';\nconst {panel}=await createHoursUiHarness(),props={projectId:'project-a',scope:'a'.repeat(64),disabled:false,getSessionToken:async()=> 'synthetic-ui-token'};\ntest('actual hours JSX keeps observed diagnostics while explicitly withholding uncertified effective totals',async()=>{\n const f=reportFixture(),events=shift();events[1].metadata.fieldOperations.recordedBy='actor-other';f.add(events);const report=await f.read();assert.equal(report.totals.closedEffectiveNetMs,null);\n panel.reset({},[json(report)]);await one(configure(panel,props),node=>node.type==='form').props.onSubmit({preventDefault(){}});const tree=panel.render(props);\n assert.equal(panel.state().result.rows.length,1);assert.match(text(tree),/Netas observadas/);assert.match(text(tree),/Netas efectivasSin confirmar/);assert.match(text(tree),/1 jornadas necesitan revisar su respaldo efectivo/);assert.match(text(tree),/Integridad por revisar/);assert.equal(panel.requests().length,1);panel.unmount();\n});\n\nasync function renderShift(report){\n panel.reset({},[json(report)]);\n await one(configure(panel,props),node=>node.type==='form').props.onSubmit({preventDefault(){}});\n return text(one(panel.render(props),node=>node.type==='article'));\n}\n\ntest('overnight shift shows both local dates and the registered break in the report zone',async()=>{\n const fixture=reportFixture();\n fixture.add(shift({\n  types:['CHECK_IN','BREAK_START','BREAK_END','CHECK_OUT'],\n  times:['2026-10-05T23:00:00.000Z','2026-10-06T02:30:00.000Z','2026-10-06T03:00:00.000Z','2026-10-06T07:30:00.000Z']\n }));\n const detail=await renderShift(await fixture.read());\n assert.match(detail,/Entrada registrada: 05\\/10\\/2026,? 20:00:00 GMT-3/);\n assert.match(detail,/Salida registrada: 06\\/10\\/2026,? 04:30:00 GMT-3/);\n assert.match(detail,/Pausas registradas: 0 h 30 min/);\n assert.match(detail,/neto observado 8 h 0 min/);\n panel.unmount();\n});\n\ntest('the last recorded event remains distinct from an actual check-out on an open shift',async()=>{\n const fixture=reportFixture();\n fixture.add(shift({types:['CHECK_IN'],times:['2026-10-05T11:00:00.000Z']}));\n const detail=await renderShift(await fixture.read());\n assert.match(detail,/Salida registrada: Sin registro/);\n assert.match(detail,/último fichaje 05\\/10\\/2026,? 08:00:00 GMT-3/);\n panel.unmount();\n});\n\ntest('an unfinished break shows a bounded subtotal and leaves final hours pending',async()=>{\n const fixture=reportFixture();\n fixture.add(shift({\n  types:['CHECK_IN','BREAK_START'],\n  times:['2026-10-05T11:00:00.000Z','2026-10-05T15:00:00.000Z']\n }));\n const report=await fixture.read();\n assert.equal(report.rows[0].effective.netMs,null);\n const detail=await renderShift(report);\n assert.match(detail,/neto observado 4 h 0 min/);\n assert.match(detail,/Pausa en curso\\. Falta registrar la salida\\. Neto definitivo pendiente/);\n panel.unmount();\n});\n",
             "previousText": ""
           }
         ]
@@ -51332,7 +51342,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-            "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+            "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -52411,7 +52421,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-            "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+            "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -59364,7 +59374,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-            "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+            "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -61138,7 +61148,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-            "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+            "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
@@ -62463,7 +62473,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
-            "sha256": "64aa2930fde9eb008bf0cbcc30f71853a39b50eddc70a398f651f387c441de70"
+            "sha256": "914d895435f5ad546cfd581fbc91f4efc3d9d85233f41b9239edca7713298c54"
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
