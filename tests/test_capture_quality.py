@@ -218,6 +218,42 @@ class CaptureQualityTest(unittest.TestCase):
         result = evaluate_capture_quality(request)
         self.assertNotEqual(result["state"], "QUALITY_PASS")
 
+    def test_document_back_ignores_unrelated_out_of_frame_background_rectangle(self):
+        # Pure synthetic geometry: no real document, portrait or identity model.
+        image = synthetic_card()
+        ImageDraw.Draw(image).rectangle((3, 3, 796, 596), outline=(245, 245, 245), width=4)
+        request = payload(image, "DOCUMENT_BACK")
+        with patch("api._biometric_core.load_quality_detector") as detector, \
+             patch("api._biometric_core.load_models") as paired:
+            result = evaluate_capture_quality(request)
+            self.assert_result(result, request, "QUALITY_PASS")
+            detector.assert_not_called()
+            paired.assert_not_called()
+
+    def test_document_front_ignores_unrelated_out_of_frame_background_rectangle(self):
+        # Injected boxes test the existing printed-portrait gate, not real inference.
+        image = synthetic_card_with_portrait_detail()
+        ImageDraw.Draw(image).rectangle((3, 3, 796, 596), outline=(245, 245, 245), width=4)
+        request, detector = payload(image, "DOCUMENT_FRONT"), Detector([(45, 70, 48, 70)])
+        with patch("api._biometric_core.load_quality_detector") as loader, \
+             patch("api._biometric_core.load_models") as paired:
+            result = evaluate_capture_quality(request, detector=detector)
+            self.assert_result(result, request, "QUALITY_PASS")
+            self.assertEqual(detector.calls, 1)
+            loader.assert_not_called()
+            paired.assert_not_called()
+
+    def test_background_rectangle_without_eligible_card_keeps_existing_rejection(self):
+        empty = Image.new("RGB", (800, 600), (65, 75, 85))
+        small = empty.copy()
+        small.paste(synthetic_card().resize((320, 240)), (240, 180))
+        for image in (empty, small):
+            ImageDraw.Draw(image).rectangle((3, 3, 796, 596), outline=(245, 245, 245), width=4)
+            request = payload(image, "DOCUMENT_BACK")
+            result = evaluate_capture_quality(request)
+            self.assert_result(result, request, "RETAKE_REQUIRED")
+            self.assertEqual(result["reasonCodes"], ["DOCUMENT_OUT_OF_FRAME"])
+
     def test_service_failure_and_nonfinite_detector_output_are_uncertain(self):
         request = payload()
         with patch("api._biometric_core.load_quality_detector", side_effect=BiometricError("BIOMETRIC_MODEL_UNAVAILABLE", 503)):

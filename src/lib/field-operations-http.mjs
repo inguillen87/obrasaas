@@ -23,6 +23,16 @@ export function createFieldHandlers({verify,operations}) {
     const session=await identity(request,verify),params=new URL(request.url).searchParams;
     if(request.method==='POST'){if(params.size)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.save(session,await boundedBody(request)));}
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
+    if(params.has('closureWorkerId')||params.has('closureShiftId')){
+      const input=context(params,['closureWorkerId','closureShiftId']);
+      if(params.size!==4||![params.get('closureWorkerId'),params.get('closureShiftId')].every(workspaceId))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return reply(await operations.attendanceClosureView(session,{...input,workerId:params.get('closureWorkerId'),shiftId:params.get('closureShiftId')}));
+    }
+    if(['progressCurveTaskId','progressCurveCursor'].some(key=>params.has(key))){
+      const input=context(params,['progressCurveTaskId','progressCurveCursor']);
+      if(!workspaceId(params.get('progressCurveTaskId'))||params.has('progressCurveCursor')&&(!params.get('progressCurveCursor')||params.get('progressCurveCursor').length>1200))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return reply(await operations.progressCurve(session,{...input,taskId:params.get('progressCurveTaskId'),...(params.has('progressCurveCursor')?{cursor:params.get('progressCurveCursor')}:{})}));
+    }
     if(['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat','expectedHoursDigest'].some(key=>params.has(key))){
       const input=context(params,['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat','expectedHoursDigest']),format=params.get('hoursFormat');
       if(!['json','csv'].includes(format)||params.size!==(format==='csv'?7:6)||!['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat'].every(key=>params.has(key))||format==='json'&&params.has('expectedHoursDigest')||format==='csv'&&!/^[a-f0-9]{64}$/.test(params.get('expectedHoursDigest')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
@@ -40,7 +50,7 @@ export function createFieldHandlers({verify,operations}) {
       return reply(await operations.inventoryHistory(session,{...input,inventoryFilter,...Object.fromEntries(selected.map(key=>[key,params.get(key)]))}));
     }
     if(['reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp'].some(key=>params.has(key))){
-      if([...params.keys()].some(key=>!['projectId','scope','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp'].includes(key))||!['EVIDENCE','PROGRESS'].includes(params.get('reviewSection'))||!['PENDING','ALL'].includes(params.get('reviewFilter'))||['afterReview','reviewId'].some(key=>params.has(key)&&!workspaceId(params.get(key)))||params.has('afterReview')&&params.has('reviewId')||params.has('reviewId')&&params.get('reviewFilter')!=='ALL'||['afterReview','reviewId','reviewAccessStamp'].some(key=>params.has(key))&&!/^[a-f0-9]{64}$/.test(params.get('reviewAccessStamp')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      if([...params.keys()].some(key=>!['projectId','scope','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp'].includes(key))||!['EVIDENCE','PROGRESS','ATTENDANCE'].includes(params.get('reviewSection'))||!['PENDING','ALL'].includes(params.get('reviewFilter'))||['afterReview','reviewId'].some(key=>params.has(key)&&!workspaceId(params.get(key)))||params.has('afterReview')&&params.has('reviewId')||params.has('reviewId')&&params.get('reviewFilter')!=='ALL'||['afterReview','reviewId','reviewAccessStamp'].some(key=>params.has(key))&&!/^[a-f0-9]{64}$/.test(params.get('reviewAccessStamp')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
       return reply(await operations.reviewPage(session,{...input,reviewSection:params.get('reviewSection'),reviewFilter:params.get('reviewFilter'),...(params.has('afterReview')?{afterReview:params.get('afterReview')}:{}) ,...(params.has('reviewId')?{reviewId:params.get('reviewId')}:{}) ,...(params.has('reviewAccessStamp')?{reviewAccessStamp:params.get('reviewAccessStamp')}:{})}));
     }
     if(params.has('journeyCursor')){if(params.size!==3||!params.get('journeyCursor')||params.get('journeyCursor').length>1024)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.read(session,{...input,journeyCursor:params.get('journeyCursor')}));}
@@ -113,13 +123,82 @@ async function currentConfigurationQrToken(client,member,projectId,configuration
   if(!token)unavailable();
   return token.token;
 }
+const xmlEntities = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'};
+const escapeXml = value => value.replace(/[&<>"']/g, char => xmlEntities[char]);
+const graphemes = new Intl.Segmenter('es', {granularity: 'grapheme'});
+
+function printableName(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  return value.normalize('NFC')
+    .replace(/[^\u{20}-\u{d7ff}\u{e000}-\u{fffd}\u{10000}-\u{10ffff}]|[\u007f-\u009f\u202a-\u202e\u2066-\u2069]/gu, ' ')
+    .replace(/\s+/gu, ' ').trim() || fallback;
+}
+
+function filenamePart(name, fallback) {
+  return name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').slice(0, 36).replace(/^-+|-+$/g, '') || fallback;
+}
+
+// Keep every word on the sign, including unbroken identifiers. Allow two
+// monospace cells for glyphs outside the Latin repertoire.
+function labelLines(value, maxCells) {
+  const lines = [];
+  let line = '', cells = 0;
+  for (const word of value.split(' ')) {
+    const letters = Array.from(graphemes.segment(word), item => item.segment);
+    const width = letter => letter.codePointAt(0) <= 0x024f ? 1 : 2;
+    const wordCells = letters.reduce((sum, letter) => sum + width(letter), 0);
+    if (line && cells + 1 + wordCells > maxCells) {
+      lines.push(line);
+      line = ''; cells = 0;
+    }
+    if (line) { line += ' '; cells++; }
+    for (const letter of letters) {
+      if (cells + width(letter) > maxCells) {
+        lines.push(line);
+        line = ''; cells = 0;
+      }
+      line += letter; cells += width(letter);
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function fieldQrSign(matrixSvg, {projectId, projectName, sectorId, sectorName, revision}) {
+  const project = printableName(projectName, projectId);
+  const sector = printableName(sectorName, sectorId);
+  const reference = digest([projectId, sectorId, revision]).slice(0, 12);
+  const filename = `qr-${filenamePart(project,'obra')}-${filenamePart(sector,'sector')}-${reference}.svg`;
+  const sectorLines = labelLines(sector, 26), projectLines = labelLines(project, 32);
+  const projectY = 96 + sectorLines.length * 32;
+  const matrixY = projectY + 18 + projectLines.length * 25;
+  const height = matrixY + 432;
+  const names = (lines, y, size, step) => lines.map((line, index) =>
+    `<text x="32" y="${y + index * step}" font-family="monospace" font-size="${size}" font-weight="bold">${escapeXml(line)}</text>`).join('\n');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="${height}" viewBox="0 0 480 ${height}" role="img" aria-labelledby="title">
+<title id="title">QR de asistencia · ${escapeXml(sector)} · ${escapeXml(project)}</title>
+<rect width="480" height="${height}" fill="white"/>
+<g fill="#172b3a" font-family="sans-serif">
+<text x="32" y="32" font-size="16" font-weight="bold">ObraSaaS · Asistencia</text>
+<text x="32" y="69" font-size="16">Sector</text>
+${names(sectorLines, 99, 25, 32)}
+<text x="32" y="${projectY + 3}" font-size="16">Obra</text>
+${names(projectLines, projectY + 30, 20, 25)}
+<g transform="translate(60 ${matrixY})">${matrixSvg}</g>
+<text x="240" y="${matrixY + 388}" text-anchor="middle" font-size="18">Para fichar, elegí «Leer QR con cámara».</text>
+<text x="240" y="${matrixY + 413}" text-anchor="middle" font-size="14">Referencia · ${reference}</text>
+</g></svg>`;
+  return {svg, filename};
+}
+
 export function createFieldQrHandler({verify,workspace,toSvg}) {
   return async request=>{try{
     const session=await identity(request,verify),params=new URL(request.url).searchParams,input=context(params,['sectorId','token','expectedConfigRevision']);
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
     if(!workspaceId(params.get('sectorId'))||(params.has('token')&&!/^[a-f0-9]{64}$/.test(params.get('token')||'')))throw new WorkspaceError('FIELD_QR_INVALID');
     if(params.has('token')?params.has('expectedConfigRevision'):!workspaceId(params.get('expectedConfigRevision')))throw new WorkspaceError('FIELD_QUERY_INVALID');
-    const token=await workspace.projectOperation(session,input,false,async(client,member,scope,project)=>{
+    const sign=await workspace.projectOperation(session,input,false,async(client,member,scope,project)=>{
       if(!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
       const c=project.metadata?.fieldOperations;
       if(!params.has('token')&&params.get('expectedConfigRevision')!==c?.configRevision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
@@ -127,10 +206,10 @@ export function createFieldQrHandler({verify,workspace,toSvg}) {
       if(!sector)throw new WorkspaceError('FIELD_QR_INVALID',422);
       const selected=params.has('token')?params.get('token'):await currentConfigurationQrToken(client,member,input.projectId,c,sector.id);
       if(digest([input.projectId,sector.id,c.configRevision,selected])!==sector.qrHash)throw new WorkspaceError('FIELD_QR_INVALID',422);
-      return selected;
+      return {token:selected,projectId:input.projectId,projectName:project.name,sectorId:sector.id,sectorName:sector.name,revision:c.configRevision};
     });
-    const payload=JSON.stringify({version:1,projectId:input.projectId,sectorId:params.get('sectorId'),token});
-    const svg=await toSvg(payload);
-    return new Response(svg,{headers:{...fieldHeaders,'Content-Type':'image/svg+xml','Content-Disposition':'attachment; filename="qr-sector.svg"','Content-Security-Policy':"default-src 'none'; sandbox"}});
+    const payload=JSON.stringify({version:1,projectId:sign.projectId,sectorId:sign.sectorId,token:sign.token});
+    const {svg,filename}=fieldQrSign(await toSvg(payload),sign);
+    return new Response(svg,{headers:{...fieldHeaders,'Content-Type':'image/svg+xml','Content-Disposition':`attachment; filename="${filename}"`,'Content-Security-Policy':"default-src 'none'; sandbox"}});
   }catch(error){return failed(error);}};
 }

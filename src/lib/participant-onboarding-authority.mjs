@@ -1,4 +1,5 @@
 import {WorkspaceError,workspaceId,digest,WORKSPACE_ROLES} from './workspace-policy.mjs';
+import {performance} from 'node:perf_hooks';
 import {companyWhatsappOnboardingEntitlement} from './company-entitlement.mjs';
 import {PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256} from './participant-onboarding-policy.mjs';
 import {prepareCompanyKycProjects,companyKycGrantDigest,assertCompanyKycInvitation} from './company-channel-kyc.mjs';
@@ -8,6 +9,8 @@ import {assertWorkerCustomerConnection} from './worker-channel-identity.mjs';
 import {customerChannelActive} from './meta-customer-outbound.mjs';
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {readCurrentReactiveKyc} from './participant-onboarding-current-kyc.mjs';
+import {lockOwnCompanyIssuerPrincipal,lockOwnCompanyIssuer,ownCompanyConnectionPolicy,ownCompanyCapabilityKind,ownCompanyTransportPolicy} from './meta-own-company-policy.mjs';
+import {participantOnboardingPhase,participantOnboardingIntent,participantOnboardingPhaseOutboundId} from './participant-onboarding-policy.mjs';
 
 const PURPOSE='PARTICIPANT_ONBOARDING';
 const fail=(code='PARTICIPANT_ONBOARDING_AUTHORITY_CHANGED',status=409)=>{throw new WorkspaceError(code,status);};
@@ -15,6 +18,23 @@ const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const timestamp=value=>typeof value==='string'&&Number.isFinite(Date.parse(value));
 const stable=value=>Array.isArray(value)?value.map(stable):object(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+const ownOnboardingAuthorities=new WeakMap();
+const ownMarked=connection=>Object.hasOwn(connection?.metadata||{},'ownCompany')||Object.hasOwn(connection?.metadata||{},'ownCompanyRuntime');
+const ownAuthorityShape=r=>digest(stable([r.member,r.project.id,r.authorityDigest,r.worker,r.connection]));
+// Only the complete canonical resolver below can mint this witness. Copies,
+// serialized DTOs and a runtime grant alone cannot authorize an onboarding send.
+export function readOwnParticipantOnboardingAuthority(r,phase,{environment=process.env,now=Date.now()}={}){
+ const proof=ownOnboardingAuthorities.get(r);
+ // This in-process witness has a process-time lease. SQL and provider wall
+ // clocks may differ; absolute grant expiry is still checked below.
+ const elapsed=proof?performance.now()-proof.monotonicCheckedAt:NaN;
+ if(!proof||!['ACCOUNT_INVITATION','IDENTITY_START'].includes(phase)||!Number.isSafeInteger(now)||!Number.isFinite(elapsed)||elapsed<0||elapsed>=60000||ownAuthorityShape(r)!==proof.shape||!ownMarked(r.connection)||r.connection.company?.mode!=='COMPANY'||participantOnboardingPhase(r.worker.metadata?.participant?.onboardingDelivery)!==phase)fail();
+ const policy=ownCompanyTransportPolicy(proof.capability,environment,now),canonical=ownCompanyConnectionPolicy(r.connection,environment,now),p=r.worker.metadata.participant;
+ if(ownCompanyCapabilityKind(proof.capability)!=='RUNTIME'||policy.connectionId!==r.connection.id||policy.grantDigest!==canonical?.grantDigest||policy.organizationId!==r.member.organizationId||r.connection.company.organizationId!==r.member.organizationId||r.connection.company.targetProjectId!==r.project.id||phase==='ACCOUNT_INVITATION'&&(p.status!=='INVITED'||p.clerkUserId!=null)||phase==='IDENTITY_START'&&(p.status!=='ACTIVE'||p.invitation?.state!=='ACCEPTED'||!workspaceId(p.acceptanceReceiptId)||!/^user_[A-Za-z0-9]+$/.test(p.clerkUserId||'')))fail();
+ const binding={version:1,catalog:'OWN_COMPANY',phase,connectionId:r.connection.id,anchorProjectId:r.connection.projectId,targetProjectId:r.project.id,wabaId:r.connection.whatsappBusinessId,phoneNumberId:r.connection.phoneNumberId,grantDigest:policy.grantDigest,ownerRevision:r.connection.company.revision,assignmentRevision:r.connection.company.assignmentRevision};
+ const correlationId=participantOnboardingPhaseOutboundId(participantOnboardingIntent(p.onboardingDelivery),phase);
+ return {capability:proof.capability,policy,connection:r.connection,member:r.member,project:r.project,worker:r.worker,authorityDigest:r.authorityDigest,phase,catalog:'OWN_COMPANY',binding,correlationId,checkedAt:proof.checkedAt};
+}
 const intentKeys=['organizationId','targetProjectId','workerId','invitationId','issuerActorId','issuerMembershipId','consentReceiptId'];
 const consentKeys=['version','status','purpose','invitationId','senderE164','issuerActorId','issuerMembershipId','receiptId','recordedAt','noticeVersion','noticeSha256'];
 const revision=`to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
@@ -117,6 +137,19 @@ async function resolveParticipantAuthority(client,intent,{environment=process.en
  if(organizations.length!==1||organizations[0].metadata?.internal===true||typeof organizations[0].name!=='string'||!organizations[0].name.trim())fail('PARTICIPANT_ONBOARDING_ORGANIZATION_REQUIRED',403);
  const organization=organizations[0];
  member.organizationName=organization.name;
+ // Lock the original number owner's principals before person/Project locks.
+ // Discovery grants nothing, and an invalid/reclassified Own channel cannot
+ // fall through to the Customer catalog or transport later in this operation.
+ let ownDiscovery=null;
+ if(!origin){
+  const discoveredChannel=await companyConnectionForProject(client,intent.organizationId,intent.targetProjectId);
+  if(ownMarked(discoveredChannel)){
+   const time=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+   if(!(time instanceof Date)||!ownCompanyConnectionPolicy(discoveredChannel,environment,time.getTime()))fail();
+   await lockOwnCompanyIssuerPrincipal(client,discoveredChannel,{environment,now:time.getTime()});
+   ownDiscovery={id:discoveredChannel.id,grantDigest:companyKycGrantDigest(discoveredChannel)};
+  }
+ }
  // Discovery supplies only a possible own-account lock, never authorization.
  const discovered=(await client.query(`SELECT id,"projectId",metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[intent.workerId,intent.targetProjectId])).rows;
  if(discovered.length!==1)fail('PARTICIPANT_ONBOARDING_PARTICIPANT_REQUIRED',403);
@@ -140,6 +173,7 @@ async function resolveParticipantAuthority(client,intent,{environment=process.en
  let kycAuthority=origin?null:await kycRetryAuthority(client,intent,worker);
  const proof=await participationProof(client,intent,worker,own),authorization=await consent(client,intent,worker);
  const connection=await projectConnection(client,intent.organizationId,project.id);
+ if(!origin&&(Boolean(ownDiscovery)!==ownMarked(connection)||ownDiscovery&&(ownDiscovery.id!==connection.id||ownDiscovery.grantDigest!==companyKycGrantDigest(connection))))fail();
  if(connection.company)await assertCompanyKycInvitation(client,worker,intent.organizationId);
  const duplicate=(await client.query(connection.company?`SELECT w.id FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" JOIN public."WhatsAppChannelProjectAssignment" a ON a."projectId"=p.id AND a."organizationId"=p."organizationId" WHERE a."connectionId"=$1 AND a."organizationId"=$2 AND a.status='ACTIVE' AND p.status='ACTIVE' AND w.active=true AND w.phone=$3 AND w.id<>$4 AND w.metadata->'participant'->>'status' IN ('INVITED','ACTIVE') LIMIT 1`:`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND phone=$2 AND id<>$3 AND active=true AND metadata->'participant'->>'status' IN ('INVITED','ACTIVE') LIMIT 1`,connection.company?[connection.id,intent.organizationId,worker.phone,worker.id]:[project.id,worker.phone,worker.id])).rows;
  if(duplicate.length)fail('PARTICIPANT_ONBOARDING_RECIPIENT_AMBIGUOUS',409);
@@ -147,6 +181,13 @@ async function resolveParticipantAuthority(client,intent,{environment=process.en
  await challengeReceipt(client,intent,worker,expected);
  const trail=(await client.query(`SELECT id FROM public."AuditLog" WHERE "organizationId"=$1 AND action='participant.operation.recorded' AND (("entityType"='Worker' AND "entityId"=$2 AND metadata->>'kind' IN ('REVOKE','RESTORE_ACCESS','EXISTING_ACCOUNT_ASSIGNED','INVITATION_ACCEPTED','INVITATION_SENT')) OR ("entityType"='TenantMembership' AND "entityId"=ANY($3::text[]) AND metadata->>'kind'='OFFICE_ROLE_CHANGED')) ORDER BY id LIMIT 1001`,[intent.organizationId,worker.id,[member.membershipId,...(own?[own.membershipId]:[])]] )).rows;
  if(trail.length>1000)fail();
+ let ownOnboardingCapability=null;
+ if(!origin&&ownDiscovery){
+  const time=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+  if(!(time instanceof Date)||connection.company?.mode!=='COMPANY')fail();
+  ownOnboardingCapability=await lockOwnCompanyIssuer(client,connection,{environment,now:time.getTime()});
+  if(ownCompanyCapabilityKind(ownOnboardingCapability)!=='RUNTIME')fail();
+ }
  // All changing authority is locked. A fresh DB clock is the last query so a
  // trial, invitation or grant expiring during earlier reads rolls back send.
  const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
@@ -160,7 +201,9 @@ async function resolveParticipantAuthority(client,intent,{environment=process.en
  if(!origin)checkedChallenge(worker,member,connection,expected,now);
  const authorityDigest=digest([origin?'participant-reactive-kyc-status-authority-v1':'participant-onboarding-authority-v1',stable({intent,member,projectId:project.id,worker:{id:worker.id,phone:worker.phone,status:p.status,clerkUserId:p.clerkUserId||null,invitation:i,kycAuthority},proof,consent:authorization,connection:{id:connection.id,anchorProjectId:connection.projectId,targetProjectId:project.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,grantDigest:companyKycGrantDigest(connection),ownerRevision:connection.company?.revision||null,assignmentRevision:connection.company?.assignmentRevision||null,projectOnlyOwner:connection.projectOnlyOwner||null},subscription:{plan:organization.subscriptionPlan,status:organization.subscriptionStatus,trialEndsAt:organization.trialEndsAt instanceof Date?organization.trialEndsAt.toISOString():organization.trialEndsAt},trail:trail.map(row=>row.id)})]);
  if(expected&&expected.authorityDigest!==authorityDigest)fail();
- return {member,project,worker,connection,now,entitlement,authorityDigest,company:Boolean(connection.company),...(origin?{own,organization,status:kycAuthority.status}:{})};
+ const result={member,project,worker,connection,now,entitlement,authorityDigest,company:Boolean(connection.company),...(origin?{own,organization,status:kycAuthority.status}:{})};
+ if(ownOnboardingCapability){ownCompanyTransportPolicy(ownOnboardingCapability,environment,now.getTime());ownOnboardingAuthorities.set(result,{capability:ownOnboardingCapability,checkedAt:now.getTime(),monotonicCheckedAt:performance.now(),shape:ownAuthorityShape(result)});}
+ return result;
 }
 
 export async function resolveParticipantOnboardingAuthority(client,intent,{environment=process.env,expected=null}={}){

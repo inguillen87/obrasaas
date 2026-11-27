@@ -8,7 +8,7 @@ import {createCompanyChannelStore} from '../src/lib/company-channel-store.mjs';
 import {WorkspaceError} from '../src/lib/workspace-policy.mjs';
 
 // Additive coverage; existing operational tests and assertions remain unchanged.
-const keys=['version','kind','readOnly','canManage','codeVerificationPresent','codeVerificationState','registered','platformState','displayComparable','displayMatchesExpected','observedAt','checkedAt','inspectionState','operationalCheck','denialStage','accepted','roundTrip'].sort();
+const keys=['version','kind','readOnly','canManage','codeVerificationPresent','codeVerificationState','registered','platformState','displayComparable','displayMatchesExpected','businessAssets','observedAt','checkedAt','inspectionState','operationalCheck','denialStage','accepted','roundTrip'].sort();
 function assertClosed(result,f){
  assert.deepEqual(Object.keys(result).sort(),keys);
  assert.equal(result.kind,'OWN_COMPANY_RUNTIME_DIAGNOSTIC');assert.equal(result.readOnly,true);assert.equal(result.canManage,false);assert.equal(result.accepted,false);assert.equal(result.roundTrip,'NOT_VERIFIED');
@@ -16,7 +16,10 @@ function assertClosed(result,f){
  assert.ok(['VERIFIED','NOT_VERIFIED','EXPIRED','OTHER','MISSING'].includes(result.codeVerificationState));assert.ok(['CLOUD_API','NOT_APPLICABLE','OTHER','MISSING'].includes(result.platformState));
  assert.ok(['PASSED','REJECTED'].includes(result.operationalCheck));assert.ok(['NONE','VERIFICATION_STATUS','DISPLAY_PHONE_MATCH'].includes(result.denialStage));assert.equal(result.inspectionState,'CURRENT');
  for(const key of ['observedAt','checkedAt'])assert.equal(new Date(result[key]).toISOString(),result[key]);
- assert.ok(Object.values(result).every(value=>typeof value!=='function'&&typeof value!=='object'));
+ assert.deepEqual(Object.keys(result.businessAssets).sort(),['appOwned','checkedAt','phoneInWaba','systemUserAssigned','wabaOwned']);
+ for(const key of ['systemUserAssigned','appOwned','wabaOwned','phoneInWaba'])assert.equal(result.businessAssets[key],true);
+ assert.equal(result.businessAssets.checkedAt,result.observedAt);
+ assert.ok(Object.values(result).every(value=>value===result.businessAssets||typeof value!=='function'&&typeof value!=='object'));
  const encoded=JSON.stringify(result);
  for(const privateValue of [f.token,f.connection.encryptedAccessToken,f.policy.phoneNumberId,f.policy.wabaId,f.policy.businessId,f.policy.expectedPhoneE164])assert.ok(!encoded.includes(privateValue));
  assertDiagnosticNoEffects(f);

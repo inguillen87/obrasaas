@@ -22,6 +22,7 @@ import {decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {createWorkerChannelStore,resolveWorkerChannelIdentity} from '../src/lib/worker-channel-identity.mjs';
 import {createWorkerChannelHandlers} from '../src/lib/worker-channel-http.mjs';
 import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers,splitMetaCustomerEvents} from '../src/lib/meta-customer-callback.mjs';
+import {createMetaCustomerAppProjection,META_APP_PROJECTION_PROVIDER} from '../src/lib/meta-customer-app-projection.mjs';
 import {createMetaFieldBridge} from '../src/lib/meta-field-bridge.mjs';
 import {createMetaCustomerOutbound,customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {createMetaCustomerProcessor,createMetaCustomerJobHandlers,signMetaCustomerJob} from '../src/lib/meta-customer-processing.mjs';
@@ -46,7 +47,12 @@ async function assessFixtureCaptureQuality(input){
 const url=lifecycleDisposableUrl(process.env),database='obrasaas_meta_lifecycle_'+randomUUID().replaceAll('-','');
 assert.match(database,/^obrasaas_meta_lifecycle_[a-f0-9]{32}$/);
 const admin=new Client({connectionString:url.toString()}),environment={...lifecycleEnvironment},checks=[];
+const options=process.argv.slice(2);
+assert.ok(options.length===0||options.length===1&&options[0]==='--business-app');
+const businessApp=options.length===1;
+if(businessApp)Object.assign(environment,{META_COEXISTENCE_CONFIG_ID:'1555555555555556',OBRASAAS_META_COEXISTENCE_RELEASE:'business-app-coexistence-v1'});
 const graph=createControlledLifecycleGraph(environment),clerk=createControlledLifecycleClerk(),blob=createControlledLifecycleBlob();
+if(businessApp)Object.assign(graph.assets.get('a'),{isOnBizApp:true,registered:true});
 let pool,created=false,failBridgeAudit=false,loseBridgeCommit=false,analyses=0,unexpectedNetworkCalls=0,kycMediaLookups=0;
 const kycMediaIds=new Set();
 const originalFetch=globalThis.fetch;
@@ -99,12 +105,13 @@ try{
  const analyzer={analyzePhoto:async()=>{analyses++;return {success:true,status:'ANALYZED_UNREVIEWED',aiAnalysis:'Controlled synthetic analysis; human review required.',requiresHumanReview:true};},transcribeAudio:async()=>({success:false,code:'SYNTHETIC_AUDIO_NOT_REQUESTED'})};
  const media=createFieldMedia({operations,get:blob.get,put:blob.put,analyzer,environment:()=>environment});
  const provider=createMetaCustomerProvider({environment,fetchImpl:graph.fetchImpl});
+ const appProjection=createMetaCustomerAppProjection({connect,provider,environment});
  const runtime=()=>{
   const bridge=createMetaFieldBridge({connect,environment,provider,get:blob.get,put:blob.put,analyzer});
   const outbound=createMetaCustomerOutbound({connect,resolveIdentity:resolveWorkerChannelIdentity,provider,environment});
   const deposit=createParticipantChannelKycDeposit({assessCaptureQuality:assessFixtureCaptureQuality,connect,resolveAuthority:resolveMetaKycAuthority,upload:channelUpload,environment});
   const kycBridge=createMetaKycBridge({connect,provider,deposit,environment}),kycOutbound=createMetaKycOutbound({connect,provider,environment});
-  const processor=createMetaCustomerProcessor({connect,dispatch:async context=>(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:META_KYC_AUTHORIZATION_CODES,outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):outbound.send(context,reply),observeStatus:(...args)=>outbound.observeStatus(...args)},environment});
+  const processor=createMetaCustomerProcessor({connect,dispatch:async context=>(await kycBridge.execute(context))||(businessApp&&await appProjection.execute(context))||bridge.execute(context),authorizationCodes:META_KYC_AUTHORIZATION_CODES,outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):outbound.send(context,reply),observeStatus:(...args)=>outbound.observeStatus(...args)},environment});
   return {bridge,outbound,processor};
  };
  let engines=runtime();
@@ -116,14 +123,15 @@ try{
   tenant.web=createMetaCustomerHandlers({verify:async()=>tenant.owner,service:onboarding});
  }
  const [a,b]=lifecycleTenants;
+ const usesBusinessApp=tenant=>businessApp&&tenant===a;
  const invoke=async(tenant,body)=>{const response=await tenant.web.POST(post('/api/identity/meta-onboarding',body));const result=await response.json();assert.equal(response.status,200,result.code);assert.match(response.headers.get('cache-control'),/no-store/);return result;};
  for(const tenant of lifecycleTenants){
   const before=await setup.read(tenant.owner,tenant.ownerContext);
-  await setup.save(tenant.owner,{...tenant.ownerContext,operationId:randomUUID(),profile:{assistantName:'Asistente sintético '+tenant.key,numberMode:'DEDICATED',initialProjectId:tenant.projectId,useCases:['FIELD_REPORTS','MATERIAL_REQUESTS','SCHEDULE_QUERIES'],expectedRevision:before.profile.revision,confirmOwnership:true}});
+  await setup.save(tenant.owner,{...tenant.ownerContext,operationId:randomUUID(),profile:{assistantName:'Asistente sintético '+tenant.key,numberMode:usesBusinessApp(tenant)?'BUSINESS_APP':'DEDICATED',initialProjectId:tenant.projectId,useCases:['FIELD_REPORTS','MATERIAL_REQUESTS','SCHEDULE_QUERIES'],expectedRevision:before.profile.revision,confirmOwnership:true}});
   tenant.start=await invoke(tenant,tenant.command('begin',{preparedRevision:1}));assert.equal(tenant.start.signup.state,'PREPARED');assert.ok(tenant.start.stateToken);
   assert.equal(tenant.start.acceptance.roundTrip,'NOT_VERIFIED');assert.equal(tenant.start.readiness.humanAcceptance,'NOT_VERIFIED');
  }
- checks.push('controlled-web-session-canonical-dedicated-preparation-and-signup-do-not-grant-acceptance');
+ checks.push(businessApp?'controlled-web-session-canonical-coexistence-and-dedicated-signup-do-not-grant-acceptance':'controlled-web-session-canonical-dedicated-preparation-and-signup-do-not-grant-acceptance');
  graph.setBeforeRequest(async(asset,endpoint,body)=>{
   if(kycMediaIds.has(endpoint)){
    assert.equal(asset.key,b.key);const state=await kycState(b);assert.equal(state.step,'FINALIZING');assert.equal(state.captureImageSetVersion,2);assert.equal(state.consent,true);assert.equal(state.backConsent,true);kycMediaLookups++;
@@ -139,7 +147,7 @@ try{
    assert.equal(reserved.outcome.state,'SEND_STARTED');assert.ok(reserved.payload.encryptedPayload.startsWith('v2.'));assert.ok(!JSON.stringify(reserved).includes(asset.sender));
   }
  });
- const complete=tenant=>tenant.command('complete',{signupId:tenant.start.signup.id,stateToken:tenant.start.stateToken,code:tenant.code,wabaId:tenant.wabaId,phoneNumberId:tenant.phoneNumberId});
+ const complete=tenant=>tenant.command('complete',{signupId:tenant.start.signup.id,stateToken:tenant.start.stateToken,code:tenant.code,wabaId:tenant.wabaId,...(usesBusinessApp(tenant)?{phoneNumberId:null,signupEvent:'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'}:{phoneNumberId:tenant.phoneNumberId})});
  const aComplete=complete(a);await Promise.all([invoke(a,aComplete),invoke(a,aComplete)]);
  assert.equal(graph.assets.get('a').exchanges,1);assert.equal(graph.assets.get('a').subscriptions,1);
  const cross=await b.web.POST(post('/api/identity/meta-onboarding',{...complete(b),wabaId:a.wabaId,phoneNumberId:a.phoneNumberId}));assert.equal(cross.status,409);assert.equal((await cross.json()).code,'META_CUSTOMER_ASSET_ALREADY_BOUND');
@@ -151,14 +159,23 @@ try{
   assert.equal(connection.enabled,false);assert.equal(connection.connectionStatus,'PENDING');
   assert.equal(decryptCustomerSecret(connection.encryptedAccessToken,{organizationId:tenant.organizationId,projectId:tenant.projectId,purpose:'access-token',resourceId:tenant.phoneNumberId},environment),tenant.token);
   assert.throws(()=>decryptCustomerSecret(connection.encryptedAccessToken,{organizationId:tenant===a?b.organizationId:a.organizationId,projectId:tenant.projectId,purpose:'access-token',resourceId:tenant.phoneNumberId},environment),{code:'META_CUSTOMER_CREDENTIAL_SCOPE_REJECTED'});
-  assert.equal((await onboarding.read(tenant.owner,tenant.ownerContext)).signup.state,'REGISTRATION_REQUIRED');
+  assert.equal((await onboarding.read(tenant.owner,tenant.ownerContext)).signup.state,usesBusinessApp(tenant)?'LINKED_PENDING_ACCEPTANCE':'REGISTRATION_REQUIRED');
  }
- graph.assets.get('a').registerResponseLost=true;
- const aRegistration=a.command('register_number',{signupId:a.start.signup.id,pin:'731902',confirmRegistration:true});
- const aRegistered=await invoke(a,aRegistration);assert.equal(aRegistered.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(aRegistered.connection.enabled,false);
- assert.equal(graph.assets.get('a').phoneInspections,4,'Signup, reservation, fresh dispatch check, and read-only lost-response recovery inspect the actual controlled Graph modality');
- await invoke(a,aRegistration);assert.equal(graph.assets.get('a').registrations,1);a.expectedRegistrations=1;
- checks.push('real-Graph-adapter-escrows-tenant-AAD-credential-and-PIN-before-one-register-and-recovers-lost-response-readonly');
+ if(businessApp){
+  assert.equal(a.start.signup.configId,environment.META_COEXISTENCE_CONFIG_ID);
+  const current=await onboarding.read(a.owner,a.ownerContext);
+  assert.equal(current.coexistence.verified,true);assert.equal(current.signup.canRegister,false);
+  const connection=(await query(`SELECT "encryptedPin" FROM "WhatsAppConnection" WHERE "projectId"=$1`,[a.projectId])).rows[0];
+  assert.equal(connection.encryptedPin,null);a.expectedRegistrations=0;
+  checks.push('actual-provider-adapter-links-coexistence-with-waba-only-finish-without-pin-or-register');
+ }else{
+  graph.assets.get('a').registerResponseLost=true;
+  const aRegistration=a.command('register_number',{signupId:a.start.signup.id,pin:'731902',confirmRegistration:true});
+  const aRegistered=await invoke(a,aRegistration);assert.equal(aRegistered.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(aRegistered.connection.enabled,false);
+  assert.equal(graph.assets.get('a').phoneInspections,4,'Signup, reservation, fresh dispatch check, and read-only lost-response recovery inspect the actual controlled Graph modality');
+  await invoke(a,aRegistration);assert.equal(graph.assets.get('a').registrations,1);a.expectedRegistrations=1;
+  checks.push('real-Graph-adapter-escrows-tenant-AAD-credential-and-PIN-before-one-register-and-recovers-lost-response-readonly');
+ }
  graph.assets.get('b').registerRejectedOnce=true;
  const bRejected=b.command('register_number',{signupId:b.start.signup.id,pin:'731902',confirmRegistration:true});
  const rejected=await invoke(b,bRejected);assert.equal(rejected.signup.state,'REGISTRATION_REJECTED');assert.equal(rejected.signup.canRegister,true);assert.equal(rejected.signup.canRetryRegistration,true);assert.equal(rejected.connection.enabled,false);
@@ -288,7 +305,8 @@ try{
   assert.equal((await query(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action='worker.channel.identity.recorded' AND "entityId"=$1 AND metadata->>'kind'='CHANNEL_BOUND'`,[tenant.workerId])).rows[0].n,1);
  }
  checks.push('HTTP-owner-only-code-HMAC-ACK-before-dispatch-and-real-resolver-bind-once-with-unsigned-and-cross-tenant-code-rejection');
- const menuA=await execute(a,'MENU'),menuB=await execute(b,'MENU');assert.equal(menuA.reply.type,'interactive');assert.equal(menuB.reply.type,'interactive');assert.equal(menuA.result.replyState,'SENT');assert.equal(menuB.result.replyState,'SENT');
+ const sendsBeforeMenu=graph.assets.get('a').sends;
+ const menuA=await execute(a,businessApp?'Hola':'MENU'),menuB=await execute(b,'MENU');assert.equal(menuA.reply.type,'interactive');assert.equal(menuB.reply.type,'interactive');assert.equal(menuA.result.replyState,'SENT');assert.equal(menuB.result.replyState,'SENT');
  assert.ok(menuA.reply.interactive.body.text.includes('Obra sintética A'));assert.ok(!JSON.stringify(menuA.reply).includes('Obra sintética B'));
  checks.push('both-activated-signup-credentials-flow-through-real-canonical-worker-bridge-processor-and-real-outbound-adapter');
  async function delivery(tenant,eventId,status='delivered',{recipient=tenant.sender}={}){
@@ -301,6 +319,27 @@ try{
  const status=await engines.outbound.result({eventId:menuA.eventId,projectId:a.projectId,channelId:a.channelId});assert.equal(status.providerStatus,'read');assert.equal(status.replySent,true);assert.equal(graph.assets.get('a').sends,sendsA);
  const aView=await onboarding.read(a.owner,a.ownerContext),bView=await onboarding.read(b.owner,b.ownerContext);assert.equal(aView.inbox.items.find(item=>item.id===menuA.eventId).providerReplyStatus,'read');assert.ok(!bView.inbox.items.some(item=>item.id===menuA.eventId));assert.equal(aView.acceptance.roundTrip,'NOT_VERIFIED');
  checks.push('signed-delivery-read-correlate-to-real-encrypted-reservation-private-tenant-status-with-no-resend-or-human-acceptance');
+ if(businessApp){
+  const replay=await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:menuA.headers,body:menuA.wire}));
+  assert.equal(replay.status,200);assert.equal((await replay.json()).durable,true);
+  assert.equal((await engines.processor.process(menuA.eventId)).done,true);
+  assert.equal(graph.assets.get('a').sends,sendsBeforeMenu+1);
+  assert.equal(graph.assets.get('a').registrations,0);
+  const echo={id:'wamid.SyntheticLifecycleEcho_'+randomUUID().replaceAll('-',''),from:a.displayNumber.slice(1),to:a.sender,timestamp:String(messageEpoch+messageSequence.get(a.key)),type:'text',text:{body:'Hola'}};
+  const payload={object:'whatsapp_business_account',entry:[{id:a.wabaId,changes:[{field:'smb_message_echoes',value:{metadata:{phone_number_id:a.phoneNumberId},message_echoes:[echo]}}]}]};
+  const wire=JSON.stringify(payload),headers={'Content-Type':'application/json','x-hub-signature-256':'sha256='+createHmac('sha256',environment.META_APP_SECRET).update(wire).digest('hex')};
+  const response=await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers,body:wire}));
+  assert.equal(response.status,200);assert.equal((await response.json()).durable,true);
+  const echoId='customer_webhook_'+splitMetaCustomerEvents(payload)[0].externalId;
+  const observedEcho=await engines.processor.process(echoId);
+  assert.equal(observedEcho.kind,'COEXISTENCE_SOURCE');
+  assert.equal(observedEcho.businessApplied,false);assert.equal(observedEcho.replySent,false);
+  const projected=(await query(`SELECT payload FROM "WebhookEvent" WHERE provider=$1 AND "projectId"=$2 AND payload->>'sourceEventId'=$3`,[META_APP_PROJECTION_PROVIDER,a.projectId,echoId])).rows;
+  assert.equal(projected.length,1);assert.equal(projected[0].payload.channelId,a.channelId);
+  assert.ok(projected[0].payload.encryptedPayload.startsWith('v2.'));
+  assert.equal(graph.assets.get('a').sends,sendsBeforeMenu+1);
+  checks.push('coexistence-signed-Hola-has-one-interactive-response-signed-delivery-and-no-resend-on-replay-or-app-echo');
+ }
  let step=await execute(a,'INCIDENCIA');step=await choose(a,step,'Tarea sintética A');await choose(a,step,'Sector sintético A');await execute(a,'Incidencia sintética del circuito completo');step=await execute(a,'Detalle privado sintético para comprobar persistencia y recuperación.');
  // Priority is a list choice, so an arbitrary text cannot bypass its nonce.
  const arbitraryPriority=await execute(a,'baja');assert.equal(arbitraryPriority.reply.type,'text');step=await choose(a,step,'Baja');
@@ -357,7 +396,8 @@ try{
  assert.equal(unexpectedNetworkCalls,0);assert.deepEqual(graph.unexpected,[]);assert.ok(scheduled.length>0);
  checks.push('private-content-stays-ciphertext-and-synthetic-transport-results-never-promote-real-Meta-or-human-acceptance');
  const report={status:'PASS',environment:'local-disposable-postgresql-full-canonical-signup-field-lifecycle',checks,checkCount:checks.length,canonicalServices:['workspace','customer-setup','onboarding','provider-adapter','participant-invitation-and-KYC','limited-WhatsApp-KYC-challenge-bridge-deposit-outbound','worker-channel-resolver','signed-callback','field-bridge','field-operations','field-media','processor','outbound','delivery-status'],tenants:2,kycRecapture:{rejectedSubmissions:1,captureImageSetVersion:2,newPrivateImages:3,documentBackConsentRecorded:true,distinctNewImageBytes:true,newCanonicalReviewRequired:true,newChannelBindingRequired:true},provider:'strict-controlled-Graph-fetch-only',clerk:'controlled-Backend-API-provider-only',webIdentity:'controlled-verifier-not-real-Clerk-JWT',blob:'controlled-private-byte-store',analyzer:'controlled-synthetic-image-only',realProviderCalls:0,unexpectedNetworkCalls,productionDataTouched:false,realNumberRegistered:false,realMetaAccepted:false,humanAccepted:false};
- mkdirSync('.vercel/meta-signup-field-lifecycle-evidence',{recursive:true});writeFileSync('.vercel/meta-signup-field-lifecycle-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ if(businessApp)report.connectionModes=['BUSINESS_APP','DEDICATED'];
+ mkdirSync('.vercel/meta-signup-field-lifecycle-evidence',{recursive:true});writeFileSync('.vercel/meta-signup-field-lifecycle-evidence/'+(businessApp?'coexistence-postgres.json':'postgres.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{
  globalThis.fetch=originalFetch;
  try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}

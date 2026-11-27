@@ -4,6 +4,7 @@ import {participantCommand} from '../src/lib/participant-policy.mjs';
 import {participantOnboardingNextStep} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
 import {fieldTransition} from '../src/lib/field-operations-policy.mjs';
+import {auditedInput,recordingAudit} from './fixtures/attendance-effective-audited.fixture.mjs';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
@@ -22,29 +23,64 @@ test('an absent current capability, revoked participation or pending identity ca
 });
 
 test('attendance withdrawal preserves revision and permissions until the canonical journey has closed',async()=>{
- const session={userId:'user_Owner'},member={actorId:'owner',organizationId:'organization-a',role:'ADMIN'},target={actorId:'person',clerkUserId:'user_Person',membershipId:'membership-a'},audits=new Map(),events=[],calls=[];
+ const session={userId:'user_Owner'},member={actorId:'owner',organizationId:'organization-a',role:'ADMIN'},target={actorId:'person',clerkUserId:'user_Person',membershipId:'membership-a'},audits=new Map(),events=[],recordingAudits=[],calls=[];
  const row={id:'worker-a',projectId:'project-a',name:'Persona de ensayo',active:true,revision:command().payload.revision,metadata:{participant:{version:1,status:'ACTIVE',clerkUserId:target.clerkUserId,permissions:{attendance:true,report:true},kyc:{status:'APPROVED'}}}},rows=values=>({rows:structuredClone(values),rowCount:values.length});
+ // Exact source projections consumed by the canonical audited chronology reader.
+ // These historical identity rows are synthetic fixture data, not a permission grant.
+ const chronologySelect=(sql,args)=>{
+  if(sql==='SELECT clock_timestamp() AS now')return rows([{now:new Date('2026-10-28T14:00:00.000Z')}]);
+  if(sql.startsWith('SELECT a.id,a."projectId",a."workerId",a."checkedInAt",a.metadata FROM public."AttendanceEntry" a JOIN public."Project" p')){
+   assert.equal(args[0],member.organizationId);
+   if(sql.includes('jsonb_to_recordset($2::jsonb)')){
+    const keys=JSON.parse(args[1]);assert.deepEqual(keys,[{projectId:row.projectId,workerId:row.id,shiftId:'permission-shift'}]);
+    return rows(events.filter(event=>keys.some(key=>key.projectId===event.projectId&&key.workerId===event.workerId&&key.shiftId===event.metadata.fieldOperations.shiftId)));
+   }
+   assert.deepEqual(args,[member.organizationId,target.actorId]);assert.ok(sql.includes("metadata->'fieldOperations'->>'recordedBy'=$2"));
+   return rows(events.filter(event=>event.metadata.fieldOperations.recordedBy===args[1]));
+  }
+  if(sql.startsWith('SELECT id FROM public."AuditLog"')&&sql.includes("action='field.attendance.corrected'")){assert.deepEqual(args,[member.organizationId,[row.projectId]]);return rows([]);}
+  if(sql.startsWith('SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata,"createdAt" FROM public."AuditLog"')){
+   assert.equal(args[0],member.organizationId);assert.deepEqual(args[1],events.map(event=>event.id));
+   return rows(recordingAudits.filter(audit=>audit.organizationId===args[0]&&args[1].includes(audit.metadata.outcome.event.id)));
+  }
+  if(sql.startsWith('SELECT i.id,i."projectId",i.metadata FROM public."Incident"')){assert.deepEqual(args,[member.organizationId,target.actorId,null]);return rows([]);}
+  if(sql.startsWith('SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata FROM public."AuditLog"')&&sql.includes("action='field.attendance.corrected'")){assert.deepEqual(args,[member.organizationId,[],target.actorId,null]);return rows([]);}
+  if(sql.startsWith('SELECT u.id AS "actorId"')&&sql.includes('AS "membershipStatus"')){
+   assert.deepEqual(args,[target.actorId,member.organizationId]);return rows([{...target,membershipStatus:'ACTIVE',role:'AUDITOR',clerkRole:'org:member',membershipRevision:'2026-10-01T00:00:00.000000'}]);
+  }
+  if(sql.startsWith('SELECT w.id FROM public."Worker" w')){assert.deepEqual(args,[member.organizationId,target.clerkUserId]);return rows([{id:row.id}]);}
+  if(sql.startsWith('SELECT id,status::text AS status,')&&sql.includes('FROM public."ProjectMembership"')){assert.deepEqual(args,[row.projectId,target.membershipId]);return rows([{id:'assignment-a',status:'ACTIVE',revision:'2026-10-01T00:00:00.000000'}]);}
+  if(sql.startsWith('SELECT w.id,w.active,w.metadata,')){assert.deepEqual(args,[row.projectId,target.clerkUserId]);return rows([{id:row.id,active:row.active,metadata:row.metadata,revision:row.revision}]);}
+  if(sql.startsWith('SELECT id FROM public."AuditLog"')&&sql.includes("action='participant.operation.recorded'")&&sql.includes('LIMIT 10001')){assert.deepEqual(args,[member.organizationId,target.membershipId,[row.id]]);return rows([]);}
+  if(sql.startsWith('SELECT id,"projectId",active,metadata,')){assert.deepEqual(args,[row.id,row.projectId]);return rows([{id:row.id,projectId:row.projectId,active:row.active,metadata:row.metadata,revision:row.revision}]);}
+  return null;
+ };
  const client={query:async(sql,args=[])=>{
-  calls.push(sql);
+  calls.push(sql);const chronology=chronologySelect(sql,args);if(chronology)return chronology;
   if(sql.includes('pg_advisory_xact_lock'))return rows([]);
   if(sql.startsWith('SELECT')&&sql.includes('FROM public."Worker" WHERE id=$1'))return rows([row]);
   if(sql.startsWith('SELECT u.id AS "actorId"'))return rows([target]);
   if(sql.startsWith('SELECT id FROM public."ProjectMembership"'))return rows([{id:'assignment-a'}]);
   if(sql.startsWith('SELECT id,"organizationId","entityType","entityId",metadata FROM public."AuditLog"'))return rows(audits.has(args[0])?[audits.get(args[0])]:[]);
-  if(sql.startsWith('SELECT id,"projectId","workerId",metadata FROM (')){
-   assert.equal(args[1],target.actorId);const latest=events.at(-1);
-   return rows(latest&&latest.metadata.fieldOperations.recordedBy===args[1]&&latest.metadata.fieldOperations.eventType!=='CHECK_OUT'?[latest]:[]);
-  }
   if(sql.startsWith('UPDATE public."Worker"')){row.metadata=JSON.parse(args[2]);row.revision='2026-10-07T00:00:00.000002';return rows([row]);}
   if(sql.startsWith('INSERT INTO public."AuditLog"')){audits.set(args[0],{id:args[0],organizationId:args[1],entityType:args[3],entityId:args[4],metadata:JSON.parse(args[5])});return rows([]);}
   assert.fail('Unexpected permission query: '+sql);
  }};
  const workspace={projectOperation:async(_session,input,_write,callback,beforeProject)=>{await beforeProject(client,member);calls.push('PROJECT_LOCK');return callback(client,member,input.scope);}},store=createParticipantStore({workspace});
- const attendance=eventType=>{const previous=events.at(-1)?.metadata.fieldOperations,transition=fieldTransition(eventType,previous);events.push({id:'attendance-'+events.length,projectId:row.projectId,workerId:row.id,metadata:{fieldOperations:{version:1,eventType,phase:transition.phase,sequence:events.length+1,recordedBy:target.actorId}}});};
+ const attendance=eventType=>{
+  const previous=events.at(-1),transition=fieldTransition(eventType,previous?.metadata.fieldOperations),source=structuredClone(auditedInput().events[0]),at=new Date(Date.parse('2026-10-05T11:00:00.000Z')+events.length*8*3600000).toISOString();
+  Object.assign(source,{id:'attendance-'+events.length,projectId:row.projectId,workerId:row.id,checkedInAt:new Date(Date.parse(at)+3).toISOString()});
+  Object.assign(source.metadata.fieldOperations,{eventType,phase:transition.phase,shiftId:'permission-shift',sequence:events.length+1,previousEventId:previous?.id||null,recordedBy:target.actorId,recordedAt:at});
+  source.metadata.fieldOperations.location.locationCapturedAt=at;events.push(source);recordingAudits.push(recordingAudit(source,member.organizationId));
+ };
  attendance('CHECK_IN');const input=command();input.payload.permissions={attendance:false,report:true};const before=structuredClone(row);
  await assert.rejects(store.save(session,input),{code:'ATTENDANCE_PERSON_JOURNEY_OPEN'});assert.deepEqual(row,before);assert.equal(audits.size,0);
- assert.ok(calls.findIndex(sql=>sql.includes('pg_advisory_xact_lock'))<calls.indexOf('PROJECT_LOCK'));assert.ok(calls.indexOf('PROJECT_LOCK')<calls.findIndex(sql=>sql.startsWith('SELECT id,"projectId","workerId",metadata FROM (')));
+ assert.ok(calls.findIndex(sql=>sql.includes('pg_advisory_xact_lock'))<calls.indexOf('PROJECT_LOCK'));assert.ok(calls.indexOf('PROJECT_LOCK')<calls.findIndex(sql=>sql.startsWith('SELECT a.id,a."projectId",a."workerId",a."checkedInAt",a.metadata FROM public."AttendanceEntry"')));
  attendance('CHECK_OUT');events.at(-1).metadata.fieldOperations.recordedBy='other-closer';
+ const immutableRecordingReceipts=structuredClone(recordingAudits);
+ await assert.rejects(store.save(session,input),{code:'ATTENDANCE_SOURCE_SET_MISMATCH'});assert.deepEqual(row,before);assert.equal(audits.size,0);assert.deepEqual(recordingAudits,immutableRecordingReceipts);
+ // Restore the fixture's original recorded author; a foreign closer is never a canonical close.
+ events.at(-1).metadata.fieldOperations.recordedBy=target.actorId;
  const allowed=await store.save(session,input);assert.equal(allowed.saved,true);assert.deepEqual(row.metadata.participant.permissions,{attendance:false,report:true});assert.notEqual(row.revision,before.revision);assert.equal(audits.size,1);assert.equal(events.length,2);
 });
 

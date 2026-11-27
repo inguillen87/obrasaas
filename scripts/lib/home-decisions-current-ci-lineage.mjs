@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_REVISION,PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_REVISION,PLAN_BUDGET_CURRENT_SECTION,planBudgetValidationFiles,verifyPlanBudgetCurrentSources,planBudgetCurrentBrowserBinding,restorePilotCompletionPreviousSourceText,pilotCompletionNativeLibrarySources} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
@@ -4338,7 +4338,7 @@ export function verifyHomeDecisionsCurrentSources(contract,readSource){
  const refs=[...value.reviewedSourceChanges,...value.validationDeltas].map(row=>({path:row.path,sha256:row.currentSha256})).concat(value.validationSources);
  reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique home decisions current source references required');
  for(const row of refs){reject(safe(row.path)&&hash(row.sha256),'Safe exact home decisions source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current home decisions source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===customerPhoneSelectionCurrentSourcePin(contract,row),'Stale current home decisions source: '+row.path);}
- const tree=parse(readSource('src/lib/operations-status.mjs').toString('utf8'),{sourceType:'module'});
+ const tree=parse(restorePilotCompletionPreviousSourceText(contract,'src/lib/operations-status.mjs',readSource('src/lib/operations-status.mjs').toString('utf8')),{sourceType:'module'});
  reject(sha(JSON.stringify(syntax(homeDecisionsLegacyOperationsAst(tree))))===value.operationsProjection.previousAstSha256,'Every inherited operations-status authority and query must remain unchanged');
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
 }
@@ -4443,7 +4443,8 @@ function companyNativeSourceFrame(manifest,readSource,run){
   const materialRows=own?.sourceChanges.filter(row=>materialPaths.includes(row?.path))||[],materials=materialRows.length>0;
   r(materialRows.length===0||materialRows.length===3,'MATERIAL_SOURCE_AUTHORITY');if(materials){const reviewedOwn=PLAN_BUDGET_CURRENT_REVISION.ownRuntimeDiagnosticAdvance;r(hours&&budget&&plain(reviewedOwn)&&same(own.sourceChanges.map(row=>row.path),reviewedOwn.sourceChanges.map(row=>row.path))&&same(own.retainedDependencies,reviewedOwn.retainedDependencies),'MATERIAL_SOURCE_AUTHORITY');}
   const kycPaths=["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"],kycRows=own?.sourceChanges.filter(row=>kycPaths.includes(row?.path))||[],kyc=kycRows.length>0;r(kycRows.length===0||kycRows.length===kycPaths.length,'MATERIAL_SOURCE_AUTHORITY');
-  const additions=[...(hours?['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']:[]),...(materials?materialPaths:[]),...(kyc?kycPaths:[])];
+  let pilotLibraries;try{pilotLibraries=pilotCompletionNativeLibrarySources(contract);}catch(error){ownerFailure(error);}
+  const additions=[...(hours?['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']:[]),...(materials?materialPaths:[]),...(kyc?kycPaths:[]),...pilotLibraries.map(row=>row.path)];
   r(Array.isArray(manifest)&&manifest.length===n.sourceCount+additions.length,'SOURCE_MANIFEST');
   const paths=[];for(const ref of manifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);}
   const historical=paths.filter(file=>!additions.includes(file));
@@ -4454,7 +4455,12 @@ function companyNativeSourceFrame(manifest,readSource,run){
   for(const file of [...new Set(authorityFiles)].sort())snapshot(file);
   verifyOwners=()=>{try{
    if(hours)verifyWorksiteLiveHoursCurrentSources(contract,checkedRead);if(budget)verifyPlanBudgetCurrentSources(contract,checkedRead);
-   if(materials)for(const file of materialPaths){const row=own.sourceChanges.find(row=>row.path===file),bytes=checkedRead(file);r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(bytes.toString('utf8').replaceAll('\r\n','\n')),'MATERIAL_SOURCE_AUTHORITY');}
+   if(materials)for(const file of materialPaths){
+    const row=own.sourceChanges.find(row=>row.path===file);
+    const currentText=checkedRead(file).toString('utf8').replaceAll('\r\n','\n');
+    const originalText=restorePilotCompletionPreviousSourceText(contract,file,currentText);
+    r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(originalText),'MATERIAL_SOURCE_AUTHORITY');
+   }
    if(kyc)for(const file of kycPaths){const row=own.sourceChanges.find(row=>row.path===file),bytes=checkedRead(file);r(row?.status==='ADDED'&&row.previousSha256===null&&row.previousBytes===0&&row.currentSha256===companyNativeSha(bytes.toString('utf8').replaceAll('\r\n','\n')),'MATERIAL_SOURCE_AUTHORITY');}
   }catch(error){ownerFailure(error);}};
   verifyOwners();
@@ -5679,6 +5685,27 @@ function identityDestinationAppendObservation(event,phase,width){
  const r=identityDestinationRequired;identityDestinationKeys(event,['activeId','activeTagName','scrollY','taskCount','buttonMounted','buttonDisabled','rect','viewportWidth','viewportHeight','firstTaskTop'],'APPEND_OBSERVATION');const focus=event.activeTagName==='BUTTON'&&event.activeId==='schedule-load-more',body=event.activeTagName==='BODY'&&event.activeId==='';r((phase==='before'?focus:focus||body)&&Number.isFinite(event.scrollY)&&event.scrollY>=0&&event.taskCount===(phase==='after'?2:1)&&event.buttonMounted===true&&event.buttonDisabled===(phase==='pending')&&event.viewportWidth===width&&event.viewportHeight===1050&&Number.isFinite(event.firstTaskTop),'APPEND_NATIVE_FOCUS_AND_TASKS');
  const box=event.rect;identityDestinationKeys(box,['left','top','right','bottom','width','height'],'APPEND_RECT_SHAPE');r(Object.values(box).every(Number.isFinite)&&box.width>0&&box.height>0&&box.right>box.left&&box.bottom>box.top&&Math.abs(box.right-box.left-box.width)<=1&&Math.abs(box.bottom-box.top-box.height)<=1,'APPEND_RECT');if(phase!=='after')r(box.left>=0&&box.right<=width+1&&box.top<1050&&box.bottom>0,'APPEND_BUTTON_VISIBLE_DURING_GET');
 }
+const identityFinalActionLabels = ['Enviar para verificar', 'Solicitar revisión sin comparación facial'];
+function validateIdentityDraftObservation(event, phase, pilot) {
+ const controls = pilot ? ['requiredChecks', 'radios', 'finalActions'] : ['consent'];
+ identityDestinationKeys(event, ['step', ...controls, 'formMounted', 'formVisible', 'sameForm', 'imageCount', 'sameImages'], 'DRAFT_OBSERVATION');
+ if (pilot) {
+  identityDestinationRequired(event.requiredChecks === 0 && event.radios === 0 && Array.isArray(event.finalActions) && event.finalActions.length === 2, 'DRAFT_FINAL_ACTIONS');
+  for (const [index, action] of event.finalActions.entries()) {
+   identityDestinationKeys(action, ['label', 'type', 'disabled'], 'DRAFT_FINAL_ACTIONS');
+   identityDestinationRequired(action.label === identityFinalActionLabels[index] && action.type === 'button' && action.disabled === false, 'DRAFT_FINAL_ACTIONS');
+  }
+ } else {
+  identityDestinationRequired(event.consent === true, 'DRAFT_IMAGES_AND_CONSENT_PRESERVED');
+ }
+ identityDestinationRequired(event.step === 3 && event.formMounted === true && event.formVisible === (phase !== 'hidden') && event.sameForm === true && event.imageCount === 2 && event.sameImages === true, 'DRAFT_IMAGES_PRESERVED');
+}
+function identityDraftShadow(formVisible, pilot) {
+ const controls = pilot
+  ? {requiredChecks:0, radios:0, finalActions:identityFinalActionLabels.map(label=>({label, type:'button', disabled:false}))}
+  : {consent:true};
+ return {step:3, ...controls, formMounted:true, formVisible, sameForm:true, imageCount:2, sameImages:true};
+}
 export function validateIdentityDestinationUxBrowserSupplement(proof,contract,{readSource,readEvidence}){
  const value=identityDestinationUxSection(contract);if(!value)return proof;const n=value.browser,r=identityDestinationRequired,k=identityDestinationKeys,s=proof.destinationNavigation;
  k(s,['version','widths','totalCheckCount','checks','limits'],'SUPPLEMENT_SHAPE');r(s.version===1&&same(s.widths,n.widths)&&s.totalCheckCount===16&&Array.isArray(s.checks)&&s.checks.length===16&&proof.combinedTotalCheckCount===119,'SUPPLEMENT_MATRIX');
@@ -5694,7 +5721,8 @@ export function validateIdentityDestinationUxBrowserSupplement(proof,contract,{r
   if(mode===1){
    k(row,[...common,'trigger','history','requestCountBefore','requestCountAfter','navigationNetwork','append','draftPreservation'],'GUIDE_CASE_SHAPE');r(row.trigger==='REAL_ONBOARDING_GUIDE'&&row.requestCountBefore===3&&row.requestCountAfter===3,'REAL_GUIDE_NO_AUTOMATIC_IO');k(row.navigationNetwork,identityDestinationNetworkKeys,'NAVIGATION_NETWORK_SHAPE');identityDestinationNetwork(row.navigationNetwork,'initial');identityDestinationNetwork(row,'history');
    const actions=['guide-private','same-hash-reopen','guide-identity','back','forward','back-final'],ids=['worker-channel-title','worker-channel-title','participant-title','worker-channel-title','participant-title','worker-channel-title'];r(Array.isArray(row.history)&&row.history.length===6,'HISTORY_MATRIX');for(const[i,event]of row.history.entries()){k(event,['action','hash','geometry'],'HISTORY_ROW');r(event.action===actions[i]&&event.hash==='#'+ids[i],'HISTORY_TRANSITION');identityDestinationGeometry(event.geometry,width,ids[i]);}
-   const d=row.draftPreservation;k(d,['syntheticImagesOnly','submitted','before','hidden','after'],'DRAFT_PRESERVATION_SHAPE');r(d.syntheticImagesOnly===true&&d.submitted===false,'LOCAL_SYNTHETIC_DRAFT_ONLY');for(const phase of ['before','hidden','after']){const event=d[phase];k(event,['step','consent','formMounted','formVisible','sameForm','imageCount','sameImages'],'DRAFT_OBSERVATION');r(event.step===3&&event.consent===true&&event.formMounted===true&&event.formVisible===(phase!=='hidden')&&event.sameForm===true&&event.imageCount===2&&event.sameImages===true,'DRAFT_IMAGES_AND_CONSENT_PRESERVED');}
+   const d=row.draftPreservation;k(d,['syntheticImagesOnly','submitted','before','hidden','after'],'DRAFT_PRESERVATION_SHAPE');r(d.syntheticImagesOnly===true&&d.submitted===false,'LOCAL_SYNTHETIC_DRAFT_ONLY');
+   for(const phase of ['before','hidden','after'])validateIdentityDraftObservation(d[phase],phase,Boolean(contract[PLAN_BUDGET_CURRENT_SECTION]?.pilotCompletionAdvance));
    const a=row.append;k(a,['canonicalAdmissionSimulated','totalTasks','projectReads','before','pending','after'],'APPEND_SHAPE');r(a.canonicalAdmissionSimulated===true&&a.totalTasks===3&&same(a.projectReads,[{actor:'A',projectId:'p-a',afterTask:null},{actor:'A',projectId:'p-a',afterTask:'t-p-a'}]),'ACTUAL_APPEND_CURSOR');for(const phase of ['before','pending','after'])identityDestinationAppendObservation(a[phase],phase,width);r(Math.abs(a.pending.rect.top-a.before.rect.top)<=3&&Math.abs(a.pending.rect.left-a.before.rect.left)<=3,'APPEND_VIEWPORT_ANCHOR_DURING_GET');
   }
   if(mode===2){k(row,[...common,'initialPath','heldBeforeContextChange','releasedAfterContextChange','currentActor','targetMounted','privateMounted','oldFactsVisible'],'CONTEXT_CASE_SHAPE');r(row.initialPath==='/?obra=p-a#worker-channel-title'&&row.heldBeforeContextChange===true&&row.releasedAfterContextChange===true&&row.currentActor==='B'&&row.targetMounted===false&&row.privateMounted===false&&row.oldFactsVisible===false,'CONTEXT_CANCELLATION');identityDestinationNetwork(row,'context');}
@@ -5711,7 +5739,7 @@ export function identityDestinationUxBrowserShadow(contract){
   const index=checks.length,png=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.write('IHDR',12);png.writeUInt32BE(width,16);png.writeUInt32BE(1050,20);const screenshot={...n.retainedScreenshots[index],sha256:sha(png),height:1050};evidence.set(screenshot.path,png);
   const common={name:n.caseNames[mode],width,status:'PASS',activationControls:0,...network(['initial','history','context','revoked'][mode]),screenshot};
   if(mode===0)checks.push({...common,trigger:'INITIAL_HASH_AND_CANONICAL_PROJECT_HINT',initialPath:'/?obra=p-a#worker-channel-title',beforeRelease:{targetMounted:false,focused:false,heldCanonicalCount:1,...network('before')},geometry:geometry(width),profileRead:{heldBeforeNavigation:true,releasedAfterNavigation:true,beforeGeometry:geometry(width),afterGeometry:geometry(width)}});
-  if(mode===1){const actions=['guide-private','same-hash-reopen','guide-identity','back','forward','back-final'],ids=['worker-channel-title','worker-channel-title','participant-title','worker-channel-title','participant-title','worker-channel-title'],observation=phase=>{const top=phase==='after'?1300:phase==='pending'?902:900;return {activeId:phase==='before'?'schedule-load-more':'',activeTagName:phase==='before'?'BUTTON':'BODY',scrollY:phase==='pending'?1569:500,taskCount:phase==='after'?2:1,buttonMounted:true,buttonDisabled:phase==='pending',rect:{left:12,top,right:width-12,bottom:top+44,width:width-24,height:44},viewportWidth:width,viewportHeight:1050,firstTaskTop:1000};},draft=formVisible=>({step:3,consent:true,formMounted:true,formVisible,sameForm:true,imageCount:2,sameImages:true});checks.push({...common,trigger:'REAL_ONBOARDING_GUIDE',history:actions.map((action,i)=>({action,hash:'#'+ids[i],geometry:geometry(width,ids[i])})),requestCountBefore:3,requestCountAfter:3,navigationNetwork:network('initial'),draftPreservation:{syntheticImagesOnly:true,submitted:false,before:draft(true),hidden:draft(false),after:draft(true)},append:{canonicalAdmissionSimulated:true,totalTasks:3,projectReads:[{actor:'A',projectId:'p-a',afterTask:null},{actor:'A',projectId:'p-a',afterTask:'t-p-a'}],before:observation('before'),pending:observation('pending'),after:observation('after')}});}
+  if(mode===1){const actions=['guide-private','same-hash-reopen','guide-identity','back','forward','back-final'],ids=['worker-channel-title','worker-channel-title','participant-title','worker-channel-title','participant-title','worker-channel-title'],observation=phase=>{const top=phase==='after'?1300:phase==='pending'?902:900;return {activeId:phase==='before'?'schedule-load-more':'',activeTagName:phase==='before'?'BUTTON':'BODY',scrollY:phase==='pending'?1569:500,taskCount:phase==='after'?2:1,buttonMounted:true,buttonDisabled:phase==='pending',rect:{left:12,top,right:width-12,bottom:top+44,width:width-24,height:44},viewportWidth:width,viewportHeight:1050,firstTaskTop:1000};},draft=formVisible=>identityDraftShadow(formVisible,Boolean(contract[PLAN_BUDGET_CURRENT_SECTION]?.pilotCompletionAdvance));checks.push({...common,trigger:'REAL_ONBOARDING_GUIDE',history:actions.map((action,i)=>({action,hash:'#'+ids[i],geometry:geometry(width,ids[i])})),requestCountBefore:3,requestCountAfter:3,navigationNetwork:network('initial'),draftPreservation:{syntheticImagesOnly:true,submitted:false,before:draft(true),hidden:draft(false),after:draft(true)},append:{canonicalAdmissionSimulated:true,totalTasks:3,projectReads:[{actor:'A',projectId:'p-a',afterTask:null},{actor:'A',projectId:'p-a',afterTask:'t-p-a'}],before:observation('before'),pending:observation('pending'),after:observation('after')}});}
   if(mode===2)checks.push({...common,initialPath:'/?obra=p-a#worker-channel-title',heldBeforeContextChange:true,releasedAfterContextChange:true,currentActor:'B',targetMounted:false,privateMounted:false,oldFactsVisible:false});
   if(mode===3)checks.push({...common,initialPath:'/?obra=p-a#worker-channel-title',initialGeometry:geometry(width),denialCode:'WORKSPACE_MEMBERSHIP_REQUIRED',history:[{action:'goBack',hash:'#participant-title',targetMounted:false,privateMounted:false},{action:'goForward',hash:'#worker-channel-title',targetMounted:false,privateMounted:false}],oldFactsVisible:false});
  }

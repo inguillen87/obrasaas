@@ -9,6 +9,7 @@ import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 import {assertDevelopmentPilotAttendance} from './meta-development-pilot-policy.mjs';
+import {assertActiveAssetOwnership} from './company-number-transfer-history.mjs';
 import {ownCompanyConnectionPolicy,lockOwnCompanyIssuer,ownCompanyCapabilityKind,fenceOwnCompanyRuntime,compactOwnCompanyRuntimeSourceFence} from './meta-own-company-policy.mjs';
 
 export const customerOutboundId=eventId=>'customer_outbound_'+digest(['meta-customer-reply-v1',eventId]);
@@ -39,6 +40,7 @@ export async function recordCustomerOutboundDiagnostic(client,{reserved=null,con
  return written.rowCount===1;
 }
 export function customerChannelActive(connection,now=Date.now(),{pilotAttendance=false,environment=process.env}={}){
+ if(connection?.metadata?.assetRetirement)return false;
  if(connection?.metadata?.ownCompany||Object.hasOwn(connection?.metadata||{},'ownCompanyRuntime')){try{ownCompanyConnectionPolicy(connection,environment,now);}catch{return false;}}
  if(connection?.metadata?.developmentPilot){if(!pilotAttendance)return false;try{assertDevelopmentPilotAttendance(connection,environment,now);}catch{return false;}}
  const verified=connection?.metadata?.customerVerification,activation=connection?.metadata?.customerActivation;
@@ -66,7 +68,7 @@ export async function reserveCustomerOutbound(client,{id,projectId,organizationI
  if(previous){if(previous.payload?.requestDigest!==requestDigest)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONFLICT',409);return {done:publicResult(previous)};}
  if(deferred&&(eventType!=='template'||request.channelPurpose!=='PARTICIPANT_ONBOARDING'||payloadFields.participantOnboarding!==true))throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
  const encryptedPayload=encryptCustomerSecret(JSON.stringify(request),{organizationId,projectId,purpose:'outbound',resourceId:id},environment),leaseToken=deferred?null:randomUUID();
- await client.query(`INSERT INTO public."WebhookEvent"(id,"projectId",provider,"externalId","eventType",status,payload,outcome,"leaseToken","leaseExpiresAt",attempts,"updatedAt") VALUES($1,$2,'meta-customer-outbound-v1',$1,$3,'PENDING',$4::jsonb,$5::jsonb,$6,$7,1,clock_timestamp())`,[id,projectId,eventType,JSON.stringify({...payloadFields,version:1,channelId:request.channelId,organizationId,...(request.eventId?{eventId:request.eventId}:{}),requestDigest,encryptedPayload}),JSON.stringify({version:1,state:'SEND_STARTED',reservedAt:new Date(now).toISOString(),actorId}),leaseToken,new Date(now+60000)]);
+ await client.query(`INSERT INTO public."WebhookEvent"(id,"projectId",provider,"externalId","eventType",status,payload,outcome,"leaseToken","leaseExpiresAt",attempts,"updatedAt") VALUES($1,$2,'meta-customer-outbound-v1',$1,$3,'PENDING',$4::jsonb,$5::jsonb,$6,$7,1,clock_timestamp())`,[id,projectId,eventType,JSON.stringify({...payloadFields,version:1,channelId:request.channelId,organizationId,...(request.assetOwnership?{assetOwnership:request.assetOwnership}:{}),...(request.eventId?{eventId:request.eventId}:{}),requestDigest,encryptedPayload}),JSON.stringify({version:1,state:'SEND_STARTED',reservedAt:new Date(now).toISOString(),actorId}),leaseToken,new Date(now+60000)]);
  if(deferred)await client.query(`UPDATE public."WebhookEvent" SET outcome=$3::jsonb,"leaseToken"=NULL,"leaseExpiresAt"=NULL,attempts=0 WHERE id=$1 AND "projectId"=$2`,[id,projectId,JSON.stringify({version:1,state:'ONBOARDING_PENDING',preparedAt:new Date(now).toISOString(),actorId})]);
  return {id,leaseToken,requestDigest};
 }
@@ -110,7 +112,8 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
     if(lockedClient&&transactionGuard){if(!canonical&&transactionGuard.resolved!==resolved)releaseLockedWorkerChannelIdentity(transactionGuard.resolved);transactionGuard.resolved=resolved;}
    const {project,connection,event,member}=resolved,payload=resolved.proof?.payload||resolved.proof?.message||resolved.proof;
    if(resolved.kind!=='CHANNEL_VERIFIED'||(sourceContext?event.projectId:project.id)!==context.projectId||connection.id!==context.channelId||event.payload.payloadDigest!==context.payloadDigest||event.leaseToken!==context.leaseToken||event.status!=='PENDING'||new Date(event.leaseExpiresAt).getTime()<=now())throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
-   if(!channelActive(connection,now(),{pilotAttendance:Boolean(resolved.developmentPilotCapability),environment}))throw new WorkspaceError('META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED',409);
+   await assertActiveAssetOwnership(client,connection);
+    if(!channelActive(connection,now(),{pilotAttendance:Boolean(resolved.developmentPilotCapability),environment}))throw new WorkspaceError('META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED',409);
    // Production field identities carry a canonical worker or corporate source
    // projection. Transport-only internal test adapters have neither; they cannot
    // be produced by either production identity resolver.
@@ -127,7 +130,7 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
     }
     return value;
    };
-   const {to,replyTo}=assertCustomerReplyWindow(payload,now()),id=customerOutboundId(event.id),request={version:1,eventId:event.id,payloadDigest:context.payloadDigest,channelId:connection.id,organizationId:member.organizationId,to,replyTo,message:reply,...(authority?.authorityDigest?{replyAuthorityDigest:authority.authorityDigest}:{}),...(protocol!==META_CUSTOMER_PROTOCOL?{channelPurpose:protocol.purpose}:{}),...(sourceContext?{targetProjectId:resolved.companyProjection?.projectId||null,sourceRouteId:resolved.companyProjection?.sourceEventId}: {})};
+   const {to,replyTo}=assertCustomerReplyWindow(payload,now()),id=customerOutboundId(event.id),request={version:1,eventId:event.id,payloadDigest:context.payloadDigest,channelId:connection.id,organizationId:member.organizationId,...(connection.metadata?.assetOwnership?{assetOwnership:connection.metadata.assetOwnership}:{}),to,replyTo,message:reply,...(authority?.authorityDigest?{replyAuthorityDigest:authority.authorityDigest}:{}),...(protocol!==META_CUSTOMER_PROTOCOL?{channelPurpose:protocol.purpose}:{}),...(sourceContext?{targetProjectId:resolved.companyProjection?.projectId||null,sourceRouteId:resolved.companyProjection?.sourceEventId}: {})};
    if(authority?.authorityDigest){const prior=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR UPDATE`,[id,sourceContext?event.projectId:project.id])).rows[0];if(prior&&authority.derivedExpiryFeedback){if(prior.payload?.version!==1||prior.payload.eventId!==event.id||prior.payload.channelId!==connection.id||prior.payload.organizationId!==member.organizationId||!['SEND_STARTED','SEND_UNKNOWN','SENT','REJECTED','STATUS_OBSERVED'].includes(prior.outcome?.state))throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);return finishReservation({done:{...publicResult(prior),replySent:false,observationOnly:true}});}if(prior&&!Object.hasOwn(JSON.parse(decryptCustomerSecret(prior.payload.encryptedPayload,{organizationId:member.organizationId,projectId:sourceContext?event.projectId:project.id,purpose:'outbound',resourceId:id},environment)),'replyAuthorityDigest'))delete request.replyAuthorityDigest;}
    const reservation=await reserveCustomerOutbound(client,{id,projectId:sourceContext?event.projectId:project.id,organizationId:member.organizationId,actorId:member.actorId,request,environment,now:now()});if(reservation.done)return finishReservation(reservation);
    const token=decryptCustomerSecret(connection.encryptedAccessToken,{organizationId:member.organizationId,projectId:sourceContext?connection.projectId:project.id,purpose:protocol.credentialPurpose,resourceId:connection.phoneNumberId},environment);

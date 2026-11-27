@@ -8,10 +8,12 @@ export function createOperationsStatus({workspace}) {
   if(context.view!==undefined&&context.view!=='decisions')throw new WorkspaceError('OPERATIONS_STATUS_QUERY_INVALID');
   if(context.view==='decisions'){
    if(!canApproveProgress(member.role))throw new WorkspaceError('WORKSPACE_INTEGRATION_PERMISSION_REQUIRED',403);
-   const pending=(await client.query(`SELECT count(*)::int AS pending FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND status='PENDING' AND "expiresAt">transaction_timestamp() AND action->>'fieldOperationsVersion'='1'`,[context.projectId])).rows[0]?.pending;
-   if(!Number.isSafeInteger(pending)||pending<0)throw new WorkspaceError('OPERATIONS_STATUS_UNAVAILABLE',503);
+   const totals=(await client.query(`SELECT count(*)::int AS pending,
+     (SELECT count(*)::int FROM public."Incident" WHERE "projectId"=$1 AND metadata->'fieldOperations'->>'version'='1' AND metadata->'fieldOperations'->>'kind'='EVIDENCE' AND (metadata->'fieldOperations'->'review' IS NULL OR metadata->'fieldOperations'->'review'='null'::jsonb)) AS "evidencePending"
+     FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND status='PENDING' AND "expiresAt">transaction_timestamp() AND action->>'fieldOperationsVersion'='1'`,[context.projectId])).rows[0];
+   if(!totals||![totals.pending,totals.evidencePending].every(value=>Number.isSafeInteger(value)&&value>=0))throw new WorkspaceError('OPERATIONS_STATUS_UNAVAILABLE',503);
    const pendingCounts=await readInventoryPendingCounts(client,member,{id:context.projectId});
-   return {scope,projectId:context.projectId,view:'decisions',observedAt:new Date().toISOString(),proposals:{pending},inventory:{canManage:true,pendingCounts}};
+   return {scope,projectId:context.projectId,view:'decisions',observedAt:new Date().toISOString(),evidence:{pending:totals.evidencePending},proposals:{pending:totals.pending},inventory:{canManage:true,pendingCounts}};
   }
   const people=(await client.query(`WITH people AS (
     SELECT w.active,w.metadata,EXISTS(SELECT 1 FROM public."PlatformUser" u

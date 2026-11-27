@@ -19,6 +19,11 @@ export function revealWorkspaceDestination(id){
  window.history.pushState(null,'',next.pathname+next.search+next.hash);
  window.dispatchEvent(new Event('hashchange'));
 }
+// The section named by the address, before capabilities choose what can render.
+export function useWorkspaceRequestedSection(){
+ const location=useSyncExternalStore(subscribe,snapshot,serverSnapshot);
+ return workspaceLocationView(location).section;
+}
 export function useWorkspaceView(capabilities,readyKey){
  const location=useSyncExternalStore(subscribe,snapshot,serverSnapshot);
  const selected=workspaceLocationView(location);

@@ -1,4 +1,5 @@
 import {WorkspaceError, workspaceId, digest} from './workspace-policy.mjs';
+import {readEffectivePersonAttendance,latestEffectiveJourneys} from './attendance-effective-store.mjs';
 
 // One principal in one organization, shared by web and signed channel adapters.
 // Call after canonical identity, BEFORE locking any Project. The canonical
@@ -9,16 +10,8 @@ export async function lockPersonWorksiteJourney(client, member) {
 }
 
 export async function assertPersonWorksiteJourney(client, member, projectId, workerId, eventType) {
-  // Select the latest event PER worker first; filtering the actor before that
-  // would resurrect an old open shift after a later legitimate close.
-  const open = (await client.query(`SELECT id,"projectId","workerId",metadata FROM (
-    SELECT DISTINCT ON (a."projectId",a."workerId") a.id,a."projectId",a."workerId",a.metadata
-    FROM public."AttendanceEntry" a JOIN public."Project" p ON p.id=a."projectId"
-    WHERE p."organizationId"=$1 AND a.metadata->'fieldOperations'->>'version'='1'
-    ORDER BY a."projectId",a."workerId",(a.metadata->'fieldOperations'->>'sequence')::int DESC,a.id DESC
-  ) latest WHERE metadata->'fieldOperations'->>'recordedBy'=$2
-    AND metadata->'fieldOperations'->>'eventType'<>'CHECK_OUT'`, [member.organizationId, member.actorId])).rows;
-  const elsewhere = open.some(row => row.projectId !== projectId || row.workerId !== workerId);
-  if (elsewhere || open.length > 1) throw new WorkspaceError('ATTENDANCE_PERSON_JOURNEY_OPEN', 409);
-  if (eventType !== 'CHECK_IN' && open.length === 1 && (open[0].projectId !== projectId || open[0].workerId !== workerId)) throw new WorkspaceError('ATTENDANCE_PERSON_JOURNEY_OPEN', 409);
+  const ledger=await readEffectivePersonAttendance(client,{organizationId:member.organizationId,actorId:member.actorId});
+  const heads=latestEffectiveJourneys(ledger),open=heads.filter(j=>j.projection.effective.state==='RECORDED_OPEN');
+  if(open.some(j=>j.projection.projectId!==projectId||j.projection.workerId!==workerId)||open.length>1)throw new WorkspaceError('ATTENDANCE_PERSON_JOURNEY_OPEN',409);
+  if(eventType==='CHECK_IN'&&open.length)throw new WorkspaceError('ATTENDANCE_SHIFT_ALREADY_OPEN',409);
 }

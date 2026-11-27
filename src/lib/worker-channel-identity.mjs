@@ -38,6 +38,7 @@ export function workerChannelCommand(input){
  participantRevision(p.revision);return {...input,operationId:input.operationId.toLowerCase(),payload:input.action==='UNLINK'?{...p,reason:participantReason(p.reason)}:{...p}};
 }
 export function assertWorkerCustomerConnection(row,organizationId,projectId,now=Date.now(),{operational=false,environment=process.env}={}){
+ if(row?.metadata?.assetRetirement)fault('WORKER_CHANNEL_CUSTOMER_CONNECTION_REQUIRED');
  if(row?.metadata?.developmentPilot)assertDevelopmentPilotAttendance(row,environment,now);
  if(!row||(row.projectId!==projectId&&!(row.company?.targetProjectId===projectId&&row.company.organizationId===organizationId&&row.company.assignmentRevision>0))||!['PENDING','CONNECTED'].includes(row.connectionStatus)||row.metadata?.credentialFormat!=='tenant-aad-v2'||row.metadata?.credentialOrganizationId!==organizationId||row.metadata?.customerVerification?.registered!==true||typeof row.encryptedAccessToken!=='string'||!row.encryptedAccessToken.startsWith('v2.')||!/^\d{5,32}$/.test(row.phoneNumberId||'')||!/^\d{5,32}$/.test(row.whatsappBusinessId||'')||row.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||row.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId)fault('WORKER_CHANNEL_CUSTOMER_CONNECTION_REQUIRED');
  if(operational&&(row.company&&row.company.mode!=='COMPANY'||!customerChannelActive(row,now,{pilotAttendance:Boolean(row.metadata?.developmentPilot),environment})))fault('WORKER_CHANNEL_CUSTOMER_ACTIVATION_REQUIRED');

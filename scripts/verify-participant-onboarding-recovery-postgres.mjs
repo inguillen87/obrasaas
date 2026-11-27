@@ -96,7 +96,13 @@ try{
  async function execute(message,options){const id=await push(message,options),result=await processor.process(id),reply=graph.messages.get(customerOutboundId(id));if(reply)lastReplyId=reply.id;return {id,result,reply:reply?.body};}
  const choose=async(previous,title)=>{const row=previous.reply?.interactive?.action.sections.flatMap(section=>section.rows).find(row=>row.title===title);assert.ok(row,'EXACT_ONBOARDING_CHOICE_REQUIRED');return execute({type:'interactive',interactive:{type:'list_reply',list_reply:{id:row.id,title:row.title}}});};
  await participant.save(owner,command('CONFIGURE_EMPLOYEE_INTAKE',{connectionId:a.channelId,expectedRevision:0,enabled:true,confirmed:true}));
- let last=await execute('HOLA',{replyId:null}),applicationId=last.id;last=await execute('Synthetic employee');last=await choose(last,'Operario');last=await execute(a.workerEmail);last=await choose(last,'Enviar solicitud');
+ let last=await execute('HOLA',{replyId:null});
+ const applicationId=last.id;
+ last=await choose(last,'Sumarme a una obra');
+ last=await execute('Synthetic employee');
+ last=await choose(last,'Operario');
+ last=await execute(a.workerEmail);
+ last=await choose(last,'Enviar solicitud');
  const intakeState=async()=>{const row=(await query(`SELECT payload FROM "WebhookEvent" WHERE id=$1`,[applicationId])).rows[0];return JSON.parse(decryptCustomerSecret(row.payload.employeeIntake.encryptedState,{organizationId:a.organizationId,projectId:a.anchorProjectId,purpose:'employee-intake',resourceId:applicationId},environment));};
  const pending=await intakeState();assert.equal(pending.status,'WAITING_RESPONSIBLE');assert.equal(pending.consent,true);
  const admission=await participant.save(owner,command('ADMIT_EMPLOYEE_INTAKE',{connectionId:a.channelId,applicationId,expectedRevision:pending.revision,job:'WORKER',permissions:{attendance:true,report:false},confirmed:true})),workerId=admission.workerId;

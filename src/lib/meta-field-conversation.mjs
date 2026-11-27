@@ -1,3 +1,4 @@
+import {isMetaGreeting} from './meta-greeting.mjs';
 import {digest,WorkspaceError,workspaceId,calendarDate} from './workspace-policy.mjs';
 import {FIELD_NOTICE,fieldTransition} from './field-operations-policy.mjs';
 import {siteText,siteQuantity,MATERIAL_UNITS} from './site-register-policy.mjs';
@@ -8,11 +9,19 @@ import {canImportPlan} from './plan-import-policy.mjs';
 import {startMetaPlanImportConversation,continueMetaPlanImportConversation} from './meta-plan-import-conversation.mjs';
 import {voiceProgressDraftForEvidence,prepareVoiceProgressDraft,voiceProgressDraftReady,UNKNOWN_VOICE_VALUE,voiceQuantityScopeLabel,voiceProgressQuantityLabel,voiceProgressUnitLabel} from './voice-progress-draft.mjs';
 import {deriveTaskMeasurement} from './task-progress-measurement.js';
-import {planMetaFieldExecution,hasMetaFieldExecutionMandate} from './meta-field-execution-conversation.mjs';
+import {planMetaFieldExecution,hasMetaFieldExecutionMandate,fieldChoices as choices} from './meta-field-execution-conversation.mjs';
+import {identityAccountReturnPath} from './identity-return-path.mjs';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['EXECUTION','Registrar material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU','MENÚ':'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',CRONOGRAMA:'TASKS',GANTT:'TASKS','IMPORTAR CRONOGRAMA':'PLAN_IMPORT','IMPORTAR PLAN':'PLAN_IMPORT',EVIDENCIA:'MEDIA',EVIDENCIAS:'OWN_EVIDENCE',AVANCES:'OWN_PROGRESS',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',EJECUCION:'EXECUTION','EJECUCIÓN':'EXECUTION',REPORTAR:'EXECUTION',EJECUCIONES:'OWN_EXECUTIONS',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
-export const metaFieldConversationAction=body=>typeof body==='string'?aliases[body.trim().toUpperCase()]||null:null;
+export const metaFieldConversationAction=body=>typeof body==='string'?(isMetaGreeting(body)?'MENU':aliases[body.trim().toUpperCase()]||null):null;
+const readLabels=new Map([['CONSULTAR ESTADO','STATUS'],['MIS EVIDENCIAS','OWN_EVIDENCE'],['MIS AVANCES','OWN_PROGRESS'],['MIS CONSUMOS','OWN_CONSUMPTIONS']]);
+export function metaFieldPromptAction(body,active){
+ const command=metaFieldConversationAction(body);
+ if(command||typeof body!=='string')return command;
+ if(active&&active.purpose!=='MENU'&&!ownReadPurposes.includes(active.purpose))return null;
+ return readLabels.get(body.trim().toUpperCase())||null;
+}
 // A read requirement, never participant authority. The signed bridge proves
 // the recovery origin/binding and current permission before using this scope.
 export function metaFieldRecoveryCatalogRead({message,state,recovery,now,attendanceOnly=false}){
@@ -23,13 +32,21 @@ const journeyExplanation={ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada a
 const text=body=>({type:'text',body});
 const permits=(purpose,facts)=>purpose==='PLAN_IMPORT'?canImportPlan(facts.planImportRole):purpose==='TASKS'||(purpose==='ATTENDANCE'?facts.permissions.attendance===true:facts.permissions.report===true);
 const denied=purpose=>markMetaFieldDisclosure({state:null,reply:text((purpose==='ATTENDANCE'?'Tu participación no tiene habilitado el registro de jornada.':'Tu participación no tiene habilitado el envío de reportes, evidencia o propuestas de avance.')+' Pedí al responsable que revise tus permisos en Mi cuenta. Escribí MENU para consultar las opciones disponibles.')},'GENERIC');
-function journeyError(action,facts){try{fieldTransition(attendanceEvents[action],facts.latest);return null;}catch(error){if(!Object.hasOwn(journeyExplanation,error.code))throw error;return error.code;}}
+function journeyError(action,facts){try{if(facts.latest?.effectiveClosed===true){if(attendanceEvents[action]!=='CHECK_IN')return 'ATTENDANCE_SHIFT_NOT_OPEN';}else fieldTransition(attendanceEvents[action],facts.latest);return null;}catch(error){if(!Object.hasOwn(journeyExplanation,error.code))throw error;return error.code;}}
 // Keep the old CONSUMO command and historical menu capability valid. The menu
 // leads with real authorized execution; its manual alternative stays explicit.
 const availableMenu=facts=>menuOptions.filter(([action])=>action!=='CONSUMPTION'&&(!facts.attendanceOnly||action.startsWith('ATTEND_')||action==='STATUS')).filter(([action])=>action==='PLAN_IMPORT'?permits('PLAN_IMPORT',facts):action.startsWith('ATTEND_')?permits('ATTENDANCE',facts)&&!journeyError(action,facts):action==='EXECUTION'?permits('REPORT',facts)&&Boolean(facts.inventory?.materials?.some(m=>m.active)):['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(action)?permits('REPORT',facts):true);
+// Navigation only: these facts come from the signed bridge. Cuenta still
+// resolves membership, the suggested worksite and every field permission.
+function withAttendanceWebGuidance(body,facts){
+ if(facts.attendanceOnly===true||facts.permissions?.attendance!==true||!workspaceId(facts.projectId))return body;
+ const path=identityAccountReturnPath(new URLSearchParams({seccion:'actividad',obra:facts.projectId}));
+ const hint='\n\nPara fichar con GPS y QR, abr\u00ed Jornada:\nhttps://obrasaas.com'+path+'#field-title\nEleg\u00ed Abrir operaciones y luego Entrada o Salida. Vos activ\u00e1s ubicaci\u00f3n y QR; el enlace no registra fichajes.';
+ const limit=Number.isSafeInteger(facts.replyBodyLimit)&&facts.replyBodyLimit>=0&&facts.replyBodyLimit<=1024?facts.replyBodyLimit:1024;
+ return body.length+hint.length<=limit?body+hint:body;
+}
 const progressHint='Usá el formato 25% o 2.5 / 10 M2. La base debe ser mayor que cero y la cantidad no puede superarla. Usá punto, hasta 4 decimales y hasta 14 cifras enteras, sin ceros a la izquierda. El borrador se conserva. Escribí CANCELAR para volver al menú.';
 const inputHints={INCIDENT_TITLE:'Escribí un título de 3 a 160 caracteres.',INCIDENT_DESCRIPTION:'Escribí un detalle de 8 a 2000 caracteres.',MATERIAL_NAME:'Escribí el nombre del material de 2 a 160 caracteres.',MATERIAL_QUANTITY:'Escribí una cantidad mayor que cero, por ejemplo 12 o 2.5. Usá punto, hasta 3 decimales y hasta 9 cifras enteras.',MEDIA:'Volvé a enviar la foto, audio o video con una descripción de hasta 1000 caracteres.',MEDIA_FILE:'Volvé a enviar la foto, audio o video con una descripción de hasta 1000 caracteres.'};
-function choices(state,eventId,body,rows){const nonce=digest([eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Opciones',rows:rows.map(([,title,description],i)=>({id:'obra:'+nonce+':'+i,title:title.slice(0,24),...(description?{description:description.slice(0,72)}:{})}))}]}};}
 function chooseSector(state,eventId,facts){
  if(!facts.sectors.length)return {state:null,reply:text('Pedí al administrador o director que prepare al menos un sector de la obra en Mi cuenta. Después volvé a iniciar este registro.')};
  const offset=Math.min(state.sectorOffset||0,Math.floor((facts.sectors.length-1)/8)*8),rows=facts.sectors.slice(offset,offset+8).map(s=>[s.id,s.name]);
@@ -52,7 +69,7 @@ function scheduleReadBody(facts,detail='',draftInstruction=''){
  if(!detail)for(const titleLimit of [12,8,4]){if(body.length<=contentLimit)break;body=summary(titleLimit);}
  if(body.length>contentLimit)body=compactReadText(body,contentLimit);
  // This local hint is supplied by the signed bridge; Cuenta rechecks access.
- const link=!facts.attendanceOnly&&workspaceId(facts.projectId)?'\nGantt completo: https://obrasaas.com/cuenta?'+new URLSearchParams({obra:facts.projectId})+'#schedule-gantt-title':'';
+ const link=!facts.attendanceOnly&&workspaceId(facts.projectId)?'\nGantt completo: https://obrasaas.com'+identityAccountReturnPath(new URLSearchParams({seccion:'cronograma',obra:facts.projectId}))+'#schedule-gantt-title':'';
  if(body.length+link.length+instruction.length<=limit)body+=link;
  return body+(instruction.length<=limit-body.length?instruction:compactReadText(instruction,Math.max(0,limit-body.length)));
 }
@@ -66,22 +83,22 @@ function chooseTask(state,eventId,facts,detail=''){
  if(page.hasPrevious)rows.push(['PREVIOUS_TASKS','Tareas anteriores']);if(page.hasNext)rows.push(['NEXT_TASKS','Más tareas']);
  return choices({...state,step:'TASK',taskPage:page},eventId,state.purpose==='TASKS'?scheduleReadBody(facts,detail):detail||'Elegí la tarea de este registro. Podés recorrer todas las páginas.',rows);
 }
-function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return state.consumptionRecovery?{state,preserveConversation:true,reply:text('El catálogo no tiene materiales disponibles. Conservamos el borrador y su plazo; pedí al responsable que revise el catálogo o descartalo con CANCELAR.') }:{state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=Math.min(state.materialOffset||0,Math.floor((materials.length-1)/8)*8),rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);const previous=state.recoverySuggestion;return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,(previous?'Borrador anterior: '+previous.quantity+' '+previous.unit+' de '+previous.name+'. Es una sugerencia, sin conversión ni aplicación automática.\n':'')+'Elegí el material del catálogo vigente. La propuesta requiere revisión antes de descontar stock.',rows);}
+function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return state.consumptionRecovery?{state,preserveConversation:true,reply:text('El catálogo no tiene materiales disponibles. Conservamos el borrador y su plazo; pedí al responsable que revise el catálogo o descartalo con CANCELAR.') }:{state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=Math.min(state.materialOffset||0,Math.floor((materials.length-1)/8)*8),rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);const previous=state.recoverySuggestion;return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,(previous?'Borrador anterior: '+voiceProgressQuantityLabel(previous.quantity)+' '+previous.unit+' de '+previous.name+'. Es una sugerencia, sin conversión ni aplicación automática.\n':'')+'Elegí el material del catálogo vigente. La propuesta requiere revisión antes de descontar stock.',rows);}
 function consumptionReasonPrompt(state,eventId){return state.consumptionRecovery?choices({...state,step:'CONSUMPTION_RECOVERY_REASON'},eventId,'Motivo anterior: '+state.recoverySuggestion.reason.slice(0,550)+(state.recoverySuggestion.reason.length>550?'…':'')+'\nConfirmá si sigue correspondiendo al material y la cantidad elegidos.',[['KEEP_REASON','Usar motivo anterior'],['NEW_REASON','Escribir otro motivo']]):{state:{...state,step:'REASON'},reply:text('Explicá para qué se usó el material. Todavía no se descuenta stock.')};}
-function consumptionConfirmation(state,eventId){return confirm(state,eventId,'Consumo propuesto: '+state.quantity+' '+state.unit+' de '+state.name+'\nEl stock se conserva hasta revisión del responsable.\nMotivo: '+state.reason.slice(0,550)+(state.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
+function consumptionConfirmation(state,eventId){return confirm(state,eventId,'Consumo propuesto: '+voiceProgressQuantityLabel(state.quantity)+' '+state.unit+' de '+state.name+'\nEl stock se conserva hasta revisión del responsable.\nMotivo: '+state.reason.slice(0,550)+(state.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
 const consumptionState=state=>({PENDING:'Pendiente de revisión',APPROVED:'Aprobado',REJECTED:'Rechazado',REVERSED:'Revertido'}[state]||'Estado no confirmado');
 const consumptionName=c=>c.materialName||'Material '+c.materialId;
 const consumptionReason=value=>value.length>600?value.slice(0,600)+'… (motivo completo en Mi cuenta)':value;
-export function metaFieldConsumptionAcknowledgement(outcome,projectName){const c=outcome.recordedConsumptionSnapshot||outcome.consumption;return 'Consumo informado en '+projectName+': '+c.quantity+' '+c.unit+' de '+consumptionName(c)+'.\nReferencia del informe: '+c.id+'\nRecibo de propuesta: '+outcome.receiptId+'\nInformado: '+c.submittedAt+'\nQuedó pendiente de revisión. Este recibo no descuenta stock; otro responsable autorizado debe decidir.\nEscribí ESTADO para consultar la decisión vigente o CONSUMOS para recorrer tus informes.';}
+export function metaFieldConsumptionAcknowledgement(outcome,projectName){const c=outcome.recordedConsumptionSnapshot||outcome.consumption;return 'Consumo informado en '+projectName+': '+voiceProgressQuantityLabel(c.quantity)+' '+c.unit+' de '+consumptionName(c)+'.\nReferencia del informe: '+c.id+'\nRecibo de propuesta: '+outcome.receiptId+'\nInformado: '+c.submittedAt+'\nQuedó pendiente de revisión. Este recibo no descuenta stock; otro responsable autorizado debe decidir.\nEscribí ESTADO para consultar la decisión vigente o CONSUMOS para recorrer tus informes.';}
 function ownConsumptionList(state,eventId,facts){
  const page=facts.ownConsumptions;if(!page)return {state:null,reply:text('No se pudo confirmar la consulta de consumos. Escribí ESTADO para volver a intentar.')};
- const rows=page.records.map(c=>[c.id,consumptionName(c),c.quantity+' '+c.unit+' · '+consumptionState(c.state)+' · '+c.submittedAt.slice(0,10)]);
+ const rows=page.records.map(c=>[c.id,consumptionName(c),voiceProgressQuantityLabel(c.quantity)+' '+c.unit+' · '+consumptionState(c.state)+' · '+c.submittedAt.slice(0,10)]);
  if(page.nextCursor)rows.push(['NEXT_CONSUMPTIONS','Más consumos']);if(page.afterConsumption)rows.push(['FIRST_CONSUMPTIONS','Volver al inicio']);rows.push(['MENU','Volver al menú']);
  return {...choices({...state,purpose:'OWN_CONSUMPTIONS',step:'OWN_CONSUMPTION_LIST',consumptionAfter:page.afterConsumption,nextConsumptionCursor:page.nextCursor},eventId,'Consumos informados por tu cuenta en '+facts.projectName+'.\n'+(page.records.length?'Elegí un informe para consultar su estado vigente, motivo, fechas y recibos.':page.afterConsumption?'No hay más informes en esta página.':'No hay consumos informados por tu cuenta en esta obra.')+'\nLa consulta no mueve stock.',rows),consumptionRead:true};
 }
 function ownConsumptionDetail(state,eventId,facts,id){
  const c=facts.ownConsumptions?.records.find(row=>row.id===id);if(!c)throw new WorkspaceError('INVENTORY_CURSOR_UNAVAILABLE',404);
- let body='Obra: '+facts.projectName+'\n'+consumptionName(c)+': '+c.quantity+' '+c.unit+'\nReferencia del informe: '+c.id+'\nInformado: '+c.submittedAt+'\nEstado vigente: '+consumptionState(c.state)+'\nMotivo del informe: '+consumptionReason(c.reason);
+ let body='Obra: '+facts.projectName+'\n'+consumptionName(c)+': '+voiceProgressQuantityLabel(c.quantity)+' '+c.unit+'\nReferencia del informe: '+c.id+'\nInformado: '+c.submittedAt+'\nEstado vigente: '+consumptionState(c.state)+'\nMotivo del informe: '+consumptionReason(c.reason);
  if(c.proposalReceiptId)body+='\nRecibo de propuesta: '+c.proposalReceiptId;
  for(const [label,event] of [['Decisión registrada',c.decision],['Reversión registrada',c.reversal]])if(event)body+='\n'+label+': '+(event.decision==='REJECT'?'Rechazado':event.decision==='APPROVE'?'Aprobado':'Revertido')+'\nFecha: '+event.recordedAt+'\nMotivo: '+consumptionReason(event.reason)+'\nRecibo: '+event.receiptId;
  body+='\nEl recibo de propuesta conserva el informe original. Las decisiones y sus movimientos tienen sus propios recibos.\nPara seguir recorriendo informes, usá las opciones de la lista anterior o escribí CONSUMOS para volver al inicio.';
@@ -108,10 +125,10 @@ function ownReportDetail(state,facts,id){
  return {state,preserveConversation:true,reply:text(body),reportRead:true};
 }
 function statusReply(facts){const e=facts.latest,page=facts.ownConsumptions;let body='Obra: '+compactReadText(facts.projectName,160);
- if(facts.permissions.attendance===true)body+='\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso');
+ if(facts.permissions.attendance===true)body+='\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.effectiveClosed===true?'cierre efectivo aprobado':e.phase==='ON_BREAK'?'en pausa':'en curso');
  if(facts.permissions.report===true)body+='\nEvidencias y avances: consultá tus informes para ver la revisión vigente, su motivo y sus recibos.';
- if(facts.permissions.report===true&&page)body+='\nConsumos informados por tu cuenta (últimos '+page.records.length+'):'+(page.records.length?'\n'+page.records.map(c=>consumptionName(c).slice(0,45)+' · '+c.quantity+' '+c.unit+' · '+consumptionState(c.state)).join('\n'):' ninguno.')+(page.nextCursor?'\nHay más informes para consultar.':'');
- return boundedReadBody(body+(facts.permissions.report===true?'\nEscribí EVIDENCIAS, AVANCES o CONSUMOS para consultar tus informes.':'\nConsultá los recibos de jornada en Mi cuenta.'),Number.isSafeInteger(facts.replyBodyLimit)?facts.replyBodyLimit:1024);
+ if(facts.permissions.report===true&&page)body+='\nConsumos informados por tu cuenta (últimos '+page.records.length+'):'+(page.records.length?'\n'+page.records.map(c=>consumptionName(c).slice(0,45)+' · '+voiceProgressQuantityLabel(c.quantity)+' '+c.unit+' · '+consumptionState(c.state)).join('\n'):' ninguno.')+(page.nextCursor?'\nHay más informes para consultar.':'');
+ return withAttendanceWebGuidance(boundedReadBody(body+(facts.permissions.report===true?'\nEscribí EVIDENCIAS, AVANCES o CONSUMOS para consultar tus informes.':'\nConsultá los recibos de jornada en Mi cuenta.'),Number.isSafeInteger(facts.replyBodyLimit)?facts.replyBodyLimit:1024),facts);
 }
 function confirm(state,eventId,body){return choices({...state,step:'CONFIRM'},eventId,body,[['CONFIRM','Guardar'],['CANCEL','Cancelar']]);}
 const voiceEvidence=(state,facts)=>facts.evidence.filter(e=>e.taskId===state.taskId&&e.status==='APPROVED'&&voiceProgressDraftForEvidence(e,facts.tasks.find(t=>t.id===state.taskId))?.task.revision===facts.tasks.find(t=>t.id===state.taskId)?.revision);
@@ -166,8 +183,11 @@ export function metaFieldMediaAuthorizationValid(message,media,state){
 }
 function authorizeMedia(state,eventId,consent){const ref=state.pendingFile;return {state:{...state,step:'MEDIA_AUTHORIZED',mediaAuthorizationStep:state.step,analysisConsent:consent,analysisConsentEventId:eventId},media:{taskId:ref.taskId,sectorId:ref.sectorId,mediaId:ref.mediaId,caption:ref.caption,contentType:ref.contentType,kind:ref.kind,analysisConsent:consent,analysisConsentEventId:eventId,sourceOrigin:ref}};}
 function start(action,eventId,facts,now){
+ if(action==='EXECUTION'&&!facts.attendanceOnly&&permits('REPORT',facts)&&Array.isArray(facts.execution?.mandates)&&!hasMetaFieldExecutionMandate(facts,now)){
+  return chooseTask({purpose:'CONSUMPTION'},eventId,facts,'Vas a informar un consumo para que lo revise un responsable. El stock se descuenta cuando lo apruebe. Elegí la tarea o continuá sin asociar una.');
+ }
  if(['EXECUTION','OWN_EXECUTIONS'].includes(action)||action==='CONSUMPTION'&&hasMetaFieldExecutionMandate(facts,now))return planMetaFieldExecution({eventId,facts,now,action:action==='CONSUMPTION'?'EXECUTION':action});
- if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,'ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',availableMenu(facts));
+ if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,withAttendanceWebGuidance('ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',facts),availableMenu(facts));
  if(action==='PLAN_IMPORT')return startMetaPlanImportConversation({eventId,facts,now});
  if(action==='TASKS')return chooseTask({purpose:'TASKS'},eventId,facts);
  if(action==='STATUS'){const body=statusReply(facts);return facts.permissions.report===true?{...choices({purpose:'OWN_CONSUMPTIONS',step:'OWN_CONSUMPTION_STATUS',consumptionAfter:null},eventId,body,[['OWN_EVIDENCE','Mis evidencias'],['OWN_PROGRESS','Mis avances'],...(facts.ownConsumptions?[['OWN_CONSUMPTIONS','Mis consumos']]:[]),['MENU','Volver al menú']]),consumptionRead:Boolean(facts.ownConsumptions)}:{state:null,reply:text(body)};}
@@ -200,8 +220,9 @@ export function metaFieldMenuDisclosure(choices,base='MENU'){
 export const metaFieldPlanDisclosure=plan=>canonicalPlanDisclosures.get(plan)||null;
 function markMetaFieldDisclosure(plan,disclosure){canonicalPlanDisclosures.set(plan,disclosure);return plan;}
 function classifyPlan(input,plan){
- const {message,state,facts,now}=input,body=message.type==='text'?message.text?.body?.trim().toUpperCase():null,action=metaFieldConversationAction(body);
+ const {message,state,facts,now}=input,body=message.type==='text'?message.text?.body?.trim().toUpperCase():null;
  const active=state?.version===1&&Date.parse(state.expiresAt)>now.getTime()?state:null;
+ const action=metaFieldPromptAction(body,active);
  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^obra:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
  const selected=active&&match&&match[1]===active.nonce?active.choices?.[Number(match[2])]?.value:null;
  let disclosure=canonicalPlanDisclosures.get(plan);
@@ -209,7 +230,7 @@ function classifyPlan(input,plan){
  if((body==='CANCELAR'||selected==='CANCEL')&&!plan.command&&(!plan.state||plan.state.purpose==='MENU'))disclosure='WITHDRAWAL';
  else if(action==='STATUS'||selected==='STATUS'||plan.state?.step==='OWN_CONSUMPTION_STATUS')disclosure=facts.permissions.attendance===true?(facts.permissions.report===true?'MIXED':'ATTENDANCE'):'REPORT';
  else if(action==='TASKS'||plan.state?.purpose==='TASKS')disclosure='GENERIC';
- else if(body==='HOLA'&&active?.purpose!=='MENU'&&plan.preserveConversation&&active?.purpose!=='PLAN_IMPORT')disclosure='GENERIC';
+ else if(isMetaGreeting(body)&&active?.purpose!=='MENU'&&plan.preserveConversation&&active?.purpose!=='PLAN_IMPORT')disclosure='GENERIC';
  else if(plan.command)disclosure=plan.command.action==='ATTENDANCE'?'ATTENDANCE':'REPORT';
  else if(plan.media||plan.reportRead||plan.consumptionRead)disclosure='REPORT';
  else if(plan.planImport)disclosure='PLAN_IMPORT';
@@ -237,7 +258,7 @@ function planMetaFieldConversationInput({message,state,eventId,facts,now}){
   const step=state.step;
   if(step==='MEASUREMENT_QUANTITY'&&(error.name==='TaskProgressMeasurementError'||error.code==='PROGRESS_MEASUREMENT_QUANTITY_INVALID'))return {state,reply:text('Ingresá sólo una cantidad exacta, con punto y hasta cuatro decimales. El total no puede superar la base ni ser menor al acumulado aprobado. Conservamos el borrador; escribí CANCELAR para volver al menú.')};
   if(step==='MEASUREMENT'&&['FIELD_QUANTITY_INVALID','PROGRESS_MEASUREMENT_QUANTITY_INVALID'].includes(error.code))return {state,reply:text(progressHint)};
-  if(step==='CONSUMPTION_QUANTITY'&&error.code==='INVENTORY_QUANTITY_INVALID')return {state,reply:text('Ingresá una cantidad positiva con punto y hasta tres decimales. El borrador y el stock se conservan.')};
+  if(step==='CONSUMPTION_QUANTITY'&&error.code==='INVENTORY_QUANTITY_INVALID')return {state,reply:text('Ingresá una cantidad mayor que cero, sin separador de miles y con hasta tres decimales. Podés escribir 1,5 o 1.5. El borrador y el stock se conservan.')};
   const hint=step==='REASON'&&['MATERIAL','PROGRESS','CONSUMPTION'].includes(state.purpose)?'Escribí el motivo de 8 a '+(state.purpose==='MATERIAL'?2000:1000)+' caracteres.':inputHints[step];
   if(hint&&(error.code==='SITE_INPUT_INVALID'||step==='MATERIAL_QUANTITY'&&error.code==='SITE_QUANTITY_INVALID'))return {state,reply:text(hint+' El borrador se conserva. Corregí este dato para continuar, o escribí CANCELAR.')};
   throw error;
@@ -246,13 +267,13 @@ function planMetaFieldConversationInput({message,state,eventId,facts,now}){
 function planConversation({message,state,eventId,facts,now}){
  const body=message.type==='text'?message.text?.body?.trim():null;
  const active=state?.version===1&&Date.parse(state.expiresAt)>now.getTime()?state:null;
- const alias=metaFieldConversationAction(body);
+ const alias=metaFieldPromptAction(body,active);
  if((alias==='TASKS'||!alias&&active?.purpose==='TASKS')&&facts.attendanceOnly)return limitedTaskRead(active);
  if(alias==='TASKS'&&active&&!['MENU','TASKS'].includes(active.purpose))return {state:active,preserveConversation:true,reply:text(scheduleReadBody(facts,'','\nConservamos el borrador y su mensaje original. Respondé a ese paso para continuar; esta consulta no guarda ni extrae otro archivo.'+(active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?' El archivo ya fue autorizado: comprobá el mismo intento desde Cuenta.':'')))};
  // A greeting is a read, never a replacement prompt for an open draft.
  // Keep its exact nonce, expiry and durable origin; authorization is resolved
  // by the signed bridge and purpose permissions still gate continuation.
- if(body?.toUpperCase()==='HOLA'&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};
+ if(isMetaGreeting(body)&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};
  if(alias==='STATUS'&&active&& !['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,consumptionRead:facts.permissions.report===true&&Boolean(facts.ownConsumptions),reply:text(statusReply(facts)+'\nConservamos el borrador. Para recorrer tus informes, cancelalo explícitamente con CANCELAR y abrí ESTADO → Mis evidencias, Mis avances o Mis consumos.')};
  if(alias==='OWN_CONSUMPTIONS'&&active&&!['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,reply:text('Conservamos el borrador actual. Escribí CANCELAR y abrí ESTADO → Mis consumos para consultar tus informes sin descartar un registro por accidente.')};
  if(ownReportPurposes.includes(alias)&&active&&!['MENU',...ownReadPurposes].includes(active.purpose))return {state:active,preserveConversation:true,reply:text('Conservamos el borrador actual. Escribí CANCELAR y abrí ESTADO → Mis evidencias o Mis avances para consultar tus informes sin descartar un registro por accidente.')};
@@ -301,13 +322,16 @@ function planConversation({message,state,eventId,facts,now}){
   if(['NEXT_REPORTS','FIRST_REPORTS'].includes(selected))return ownReportList(s,eventId,facts,s.purpose);
   if(selected==='MENU')return start('MENU',eventId,facts,now);
   if(selected&&s.step==='OWN_REPORT_LIST')return ownReportDetail(active,facts,selected);
-  return {state:active,reply:text('Elegí un informe o una página en el mensaje vigente. Consultar no modifica la tarea.')};
+  return {state:active,preserveConversation:true,reply:text(s.purpose==='OWN_EVIDENCE'?'Elegí una evidencia del mensaje vigente para ver su revisión y sus recibos.':'Elegí un avance del mensaje vigente para ver su decisión y sus recibos.')};
  }
  if(s.purpose==='OWN_CONSUMPTIONS'){
   if(['OWN_CONSUMPTIONS','NEXT_CONSUMPTIONS','FIRST_CONSUMPTIONS','BACK_CONSUMPTIONS'].includes(selected))return ownConsumptionList(s,eventId,facts);
   if(selected==='MENU')return start('MENU',eventId,facts,now);
   if(selected&&s.step==='OWN_CONSUMPTION_LIST')return ownConsumptionDetail(active,eventId,facts,selected);
-  return {state:active,reply:text('Elegí un informe o una página en el mensaje vigente. La consulta no modifica stock.')};
+  if(s.step==='OWN_CONSUMPTION_STATUS'){
+   return {state:active,preserveConversation:true,reply:text('En el mensaje de estado, elegí Mis evidencias, Mis avances o Mis consumos. También podés escribir el nombre de la consulta.')};
+  }
+  return {state:active,preserveConversation:true,reply:text('Elegí un consumo del mensaje vigente para ver su estado y sus recibos.')};
  }
  if(s.step==='TASK'){
   if(!selected)return {state:active,reply:text('Elegí una tarea en el menú anterior, o escribí CANCELAR.')};
@@ -395,9 +419,9 @@ function planConversation({message,state,eventId,facts,now}){
  if(s.step==='MATERIAL_NAME'){s.name=siteText(body,160,2);return {state:{...s,step:'MATERIAL_QUANTITY'},reply:text('Escribí la cantidad exacta, por ejemplo 12 o 2.5. Usá punto para los decimales.')};}
  if(s.step==='MATERIAL_QUANTITY'){s.quantity=siteQuantity(body);return choices({...s,step:'MATERIAL_UNIT'},eventId,'Elegí la unidad.',MATERIAL_UNITS.map(u=>[u,u]));}
  if(s.step==='MATERIAL_UNIT'){if(!selected)return {state:active,reply:text('Elegí la unidad del menú anterior.')};s.unit=selected;return {state:{...s,step:'REASON'},reply:text('Explicá para qué necesitás el material. El pedido requiere autorización de compra.')};}
- if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};const next={...s,step:'CONSUMPTION_QUANTITY',materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash};if(s.consumptionRecovery&&s.recoverySuggestion.unit===material.unit)return choices({...next,step:'CONSUMPTION_RECOVERY_QUANTITY'},eventId,'Material elegido: '+material.name+'\nUnidad: '+material.unit+'\nCantidad anterior sugerida: '+s.recoverySuggestion.quantity+' '+s.recoverySuggestion.unit+'. Elegí si corresponde usarla.',[['KEEP_QUANTITY','Usar cantidad anterior'],['NEW_QUANTITY','Escribir otra cantidad']]);return {state:next,reply:text('Material: '+material.name+'\nUnidad: '+material.unit+'\n'+(s.consumptionRecovery?'La unidad anterior era '+s.recoverySuggestion.unit+'. No convertimos la cantidad.\n':'')+'Escribí la cantidad consumida, con punto y hasta tres decimales.')};}
- if(s.step==='CONSUMPTION_RECOVERY_QUANTITY'){if(selected==='NEW_QUANTITY')return {state:{...s,step:'CONSUMPTION_QUANTITY'},reply:text('Escribí la cantidad consumida en '+s.unit+', con punto y hasta tres decimales.')};if(selected!=='KEEP_QUANTITY'||s.unit!==s.recoverySuggestion.unit)return {state:active,reply:text('Elegí una cantidad desde el mensaje vigente.')};s.quantity=inventoryQuantity(s.recoverySuggestion.quantity);return consumptionReasonPrompt(s,eventId);}
- if(s.step==='CONSUMPTION_QUANTITY'){s.quantity=inventoryQuantity(body);return consumptionReasonPrompt(s,eventId);}
+ if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};const next={...s,step:'CONSUMPTION_QUANTITY',materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash};if(s.consumptionRecovery&&s.recoverySuggestion.unit===material.unit)return choices({...next,step:'CONSUMPTION_RECOVERY_QUANTITY'},eventId,'Material elegido: '+material.name+'\nUnidad: '+material.unit+'\nCantidad anterior sugerida: '+voiceProgressQuantityLabel(s.recoverySuggestion.quantity)+' '+s.recoverySuggestion.unit+'. Elegí si corresponde usarla.',[['KEEP_QUANTITY','Usar cantidad anterior'],['NEW_QUANTITY','Escribir otra cantidad']]);return {state:next,reply:text('Material: '+material.name+'\nUnidad: '+material.unit+'\n'+(s.consumptionRecovery?'La unidad anterior era '+s.recoverySuggestion.unit+'. No convertimos la cantidad.\n':'')+'Escribí la cantidad consumida sin separador de miles. Para una unidad y media, ingresá 1,5 o 1.5.')};}
+ if(s.step==='CONSUMPTION_RECOVERY_QUANTITY'){if(selected==='NEW_QUANTITY')return {state:{...s,step:'CONSUMPTION_QUANTITY'},reply:text('Escribí la cantidad consumida en '+s.unit+', sin separador de miles. Por ejemplo, 1,5 o 1.5.')};if(selected!=='KEEP_QUANTITY'||s.unit!==s.recoverySuggestion.unit)return {state:active,reply:text('Elegí una cantidad desde el mensaje vigente.')};s.quantity=inventoryQuantity(s.recoverySuggestion.quantity);return consumptionReasonPrompt(s,eventId);}
+ if(s.step==='CONSUMPTION_QUANTITY'){s.quantity=inventoryQuantity(body?.replace(',', '.'));return consumptionReasonPrompt(s,eventId);}
  if(s.step==='CONSUMPTION_RECOVERY_REASON'){if(selected==='NEW_REASON')return {state:{...s,step:'REASON'},reply:text('Escribí el motivo vigente, de 8 a 1000 caracteres.')};if(selected!=='KEEP_REASON')return {state:active,reply:text('Elegí el motivo desde el mensaje vigente.')};s.reason=siteText(s.recoverySuggestion.reason,1000,8,true);return consumptionConfirmation(s,eventId);}
  if(s.step==='MEASUREMENT_SCOPE'){
   if(!['DELTA','CUMULATIVE'].includes(selected))return {state:active,reply:text('Elegí Realizado hoy o Total acumulado en el menú anterior.')};
@@ -419,7 +443,7 @@ function planConversation({message,state,eventId,facts,now}){
   return chooseEvidence(s,eventId,facts);
  }
  if(s.step==='PROGRESS_EVIDENCE'){if(['NEXT_EVIDENCE','PREVIOUS_EVIDENCE'].includes(selected))return chooseEvidence(s,eventId,facts);if(!selected||!facts.evidence.some(e=>e.id===selected&&e.taskId===s.taskId&&e.status==='APPROVED'))return {state:active,...(s.progressEvidenceWait?{preserveConversation:true}:{}),reply:text(s.progressEvidenceWait?'Elegí una evidencia aprobada del mensaje vigente. Conservamos la medición; si la evidencia cambió, escribí CANCELAR antes de preparar otro borrador.':'Elegí una evidencia aprobada vigente del menú anterior. Si cambió, escribí AVANCE para consultar nuevamente.')};s.evidenceIds=[selected];return {state:{...s,step:'REASON'},reply:text('Explicá cómo mediste el avance o la cantidad ejecutada.')};}
- if(s.step==='REASON'){s.reason=siteText(body,s.purpose==='MATERIAL'?2000:1000,8,true);const m=s.measurementSummary;return confirm(s,eventId,(s.purpose==='MATERIAL'?'Pedido: '+s.quantity+' '+s.unit+' de '+s.name+'\nEsto no autoriza una compra.':s.purpose==='CONSUMPTION'?'Consumo propuesto: '+s.quantity+' '+s.unit+' de '+s.name+'\nEl stock se conserva hasta revisión del responsable.':m?'Acumulado aprobado: '+voiceProgressQuantityLabel(m.previous)+' '+voiceProgressUnitLabel(m.unit)+'\nAdicional propuesto: '+voiceProgressQuantityLabel(m.delta)+' '+voiceProgressUnitLabel(m.unit)+'\nNuevo acumulado: '+voiceProgressQuantityLabel(m.executed)+' / '+voiceProgressQuantityLabel(m.baseline)+' '+voiceProgressUnitLabel(m.unit)+' · '+m.progress+'%\nLa tarea conserva su avance hasta aprobación.':'Avance propuesto: '+s.progress+'%'+(s.quantity!==null?' · '+s.quantity+' / '+s.baseline+' '+s.unit:'')+'\nLa tarea conserva su avance hasta aprobación.')+'\nMotivo: '+s.reason.slice(0,550)+(s.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
+ if(s.step==='REASON'){s.reason=siteText(body,s.purpose==='MATERIAL'?2000:1000,8,true);if(s.purpose==='CONSUMPTION')return consumptionConfirmation(s,eventId);const m=s.measurementSummary;return confirm(s,eventId,(s.purpose==='MATERIAL'?'Pedido: '+s.quantity+' '+s.unit+' de '+s.name+'\nEsto no autoriza una compra.':m?'Acumulado aprobado: '+voiceProgressQuantityLabel(m.previous)+' '+voiceProgressUnitLabel(m.unit)+'\nAdicional propuesto: '+voiceProgressQuantityLabel(m.delta)+' '+voiceProgressUnitLabel(m.unit)+'\nNuevo acumulado: '+voiceProgressQuantityLabel(m.executed)+' / '+voiceProgressQuantityLabel(m.baseline)+' '+voiceProgressUnitLabel(m.unit)+' · '+m.progress+'%\nLa tarea conserva su avance hasta aprobación.':'Avance propuesto: '+s.progress+'%'+(s.quantity!==null?' · '+s.quantity+' / '+s.baseline+' '+s.unit:'')+'\nLa tarea conserva su avance hasta aprobación.')+'\nMotivo: '+s.reason.slice(0,550)+(s.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
  if(s.step==='CONFIRM'){
   if(selected==='CANCEL')return {state:null,reply:text('Operación cancelada. Escribí MENU para continuar.')};
   if(selected!=='CONFIRM')return {state:active,reply:text('Elegí Guardar o Cancelar en el menú anterior.')};

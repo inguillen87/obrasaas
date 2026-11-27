@@ -22,7 +22,7 @@ permissions:
 jobs:
   contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 135
     services:
       postgres:
         image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -77,7 +77,7 @@ jobs:
         run: |
           npx eslint scripts/lib/company-contact-migration.mjs scripts/adopt-company-contact-schema.mjs tests/production-company-contact-migration.test.mjs --max-warnings 0
           node --test tests/production-company-contact-migration.test.mjs
-      - run: node --test tests/production-participant*.test.mjs tests/production-field-*.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-kyc*.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs tests/production-pilot-media.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs
+      - run: node --test tests/production-participant*.test.mjs tests/production-field-*.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-kyc*.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs tests/production-pilot-media.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs tests/production-approved-progress-curve.test.mjs tests/production-approved-progress-curve-http.test.mjs tests/production-whatsapp-company-entry.test.mjs
       - run: npx eslint src/lib/pilot-media.mjs src/lib/video-frame-extractor.mjs src/lib/meta-kyc-*.mjs tests/production-meta-kyc*.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-pilot-media.test.mjs --max-warnings 0
       - name: Integral worksite lint
         run: npx eslint src/lib/participant-*.mjs src/lib/field-*.mjs src/lib/meta-customer-*.mjs src/lib/whatsapp/template-review-policy.js src/lib/whatsapp/obra-intent-policy.js src/lib/whatsapp/field-worker-intent-policy.js src/lib/whatsapp/operational-proposal-decision-policy.js src/lib/site-purchase-*.mjs src/lib/operations-status.mjs src/lib/geo.js src/lib/procurement-*.js src/lib/progress-measurement-quantity.js src/app/api/identity/participants src/app/api/identity/participant-join src/app/api/identity/field-operations src/app/api/identity/field-media src/app/api/identity/field-qr src/app/api/identity/site-purchases src/app/api/identity/operations-status src/app/api/identity/meta-onboarding src/app/api/meta/customer-callback scripts/verify-participants-*.mjs scripts/verify-field-operations-*.mjs scripts/verify-meta-customer-*.mjs scripts/verify-site-purchase-*.mjs tests/production-participants.test.mjs tests/production-field-operations.test.mjs tests/production-field-qr-reprint.test.mjs tests/production-meta-customer.test.mjs tests/production-site-purchase.test.mjs
@@ -101,6 +101,13 @@ jobs:
           path: |
             .vercel/private/biometric-real-model-proof.json
             .vercel/participant-bank-intake-contract-evidence/
+            .vercel/private/selftest-workers-*/execution.json
+            .vercel/private/selftest-workers-*/A.stdout.log
+            .vercel/private/selftest-workers-*/A.stderr.log
+            .vercel/private/selftest-workers-*/B.stdout.log
+            .vercel/private/selftest-workers-*/B.stderr.log
+            .vercel/private/selftest-workers-*/C.stdout.log
+            .vercel/private/selftest-workers-*/C.stderr.log
             .vercel/workspace-ci-evidence/lane-contracts.json
           include-hidden-files: true
           retention-days: 7
@@ -255,6 +262,10 @@ jobs:
           npx eslint src/lib/company-channel-kyc.mjs src/lib/meta-kyc-*.mjs src/lib/participant-channel-kyc.mjs scripts/verify-company-channel-kyc-postgres.mjs tests/fixtures/company-kyc-memory.mjs tests/production-company-channel-kyc.test.mjs --max-warnings 0
           node scripts/verify-company-channel-kyc-postgres.mjs
       - name: AI-first participant preanalysis with personal consent and owned PostgreSQL evidence
+        env:
+          OBRASAAS_PREANALYSIS_CI_SERVICE_ID: ${{ job.services.postgres.id }}
+          OBRASAAS_PREANALYSIS_CI_NETWORK: ${{ job.services.postgres.network }}
+          OBRASAAS_PREANALYSIS_CI_PUBLISHED_PORT: ${{ job.services.postgres.ports[5432] }}
         run: |
           npx eslint scripts/verify-participant-kyc-preanalysis-ci.mjs scripts/verify-participant-kyc-preanalysis-postgres.mjs scripts/lib/participant-preanalysis-current-ci-lineage.mjs src/lib/participant-analysis-consent.mjs src/lib/participant-kyc-preanalysis*.mjs "src/app/(identity)/cuenta/participant-kyc-preanalysis-view.mjs" tests/production-participant-preanalysis-current-ci-lineage.test.mjs tests/production-participant-kyc-preanalysis*.test.mjs tests/fixtures/participant-preanalysis-memory.mjs --max-warnings 0
           node --test tests/production-participant-preanalysis-current-ci-lineage.test.mjs
@@ -325,16 +336,16 @@ jobs:
       - name: Pinned Python dependencies
         run: python -m pip install --disable-pip-version-check -r requirements.txt
       - run: node scripts/verify-field-operations-postgres.mjs
-      - run: node scripts/verify-field-operations-ui.mjs
       - name: Local QR decoding and camera cancellation
         run: |
           npx eslint scripts/verify-field-qr-ui.mjs tests/production-field-qr-reader.test.mjs --max-warnings 0
           node scripts/verify-field-qr-ui.mjs
       - name: Manual web overtime with independent approval and durable recovery
         run: |
-          npx eslint src/lib/field-operations-policy.mjs src/lib/field-operations-store.mjs src/lib/field-operations-http.mjs src/lib/field-overtime-policy.mjs src/lib/field-overtime-store.mjs src/lib/field-shift-summary.mjs 'src/app/(identity)/cuenta/field-operations-panel.js' 'src/app/(identity)/cuenta/field-overtime-view.js' 'src/app/(identity)/cuenta/workspace-recovery-journal.mjs' src/app/api/identity/field-operations/route.js scripts/verify-field-operations-ui.mjs scripts/verify-field-overtime.mjs scripts/verify-field-overtime-postgres.mjs scripts/verify-field-overtime-ui.mjs tests/production-field-overtime-recovery.test.mjs --max-warnings 0
+          npx eslint src/lib/field-operations-policy.mjs src/lib/field-operations-store.mjs src/lib/field-operations-http.mjs src/lib/field-overtime-policy.mjs src/lib/field-overtime-store.mjs src/lib/field-shift-summary.mjs 'src/app/(identity)/cuenta/field-operations-panel.js' 'src/app/(identity)/cuenta/field-overtime-view.js' 'src/app/(identity)/cuenta/workspace-recovery-journal.mjs' src/app/api/identity/field-operations/route.js scripts/verify-field-operations-ui.mjs scripts/verify-field-overtime.mjs scripts/verify-field-overtime-postgres.mjs scripts/verify-field-overtime-ui.mjs tests/production-field-overtime-recovery.test.mjs src/lib/attendance-*.mjs scripts/lib/attendance-effective-postgres-cases.mjs tests/fixtures/attendance-effective-audited.fixture.mjs tests/fixtures/attendance-effective-legacy.fixture.mjs 'src/app/(identity)/cuenta/attendance-closure-view.mjs' 'src/app/(identity)/cuenta/attendance-closure-view.js' tests/production-attendance-effective.test.mjs tests/production-attendance-effective-http-menu.test.mjs tests/production-attendance-closure-view.test.mjs tests/production-attendance-closure-form.test.mjs tests/production-attendance-effective-report-regressions.test.mjs tests/production-attendance-effective-hours-ui.test.mjs tests/production-attendance-overtime-unconfirmed-ui.test.mjs tests/production-attendance-effective-reader-completeness.test.mjs --max-warnings 0
           node scripts/verify-field-overtime.mjs
           node --test tests/production-field-overtime-recovery.test.mjs
+          node --test tests/production-attendance-effective.test.mjs tests/production-attendance-effective-http-menu.test.mjs tests/production-attendance-closure-view.test.mjs tests/production-attendance-closure-form.test.mjs tests/production-attendance-effective-report-regressions.test.mjs tests/production-attendance-effective-hours-ui.test.mjs tests/production-attendance-overtime-unconfirmed-ui.test.mjs tests/production-attendance-effective-reader-completeness.test.mjs
           node scripts/verify-field-overtime-postgres.mjs
           node scripts/verify-field-overtime-ui.mjs
       - name: Canonical task pagination, preserved field drafts and current WhatsApp guidance
@@ -352,7 +363,7 @@ jobs:
         with:
           name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-field
           path: |
-            .vercel/field-operations-evidence/
+            .vercel/field-operations-evidence/postgres.json
             .vercel/field-qr-evidence/
             .vercel/private/field-overtime-unit-proof.json
             .vercel/private/field-overtime-postgres-proof.json
@@ -434,6 +445,21 @@ jobs:
       - run: node scripts/verify-meta-customer-ui.mjs
       - run: node scripts/verify-worker-channel-ui.mjs
       - run: node scripts/verify-customer-whatsapp-ui.mjs
+      - name: Customer inbox pagination and operation recovery
+        run: |
+          npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
+          node --test tests/production-customer-inbox.test.mjs
+          node scripts/verify-customer-inbox-postgres.mjs
+      - name: Full page receipt recovery and private inbox UX
+        run: |
+          npx eslint scripts/verify-workspace-reload-ui.mjs scripts/verify-customer-inbox-ui.mjs tests/production-workspace-recovery-journal.test.mjs
+          node scripts/verify-workspace-reload-ui.mjs
+          node scripts/verify-customer-inbox-ui.mjs
+      - name: Clerk entry, invitation navigation and expired-session recovery
+        run: |
+          npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/identity-load-guard.js' 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
+          node --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
+          node scripts/verify-clerk-access-ui.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane meta --expected-head "$GITHUB_SHA"
@@ -451,6 +477,9 @@ jobs:
             .vercel/template-send-evidence/
             .vercel/meta-demo-pilot-evidence/
             .vercel/demo-pilot-evidence/
+            .vercel/clerk-access-evidence/
+            .vercel/workspace-reload-evidence/
+            .vercel/customer-inbox-evidence/
             .vercel/workspace-ci-evidence/lane-meta.json
           include-hidden-files: true
           retention-days: 7
@@ -507,6 +536,9 @@ jobs:
           node scripts/verify-company-channel-postgres.mjs
           node scripts/verify-company-channel-boundary.mjs
           node scripts/verify-company-channel-ui.mjs
+      - run: node scripts/verify-company-onboarding-postgres.mjs
+      - run: node scripts/verify-workspace-ui.mjs
+      - run: node scripts/verify-company-onboarding-ui.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane channels --expected-head "$GITHUB_SHA"
@@ -523,6 +555,10 @@ jobs:
             .vercel/private/company-channel-postgres-proof.json
             .vercel/private/company-channel-boundary-proof.json
             .vercel/company-channel-ui-evidence/
+            .vercel/workspace-evidence/browser*.json
+            .vercel/workspace-evidence/workspace-*.json
+            .vercel/workspace-evidence/*.png
+            .vercel/company-onboarding-evidence/
             .vercel/workspace-ci-evidence/lane-channels.json
           include-hidden-files: true
           retention-days: 7
@@ -566,6 +602,7 @@ jobs:
       - name: Pinned Python dependencies
         run: python -m pip install --disable-pip-version-check -r requirements.txt
       - run: node scripts/verify-site-register-postgres.mjs
+      - run: node scripts/verify-field-operations-ui.mjs
       - name: Material catalog, authorized consumption and durable recovery
         run: |
           npx eslint src/lib/material-inventory.mjs 'src/app/(identity)/cuenta/material-inventory-panel.js' 'src/app/(identity)/cuenta/material-inventory-view.mjs' scripts/verify-material-inventory-*.mjs tests/production-material-inventory.test.mjs --max-warnings 0
@@ -605,6 +642,8 @@ jobs:
           name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-business
           path: |
             .vercel/site-register-evidence/
+            .vercel/field-operations-evidence/browser*.json
+            .vercel/field-operations-evidence/*.png
             .vercel/material-inventory-evidence/
             .vercel/purchase-evidence/
             .vercel/operations-status-evidence/
@@ -658,24 +697,6 @@ jobs:
       - name: Pinned Python dependencies
         run: python -m pip install --disable-pip-version-check -r requirements.txt
       - run: node scripts/verify-workspace-postgres.mjs
-      - name: Customer inbox pagination and operation recovery
-        run: |
-          npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
-          node --test tests/production-customer-inbox.test.mjs
-          node scripts/verify-customer-inbox-postgres.mjs
-      - run: node scripts/verify-company-onboarding-postgres.mjs
-      - run: node scripts/verify-workspace-ui.mjs
-      - name: Full page receipt recovery and private inbox UX
-        run: |
-          npx eslint scripts/verify-workspace-reload-ui.mjs scripts/verify-customer-inbox-ui.mjs tests/production-workspace-recovery-journal.test.mjs
-          node scripts/verify-workspace-reload-ui.mjs
-          node scripts/verify-customer-inbox-ui.mjs
-      - run: node scripts/verify-company-onboarding-ui.mjs
-      - name: Clerk entry, invitation navigation and expired-session recovery
-        run: |
-          npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/identity-load-guard.js' 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
-          node --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
-          node scripts/verify-clerk-access-ui.mjs
       - name: Canonical authorized portfolio, private source-bound contracts and responsive recovery
         run: |
           npx eslint scripts/verify-portfolio-overview-contracts.mjs scripts/verify-portfolio-overview-ui.mjs scripts/verify-workspace-postgres.mjs tests/production-portfolio-overview.test.mjs --max-warnings 0
@@ -687,10 +708,10 @@ jobs:
           node scripts/verify-workspace-identity-only-ui.mjs --expected-head "$GITHUB_SHA"
       - name: Focused worksite navigation and three-step synthetic identity browser evidence
         run: |
-          npx eslint scripts/verify-focused-workspace-ci.mjs scripts/verify-focused-workspace-ui.mjs scripts/lib/integrated-identity-current-ci-lineage.mjs tests/production-focused-workspace-ci.test.mjs tests/production-focused-workspace-ui.test.mjs tests/production-focused-workspace-navigation.test.mjs tests/production-integrated-identity-current-ci-lineage.test.mjs --max-warnings 0
+          npx eslint scripts/verify-focused-workspace-ci.mjs scripts/verify-focused-workspace-ui.mjs scripts/lib/integrated-identity-current-ci-lineage.mjs tests/production-focused-workspace-ci.test.mjs tests/production-focused-workspace-ui.test.mjs tests/production-focused-workspace-navigation.test.mjs tests/production-integrated-identity-current-ci-lineage.test.mjs scripts/verify-focused-workspace-current85-ci.mjs scripts/lib/focused-workspace-current85-evidence.mjs scripts/lib/focused-workspace-current85-spec.mjs tests/production-focused-workspace-current85-ci.test.mjs tests/fixtures/focused-workspace-current85-fixture.mjs --max-warnings 0
           node --test tests/production-integrated-identity-current-ci-lineage.test.mjs
-          node scripts/verify-focused-workspace-ci.mjs browser --expected-head "$GITHUB_SHA"
-          node scripts/verify-focused-workspace-ci.mjs verify --expected-head "$GITHUB_SHA"
+          node scripts/verify-focused-workspace-current85-ci.mjs browser --expected-head "$GITHUB_SHA"
+          node scripts/verify-focused-workspace-current85-ci.mjs verify --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane workspace-ui --expected-head "$GITHUB_SHA"
@@ -700,11 +721,7 @@ jobs:
         with:
           name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-workspace-ui
           path: |
-            .vercel/workspace-evidence/
-            .vercel/company-onboarding-evidence/
-            .vercel/clerk-access-evidence/
-            .vercel/workspace-reload-evidence/
-            .vercel/customer-inbox-evidence/
+            .vercel/workspace-evidence/postgres.json
             .vercel/portfolio-overview-contract-evidence/
             .vercel/private/portfolio-overview-ui-validation.json
             .vercel/private/portfolio-*.png

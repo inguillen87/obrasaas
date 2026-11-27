@@ -9,6 +9,38 @@ export {OWN_TEMPLATE_ACTIONS};
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===keys.slice().sort().join('|');
 const fail=(code='META_OWN_TEMPLATE_CONTEXT_CHANGED',status=409)=>{throw new WorkspaceError(code,status);};
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+// The source connection is locked by the caller. A recorded API receipt is
+// not reconciliation: only the current draft's exact, confirmed readback can
+// supersede an older reservation/UNKNOWN of the same immutable submission.
+export function ownCompanyTemplateTransferPending(connection,receipts){
+ const drafts=connection.metadata?.ownCompanyTemplateDrafts||{};
+ // PREPARE only records a local view of an existing draft. It never reserves
+ // a provider effect, even if that view happened to say UNKNOWN at the time.
+ const uncertain=m=>m.state==='PROVIDER_STARTED'||m.action!=='PREPARE_OWN_TEMPLATE'&&['SUBMISSION_STARTED','SUBMISSION_UNKNOWN'].includes(m.submissionState);
+ const records=receipts.map(row=>row.metadata);
+ for(const [key,draft] of Object.entries(drafts)){
+  if(['SUBMISSION_STARTED','SUBMISSION_UNKNOWN'].includes(draft?.state))return true;
+  if(draft?.state!=='SUBMITTED')continue;
+  const observation=draft.lastConfirmedObservation;
+  const current=records.find(m=>m.operationId===draft.observationOperationId&&m.connectionId===connection.id&&m.blueprintKey===key&&m.grantDigest===draft.grantDigest&&m.contentSha256===draft.definition?.contentSha256&&m.state==='RECORDED'&&m.submissionState==='SUBMITTED'&&m.providerConfirmed===true&&m.lastObservation?.providerConfirmed===true&&m.lastObservation.submissionState==='SUBMITTED'&&m.lastObservation.operationId===draft.observationOperationId&&m.lastObservation.observationRevision===draft.observationRevision&&m.lastObservation.providerStatus===observation?.status&&m.lastObservation.observedAt===observation?.recordedAt);
+  if(!current||observation?.source!=='PROVIDER_READBACK'||String(observation.providerId)!==String(draft.providerId)||!Number.isSafeInteger(draft.observationRevision)||draft.observationRevision<1)return true;
+ }
+ for(const m of records.filter(uncertain)){
+  const draft=drafts[m.blueprintKey],latest=draft?.lastConfirmedObservation;
+  if(!draft||draft.state!=='SUBMITTED'||m.connectionId!==connection.id||m.grantDigest!==draft.grantDigest||m.contentSha256!==draft.definition?.contentSha256||latest?.source!=='PROVIDER_READBACK')return true;
+  // A crashed initial submission has no observation revision in old receipts.
+  // A later recovery must name that submission; an orphan recovery reservation
+  // stays on HOLD until that exact operation is recovered canonically.
+  const initial=m.action==='SUBMIT_OWN_TEMPLATE'&&m.operationId===draft.submissionOperationId;
+  const olderObservation=Number.isSafeInteger(m.lastObservation?.observationRevision)&&m.lastObservation.observationRevision<draft.observationRevision;
+  if(!initial&&!olderObservation)return true;
+ }
+ return false;
+}
+export async function assertOwnCompanyTemplatesSettledForTransfer(client,connection,organizationId){
+ const receipts=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND action='company.own.template.recorded' AND metadata->>'projectId'=$2 AND metadata->>'connectionId'=$3 ORDER BY id FOR SHARE`,[organizationId,connection.projectId,connection.id])).rows;
+ if(ownCompanyTemplateTransferPending(connection,receipts))throw new WorkspaceError('COMPANY_TRANSFER_PENDING_OPERATIONS',409);
+}
 export function normalizeOwnTemplateCommand(body){
  if(!exact(body,['scope','projectId','action','operationId','payload'])||!workspaceId(body.projectId)||!hash(body.scope)||!operationId(body.operationId)||!OWN_TEMPLATE_ACTIONS.includes(body.action))fail('META_OWN_TEMPLATE_INPUT_INVALID',400);
  const p=body.payload,submit=body.action==='SUBMIT_OWN_TEMPLATE',recover=body.action==='RECOVER_OWN_TEMPLATE';

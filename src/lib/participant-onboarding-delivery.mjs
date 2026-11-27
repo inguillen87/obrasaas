@@ -2,9 +2,9 @@ import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {customerJobTransaction,reserveCustomerOutbound,startPendingCustomerOutbound,completeCustomerOutbound} from './meta-customer-outbound.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {buildCustomerTemplate,customerRemoteTemplateMatches,buildParticipantOnboardingMessage,buildParticipantInvitationMessage} from './meta-customer-templates.mjs';
-import {metaCustomerTransportReady,customerTemplateMessage} from './meta-customer-provider.mjs';
+import {metaCustomerTransportReady,metaCustomerScopedTransportReady,customerTemplateMessage} from './meta-customer-provider.mjs';
 import {prepareMetaKycChallenge,metaKycOperationId,metaKycChallengeDigest} from './meta-kyc-challenge.mjs';
-import {resolveParticipantOnboardingAuthority} from './participant-onboarding-authority.mjs';
+import {resolveParticipantOnboardingAuthority,readOwnParticipantOnboardingAuthority} from './participant-onboarding-authority.mjs';
 import {participantOnboardingIntent,participantOnboardingOutboundId,participantOnboardingPhaseOutboundId,participantOnboardingPhase,participantOnboardingPhaseState,updateParticipantOnboardingPhase,createParticipantOnboardingPhases,publicParticipantOnboarding} from './participant-onboarding-policy.mjs';
 import {participantReceiptId} from './participant-policy.mjs';
 
@@ -15,9 +15,14 @@ const safeCode=error=>error instanceof WorkspaceError&&['PARTICIPANT_ONBOARDING_
 const rowColumns=`w.id,w."projectId",w.phone,w.active,w.metadata,to_char(w."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 async function worker(client,projectId,workerId,{lock=false}={}){return (await client.query(`SELECT ${rowColumns} FROM public."Worker" w WHERE w.id=$1 AND w."projectId"=$2${lock?' FOR UPDATE':''}`,[workerId,projectId])).rows[0];}
 async function event(client,id,projectId){return (await client.query(`SELECT id,"projectId",payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR UPDATE`,[id,projectId])).rows[0];}
-function approvedTemplate(r,phase=null){
+const ownMarked=r=>Object.hasOwn(r.connection?.metadata||{},'ownCompany')||Object.hasOwn(r.connection?.metadata||{},'ownCompanyRuntime');
+const ownBinding=(r,phase,environment)=>ownMarked(r)?readOwnParticipantOnboardingAuthority(r,phase,{environment,now:r.now.getTime()}).binding:null;
+const ownEnvelope=(r,phase,environment)=>{const binding=ownBinding(r,phase,environment);return binding?{version:3,ownOnboarding:binding}:{};};
+const ownPayload=request=>request.version===3?{onboardingCatalog:'OWN_COMPANY',ownOnboardingDigest:digest(request.ownOnboarding)}:{};
+function approvedTemplate(r,phase=null,environment=process.env){
  const templateKey=phase==='ACCOUNT_INVITATION'?'participant_invitation':key;
- const definition=buildCustomerTemplate(r.connection,templateKey),draft=r.connection.metadata?.customerTemplateDrafts?.[templateKey];
+ const binding=ownBinding(r,phase,environment),definition=buildCustomerTemplate(r.connection,templateKey),draft=binding?r.connection.metadata?.ownCompanyTemplateDrafts?.[templateKey]:r.connection.metadata?.customerTemplateDrafts?.[templateKey];
+ if(binding&&draft?.grantDigest!==binding.grantDigest)fail('PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED');
  if(!draft||draft.state!=='SUBMITTED'||draft.providerStatus!=='APPROVED'||draft.providerCategory!=='UTILITY'||draft.definition?.name!==definition.name||draft.definition?.contentSha256!==definition.contentSha256||!/^\d{5,32}$/.test(draft.providerId||'')||!Number.isSafeInteger(draft.observationRevision)||draft.observationRevision<1)fail('PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED');
  return {definition,providerId:draft.providerId,stamp:digest(draft)};
 }
@@ -36,10 +41,14 @@ function decode(row,r,intent,environment,phase=null){
  if(row.payload?.participantOnboarding!==true||row.projectId!==r.connection.projectId||row.payload.organizationId!==intent.organizationId||row.payload.channelId!==r.connection.id||row.payload.targetProjectId!==intent.targetProjectId||row.payload.workerId!==intent.workerId||row.payload.invitationId!==intent.invitationId||row.payload.consentReceiptId!==intent.consentReceiptId)fail();
  let request;try{request=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,{organizationId:intent.organizationId,projectId:r.connection.projectId,purpose:'outbound',resourceId:row.id},environment));}catch{fail();}
  if(phase){
-  const keys=['version','phase','channelPurpose','organizationId','channelId','targetProjectId','workerId','invitationId','consentReceiptId','to','phoneNumberId','wabaId','authorityDigest','expiresAt','template','message',...(phase==='IDENTITY_START'?['challengeId','acceptanceReceiptId','participantClerkUserId']:[])];
-  if(request.version!==2||request.phase!==phase||row.payload.onboardingPhase!==phase||row.id!==participantOnboardingPhaseOutboundId(intent,phase)||Object.keys(request).sort().join('|')!==keys.sort().join('|'))fail();
+  const isOwn=request.version===3||Object.hasOwn(request,'ownOnboarding')||Object.hasOwn(row.payload,'onboardingCatalog')||Object.hasOwn(row.payload,'ownOnboardingDigest');
+  const binding=isOwn?ownBinding(r,phase,environment):null;
+  if(isOwn?(!binding||request.version!==3||digest(request.ownOnboarding)!==digest(binding)||row.payload.onboardingCatalog!=='OWN_COMPANY'||row.payload.ownOnboardingDigest!==digest(binding)):ownMarked(r))fail();
+  const keys=['version','phase','channelPurpose','organizationId','channelId','targetProjectId','workerId','invitationId','consentReceiptId','to','phoneNumberId','wabaId','authorityDigest','expiresAt','template','message',...(isOwn?['ownOnboarding']:[]),...(phase==='IDENTITY_START'?['challengeId','acceptanceReceiptId','participantClerkUserId']:[])];
+  if(request.version!==(isOwn?3:2)||request.phase!==phase||row.payload.onboardingPhase!==phase||row.id!==participantOnboardingPhaseOutboundId(intent,phase)||Object.keys(request).sort().join('|')!==keys.sort().join('|'))fail();
  }
- if(digest(request)!==row.payload.requestDigest||request.version!==(phase?2:1)||request.channelPurpose!=='PARTICIPANT_ONBOARDING'||request.organizationId!==intent.organizationId||request.channelId!==r.connection.id||request.targetProjectId!==intent.targetProjectId||request.workerId!==intent.workerId||request.invitationId!==intent.invitationId||request.consentReceiptId!==intent.consentReceiptId||request.to!==r.worker.phone.slice(1)||request.phoneNumberId!==r.connection.phoneNumberId||request.wabaId!==r.connection.whatsappBusinessId||request.authorityDigest!==r.authorityDigest||request.challengeId!==row.payload.challengeId)fail();
+ if(!phase&&(ownMarked(r)||request.version!==1||Object.hasOwn(request,'ownOnboarding')||Object.hasOwn(row.payload,'onboardingCatalog')))fail();
+ if(digest(request)!==row.payload.requestDigest||request.channelPurpose!=='PARTICIPANT_ONBOARDING'||request.organizationId!==intent.organizationId||request.channelId!==r.connection.id||request.targetProjectId!==intent.targetProjectId||request.workerId!==intent.workerId||request.invitationId!==intent.invitationId||request.consentReceiptId!==intent.consentReceiptId||request.to!==r.worker.phone.slice(1)||request.phoneNumberId!==r.connection.phoneNumberId||request.wabaId!==r.connection.whatsappBusinessId||request.authorityDigest!==r.authorityDigest||request.challengeId!==row.payload.challengeId)fail();
  customerTemplateMessage(request.message);
  if(phase==='ACCOUNT_INVITATION'){
   if(Object.hasOwn(row.payload,'challengeId')||Object.hasOwn(request,'challengeId')||!Number.isFinite(Date.parse(request.expiresAt))||request.expiresAt!==r.worker.metadata.participant.invitation.expiresAt||Date.parse(request.expiresAt)<=r.now.getTime()||digest(request.message)!==digest(buildParticipantInvitationMessage(r.connection,{organizationName:r.member.organizationName||r.project.organizationName})))fail();
@@ -62,9 +71,17 @@ async function projectStatus(client,intent,values,phase=null){
 // The only retryable phase precedes its committed SEND_STARTED marker.
 export function createParticipantOnboardingDelivery({connect,provider,environment=process.env,resolveAuthority=resolveParticipantOnboardingAuthority,prepareChallenge=prepareMetaKycChallenge,afterPrepare=async()=>{},afterDispatchMarker=async()=>{}}){
  const within=run=>customerJobTransaction(connect,run);
- const transport=()=>{if(!metaCustomerTransportReady(provider.readiness()))fail('PARTICIPANT_ONBOARDING_PROVIDER_CLOSED',503);};
- async function remoteApproval(r,template){
-  transport();const remote=await provider.findTemplate({token:credential(r,environment),wabaId:r.connection.whatsappBusinessId,name:template.definition.name});
+ const transport=(r,phase)=>{if(r&&ownMarked(r)){ownBinding(r,phase,environment);if(typeof provider.forOwnParticipantOnboarding!=='function')fail('PARTICIPANT_ONBOARDING_PROVIDER_CLOSED',503);}else if(!metaCustomerTransportReady(provider.readiness()))fail('PARTICIPANT_ONBOARDING_PROVIDER_CLOSED',503);};
+ async function transportFor(r,phase,intent,template,{client=null,envelope=null}={}){
+  if(!ownMarked(r)){if(envelope?.version===3||envelope?.ownOnboarding)fail();transport(r,phase);return provider;}
+  transport(r,phase);
+  const challenge=r.worker.metadata?.participant?.kycChatChallenge,expected={authorityDigest:r.authorityDigest,...(challenge?.status==='PENDING'?{challengeId:challenge.id}:{})};
+  const fresh=async c=>{const next=await resolveAuthority(c,intent,{environment,expected});assertPhaseAuthority(next,intent,phase);const observed=approvedTemplate(next,phase,environment);if(observed.stamp!==template.stamp||digest(ownBinding(next,phase,environment))!==digest(ownBinding(r,phase,environment)))fail('PARTICIPANT_ONBOARDING_TEMPLATE_CHANGED');return next;};
+  const scoped=await provider.forOwnParticipantOnboarding({authority:r,phase,token:credential(r,environment),beforeExternal:()=>client?fresh(client):within(fresh),envelope});
+  if(!metaCustomerScopedTransportReady(scoped.readiness()))fail('PARTICIPANT_ONBOARDING_PROVIDER_CLOSED',503);return scoped;
+ }
+ async function remoteApproval(r,template,phase,intent,options={}){
+  const scoped=await transportFor(r,phase,intent,template,options),remote=await scoped.findTemplate({token:credential(r,environment),wabaId:r.connection.whatsappBusinessId,name:template.definition.name});
   if(!customerRemoteTemplateMatches(remote,template.definition)||String(remote.id)!==template.providerId||remote.status!=='APPROVED'||remote.category!=='UTILITY')fail('PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED');
  }
  async function load(reference){return within(async client=>{
@@ -86,10 +103,10 @@ export function createParticipantOnboardingDelivery({connect,provider,environmen
    const {intent}=loaded;let current=loaded.current,phase=participantOnboardingPhase(current);
    if(['CANCELED','SEND_STARTED','SEND_UNKNOWN','SENT','REJECTED','STATUS_OBSERVED'].includes(current.state))return publicParticipantOnboarding(loaded.participant);
    try{
-    transport();
     const inspect=await within(async client=>{
      let inspectedPhase=phase,inspectedCurrent=current;
-     const r=await resolveAuthority(client,intent,{environment,expected:current.challengeId?{authorityDigest:current.authorityDigest,challengeId:current.challengeId}:null});
+     let r=await resolveAuthority(client,intent,{environment,expected:current.challengeId?{authorityDigest:current.authorityDigest,challengeId:current.challengeId}:null});
+     if(!ownMarked(r)||inspectedPhase)transport(r,inspectedPhase);
      // An older, never-prepared request may adopt invitation-only delivery after
      // all canonical authority has been locked. Existing envelopes/challenges and
      // every dispatch marker keep their exact v1 path and are never retagged.
@@ -97,23 +114,24 @@ export function createParticipantOnboardingDelivery({connect,provider,environmen
       // The v1 marker is global, even if the current corporate anchor changed.
       // A former anchor must never hide an accepted/uncertain prior attempt.
       const old=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND provider='meta-customer-outbound-v1' FOR UPDATE`,[participantOnboardingOutboundId(intent)])).rows[0];
-      if(!old){const m=structuredClone(r.worker.metadata);m.participant.onboardingDelivery=createParticipantOnboardingPhases(m.participant.onboardingDelivery,m.participant,r.now.toISOString());await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.worker.projectId,JSON.stringify(m)]);r.worker.metadata=m;inspectedCurrent=m.participant.onboardingDelivery;inspectedPhase=participantOnboardingPhase(inspectedCurrent);}
+      if(!old){const m=structuredClone(r.worker.metadata);m.participant.onboardingDelivery=createParticipantOnboardingPhases(m.participant.onboardingDelivery,m.participant,r.now.toISOString());await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.worker.projectId,JSON.stringify(m)]);r.worker.metadata=m;inspectedCurrent=m.participant.onboardingDelivery;inspectedPhase=participantOnboardingPhase(inspectedCurrent);if(ownMarked(r))r=await resolveAuthority(client,intent,{environment});}
      }
-     assertPhaseAuthority(r,intent,inspectedPhase);const template=approvedTemplate(r,inspectedPhase);
+     transport(r,inspectedPhase);
+     assertPhaseAuthority(r,intent,inspectedPhase);const template=approvedTemplate(r,inspectedPhase,environment);
      const id=inspectedPhase?participantOnboardingPhaseOutboundId(intent,inspectedPhase):participantOnboardingOutboundId(intent),stored=await event(client,id,r.connection.projectId);
      if(stored&&stored.outcome?.state!=='ONBOARDING_PENDING')return {done:await projectStatus(client,intent,{state:stored.outcome?.state||'SEND_UNKNOWN',providerStatus:stored.outcome?.providerStatus||null,nextCheckAt:null},inspectedPhase),phase:inspectedPhase,current:inspectedCurrent};
      if(stored)decode(stored,r,intent,environment,inspectedPhase);
      return {r,template,id,phase:inspectedPhase,current:inspectedCurrent};
     });phase=inspect.phase;current=inspect.current;if(inspect.done)return inspect.done;
-    await remoteApproval(inspect.r,inspect.template);
+    await remoteApproval(inspect.r,inspect.template,phase,intent);
     const queued=await within(async client=>{
-     const r=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:inspect.r.authorityDigest,...(current.challengeId?{challengeId:current.challengeId}:{})}});assertPhaseAuthority(r,intent,phase);const template=approvedTemplate(r,phase);
+     const r=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:inspect.r.authorityDigest,...(current.challengeId?{challengeId:current.challengeId}:{})}});assertPhaseAuthority(r,intent,phase);const template=approvedTemplate(r,phase,environment);
      if(template.stamp!==inspect.template.stamp)fail('PARTICIPANT_ONBOARDING_TEMPLATE_CHANGED');
      const stored=await event(client,inspect.id,r.connection.projectId);
      if(stored){if(stored.outcome?.state!=='ONBOARDING_PENDING')return {done:await projectStatus(client,intent,{state:stored.outcome?.state||'SEND_UNKNOWN',providerStatus:stored.outcome?.providerStatus||null,nextCheckAt:null},phase)};return {id:stored.id,request:decode(stored,r,intent,environment,phase),template};}
      if(phase==='ACCOUNT_INVITATION'){
-      const message=buildParticipantInvitationMessage(r.connection,{organizationName:r.member.organizationName||r.project.organizationName}),request={version:2,phase,channelPurpose:'PARTICIPANT_ONBOARDING',organizationId:intent.organizationId,channelId:r.connection.id,targetProjectId:intent.targetProjectId,workerId:intent.workerId,invitationId:intent.invitationId,consentReceiptId:intent.consentReceiptId,to:r.worker.phone.slice(1),phoneNumberId:r.connection.phoneNumberId,wabaId:r.connection.whatsappBusinessId,authorityDigest:r.authorityDigest,expiresAt:r.worker.metadata.participant.invitation.expiresAt,template:{providerId:template.providerId,stamp:template.stamp,contentSha256:template.definition.contentSha256},message};
-      await reserveCustomerOutbound(client,{id:inspect.id,projectId:r.connection.projectId,organizationId:intent.organizationId,actorId:intent.issuerActorId,request,eventType:'template',deferred:true,payloadFields:{participantOnboarding:true,onboardingPhase:phase,targetProjectId:intent.targetProjectId,workerId:intent.workerId,invitationId:intent.invitationId,consentReceiptId:intent.consentReceiptId},environment,now:r.now.getTime()});
+      const message=buildParticipantInvitationMessage(r.connection,{organizationName:r.member.organizationName||r.project.organizationName}),request={version:2,...ownEnvelope(r,phase,environment),phase,channelPurpose:'PARTICIPANT_ONBOARDING',organizationId:intent.organizationId,channelId:r.connection.id,targetProjectId:intent.targetProjectId,workerId:intent.workerId,invitationId:intent.invitationId,consentReceiptId:intent.consentReceiptId,to:r.worker.phone.slice(1),phoneNumberId:r.connection.phoneNumberId,wabaId:r.connection.whatsappBusinessId,authorityDigest:r.authorityDigest,expiresAt:r.worker.metadata.participant.invitation.expiresAt,template:{providerId:template.providerId,stamp:template.stamp,contentSha256:template.definition.contentSha256},message};
+      await reserveCustomerOutbound(client,{id:inspect.id,projectId:r.connection.projectId,organizationId:intent.organizationId,actorId:intent.issuerActorId,request,eventType:'template',deferred:true,payloadFields:{participantOnboarding:true,onboardingPhase:phase,...ownPayload(request),targetProjectId:intent.targetProjectId,workerId:intent.workerId,invitationId:intent.invitationId,consentReceiptId:intent.consentReceiptId},environment,now:r.now.getTime()});
       const final=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:r.authorityDigest}});assertPhaseAuthority(final,intent,phase);
       await projectStatus(client,intent,{state:'PENDING',outboundId:inspect.id,anchorProjectId:r.connection.projectId,authorityDigest:r.authorityDigest,code:null,nextCheckAt:null},phase);return {id:inspect.id,request,template};
      }
@@ -121,36 +139,42 @@ export function createParticipantOnboardingDelivery({connect,provider,environmen
      if(!prepared.code||prepared.codeUnavailable)fail();
      const updated=await worker(client,intent.targetProjectId,intent.workerId),challenge=updated?.metadata?.participant?.kycChatChallenge;
      if(!challenge||challenge.status!=='PENDING'||challenge.codeDigest!==metaKycChallengeDigest(prepared.code))fail();
+     // Own witnesses describe exact Worker bytes. Preparing the challenge
+     // changes those bytes, so resolve again before binding the new envelope.
+     const preparedAuthority=ownMarked(r)?await resolveAuthority(client,intent,{environment,expected:{authorityDigest:r.authorityDigest,challengeId:challenge.id}}):r;
+     if(approvedTemplate(preparedAuthority,phase,environment).stamp!==template.stamp)fail('PARTICIPANT_ONBOARDING_TEMPLATE_CHANGED');
      // Keep the canonical exterior receipt that account acceptance requires.
      // This receipt, the challenge and its encrypted outbox commit together.
      if(!/^meta_kyc_challenge_[a-f0-9]{64}$/.test(prepared.receiptId||'')||prepared.expiresAt!==challenge.expiresAt)fail();
      const requestDigest=digest({action:'PREPARE_KYC_CHAT',source:'PARTICIPANT_ONBOARDING',projectId:intent.targetProjectId,workerId:intent.workerId,revision:r.worker.revision,operationId,outboundId:inspect.id});
      await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.operation.recorded','Worker',$4,$5::jsonb)`,[participantReceiptId(intent.issuerActorId,intent.targetProjectId,operationId),intent.organizationId,intent.issuerActorId,intent.workerId,JSON.stringify({version:1,projectId:intent.targetProjectId,requestDigest,kind:'PREPARE_KYC_CHAT',challengeReceiptId:prepared.receiptId,expiresAt:challenge.expiresAt,source:'PARTICIPANT_ONBOARDING',outboundId:inspect.id,identityCertified:false,permissionsGranted:false})]);
      const message=buildParticipantOnboardingMessage(r.connection,{organizationName:r.member.organizationName||r.project.organizationName,invitationId:intent.invitationId,code:prepared.code});
-     const request={version:phase?2:1,...(phase?{phase,acceptanceReceiptId:r.worker.metadata.participant.acceptanceReceiptId,participantClerkUserId:r.worker.metadata.participant.clerkUserId}:{}),channelPurpose:'PARTICIPANT_ONBOARDING',organizationId:intent.organizationId,channelId:r.connection.id,targetProjectId:intent.targetProjectId,workerId:intent.workerId,invitationId:intent.invitationId,consentReceiptId:intent.consentReceiptId,to:r.worker.phone.slice(1),phoneNumberId:r.connection.phoneNumberId,wabaId:r.connection.whatsappBusinessId,authorityDigest:r.authorityDigest,challengeId:challenge.id,expiresAt:challenge.expiresAt,template:{providerId:template.providerId,stamp:template.stamp,contentSha256:template.definition.contentSha256},message};
-     await reserveCustomerOutbound(client,{id:inspect.id,projectId:r.connection.projectId,organizationId:intent.organizationId,actorId:intent.issuerActorId,request,eventType:'template',deferred:true,payloadFields:{participantOnboarding:true,...(phase?{onboardingPhase:phase}:{}),targetProjectId:intent.targetProjectId,workerId:intent.workerId,invitationId:intent.invitationId,consentReceiptId:intent.consentReceiptId,challengeId:challenge.id},environment,now:r.now.getTime()});
+     const request={version:phase?2:1,...ownEnvelope(preparedAuthority,phase,environment),...(phase?{phase,acceptanceReceiptId:r.worker.metadata.participant.acceptanceReceiptId,participantClerkUserId:r.worker.metadata.participant.clerkUserId}:{}),channelPurpose:'PARTICIPANT_ONBOARDING',organizationId:intent.organizationId,channelId:r.connection.id,targetProjectId:intent.targetProjectId,workerId:intent.workerId,invitationId:intent.invitationId,consentReceiptId:intent.consentReceiptId,to:r.worker.phone.slice(1),phoneNumberId:r.connection.phoneNumberId,wabaId:r.connection.whatsappBusinessId,authorityDigest:r.authorityDigest,challengeId:challenge.id,expiresAt:challenge.expiresAt,template:{providerId:template.providerId,stamp:template.stamp,contentSha256:template.definition.contentSha256},message};
+     await reserveCustomerOutbound(client,{id:inspect.id,projectId:r.connection.projectId,organizationId:intent.organizationId,actorId:intent.issuerActorId,request,eventType:'template',deferred:true,payloadFields:{participantOnboarding:true,...(phase?{onboardingPhase:phase}:{}),...ownPayload(request),targetProjectId:intent.targetProjectId,workerId:intent.workerId,invitationId:intent.invitationId,consentReceiptId:intent.consentReceiptId,challengeId:challenge.id},environment,now:r.now.getTime()});
      const final=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:r.authorityDigest,challengeId:challenge.id}});assertPhaseAuthority(final,intent,phase);
      await projectStatus(client,intent,{state:'PENDING',outboundId:inspect.id,anchorProjectId:r.connection.projectId,challengeId:challenge.id,authorityDigest:r.authorityDigest,code:null,nextCheckAt:null},phase);
      return {id:inspect.id,request,template};
     });if(queued.done)return queued.done;
     await afterPrepare();
     // Refresh Meta's exact owned definition before marking the attempt.
-    const before=await within(async client=>{const r=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:queued.request.authorityDigest,...(queued.request.challengeId?{challengeId:queued.request.challengeId}:{})}});assertPhaseAuthority(r,intent,phase);const template=approvedTemplate(r,phase);if(template.stamp!==queued.request.template.stamp)fail('PARTICIPANT_ONBOARDING_TEMPLATE_CHANGED');return {r,template};});
-    await remoteApproval(before.r,before.template);
+    const before=await within(async client=>{const r=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:queued.request.authorityDigest,...(queued.request.challengeId?{challengeId:queued.request.challengeId}:{})}});assertPhaseAuthority(r,intent,phase);const template=approvedTemplate(r,phase,environment);if(template.stamp!==queued.request.template.stamp)fail('PARTICIPANT_ONBOARDING_TEMPLATE_CHANGED');return {r,template};});
+    await remoteApproval(before.r,before.template,phase,intent);
     const started=await within(async client=>{
      const r=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:queued.request.authorityDigest,...(queued.request.challengeId?{challengeId:queued.request.challengeId}:{})}});assertPhaseAuthority(r,intent,phase);const stored=await event(client,queued.id,r.connection.projectId),request=decode(stored,r,intent,environment,phase);
-     if(approvedTemplate(r,phase).stamp!==request.template.stamp)fail('PARTICIPANT_ONBOARDING_TEMPLATE_CHANGED');
-     transport();const reservation=await startPendingCustomerOutbound(client,{id:stored.id,projectId:r.connection.projectId,requestDigest:stored.payload.requestDigest,now:r.now.getTime()});
+     if(approvedTemplate(r,phase,environment).stamp!==request.template.stamp)fail('PARTICIPANT_ONBOARDING_TEMPLATE_CHANGED');
+     if(ownMarked(r))await remoteApproval(r,approvedTemplate(r,phase,environment),phase,intent,{client});
+     transport(r,phase);const reservation=await startPendingCustomerOutbound(client,{id:stored.id,projectId:r.connection.projectId,requestDigest:stored.payload.requestDigest,now:r.now.getTime()});
      if(reservation.done)return {done:await projectStatus(client,intent,{state:reservation.done.state,providerStatus:reservation.done.providerStatus,nextCheckAt:null},phase)};
      await projectStatus(client,intent,{state:'SEND_STARTED',code:null,nextCheckAt:null},phase);return reservation;
     });if(started.done)return started.done;
     await afterDispatchMarker();
     return await within(async client=>{
      const r=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:queued.request.authorityDigest,...(queued.request.challengeId?{challengeId:queued.request.challengeId}:{})}});assertPhaseAuthority(r,intent,phase);const stored=await event(client,queued.id,r.connection.projectId),request=decode(stored,r,intent,environment,phase);
-     if(stored.outcome?.state!=='SEND_STARTED'||approvedTemplate(r,phase).stamp!==request.template.stamp)fail();
-     transport();let state='SEND_UNKNOWN',result=null;
+     if(stored.outcome?.state!=='SEND_STARTED'||approvedTemplate(r,phase,environment).stamp!==request.template.stamp)fail();
+     transport(r,phase);let state='SEND_UNKNOWN',result=null;
      const final=await resolveAuthority(client,intent,{environment,expected:{authorityDigest:request.authorityDigest,...(request.challengeId?{challengeId:request.challengeId}:{})}});assertPhaseAuthority(final,intent,phase);
-     try{result=await provider.sendTemplate({token:credential(final,environment),phoneNumberId:final.connection.phoneNumberId,to:request.to,message:request.message,correlationId:stored.id});if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(result?.messageId||''))fail('PARTICIPANT_ONBOARDING_DELIVERY_UNCONFIRMED',503);state='SENT';}catch(error){if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED')state='REJECTED';else result=null;}
+     const scoped=await transportFor(final,phase,intent,approvedTemplate(final,phase,environment),{client,envelope:request});
+     try{result=await scoped.sendTemplate({token:credential(final,environment),phoneNumberId:final.connection.phoneNumberId,to:request.to,message:request.message,correlationId:stored.id});if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(result?.messageId||''))fail('PARTICIPANT_ONBOARDING_DELIVERY_UNCONFIRMED',503);state='SENT';}catch(error){if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED')state='REJECTED';else result=null;}
      const completed=await completeCustomerOutbound(client,{...started,state,messageId:result?.messageId||null,now:r.now.getTime()});
      return projectStatus(client,intent,{state:completed.state,providerStatus:completed.providerStatus||null,code:null,nextCheckAt:null},phase);
     });

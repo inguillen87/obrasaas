@@ -13,7 +13,7 @@ const accountSourceFiles=['workspace-identity.js','workspace.module.css','onboar
  'office-review-panel.js','office-review-panel.module.css','office-review-view.mjs',
  'workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-session-request.mjs',
  'workspace-recovery-journal.mjs','participant-office-account-view.mjs','workspace-recovery-storage.mjs','private-bank-account-format.mjs',
- 'site-purchase-view.mjs','company-channel-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','schedule-workbench.mjs','plan-baseline-view.mjs','plan-source-curve.mjs'];
+ 'site-purchase-view.mjs','company-channel-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','schedule-workbench.mjs','plan-baseline-view.mjs','plan-source-curve.mjs','attendance-closure-view.mjs'];
 const sourceManifest=accountSourceFiles.map(file=>({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(root,'src/app/(identity)/cuenta',file))).digest('hex')}));
 for(const file of ['src/app/(identity)/identity.module.css','src/app/(identity)/identity-load-guard.js','src/lib/identity-return-path.mjs','src/app/globals.css'])sourceManifest.push({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')});
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
@@ -60,6 +60,8 @@ export function FixtureProvider({children}){
 export const useFixtureState=()=>useContext(Context);
 export function useAuth(){return {...useContext(Context),getToken:token};}
 export function useOrganization(){const{orgId}=useContext(Context);return {organization:orgId?{id:orgId,name:'Empresa sintética'}:null};}
+export function useClerk(){return {loaded:true};}
+export function useUser(){return {isLoaded:true,user:null};}
 export function OrganizationSwitcher(){const{set}=useContext(Context);return <button id="organization" onClick={()=>set(value=>({...value,orgId:'org_a',orgRole:'org:admin',register:true}))}>Seleccionar organización de ensayo</button>;}`);
 writeFileSync(path.join(app,'layout.js'),`import './globals.css';import {FixtureProvider} from '../clerk-fixture';export default function Layout({children}){return <html lang="es"><body style={{margin:0,fontFamily:'Arial'}}><FixtureProvider>{children}</FixtureProvider></body></html>;}`);
 writeFileSync(path.join(account,'page.js'),`import{Suspense}from'react';import{WorkspaceIdentityPanel}from'./workspace-identity';import styles from'../identity.module.css';import workspaceStyles from'./workspace.module.css';export default function Page(){return <main className={styles.shell}><section className={styles.card+' '+workspaceStyles.shell}><h1>Mi cuenta</h1><Suspense fallback={<p>Esperando contexto</p>}><WorkspaceIdentityPanel/></Suspense></section></main>;}`);

@@ -10,6 +10,7 @@ import {prepareMetaKycChallenge,metaKycOperationId,metaKycChallengeDigest} from 
 import {participantReceiptId} from './participant-policy.mjs';
 import {customerOutboundId,assertCustomerReplyWindow} from './meta-customer-outbound.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
+import {participantIdentityUrl} from './participant-kyc-chat-copy.mjs';
 
 const fail=(code='EMPLOYEE_INTAKE_CONTEXT_REQUIRED')=>{throw new WorkspaceError(code,409);};
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -127,7 +128,7 @@ export async function reactiveOnboardingAuthority(client,r,pref,{environment=pro
  }else await unusedDelivery(client,r,worker,pref.intent);
  const authority=await canonicalAuthority(client,pref.intent,{environment,expected:proof?{authorityDigest:proof.authorityDigest,challengeId:proof.challengeId}:null});
  if(authority.connection.id!==r.connection.id||authority.connection.projectId!==r.project.id||authority.worker.id!==worker.id||authority.worker.phone!==r.sender||authority.connection.metadata?.developmentPilot)fail('EMPLOYEE_INTAKE_REVOKED');
- const org=(await client.query(`SELECT "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[pref.intent.organizationId])).rows;
+ const org=(await client.query(`SELECT "trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[pref.intent.organizationId])).rows;
  if(org.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');
  // Invitation expiry limits a pending acceptance. An already accepted account
  // retains the same short reply window, entitlement and challenge fences.
@@ -148,12 +149,17 @@ const legacyReactiveKycStatusReplies={
  REJECTED:'La revisión de esta presentación no fue aprobada. Consultá Mi cuenta y al responsable para revisar el próximo paso. Este chat no inicia otra presentación.',
  APPROVED:'La revisión de tu identidad fue aprobada. Este mensaje no concede permisos ni vincula WhatsApp. Consultá Mi cuenta para comprobar tus permisos y completar la vinculación propia cuando corresponda.',
 };
-// Presentation only: exact old text remains recoverable on its original sealed
-// result; neither text variant supplies account, identity or channel authority.
-export function reactiveParticipantStatusReply(status,recordedReply=null){
+// Keep both earlier text variants recoverable on their original sealed result.
+export function reactiveParticipantStatusReply(status,recordedReply=null,projectId=null){
  if(!Object.hasOwn(reactiveKycStatusReplies,status))fail();
  const legacy={type:'text',body:legacyReactiveKycStatusReplies[status]};
- return recordedReply&&digest(recordedReply)===digest(legacy)?legacy:{type:'text',body:reactiveKycStatusReplies[status]};
+ const recordedDigest=recordedReply?digest(recordedReply):null;
+ if(recordedDigest===digest(legacy))return legacy;
+ const generic={type:'text',body:reactiveKycStatusReplies[status]};
+ if(!['PENDING_REVIEW','REJECTED'].includes(status)||!workspaceId(projectId)||recordedDigest===digest(generic))return generic;
+ const link=participantIdentityUrl(projectId);
+ if(status==='REJECTED')return {type:'text',body:'Te pidieron corregir tu presentación de identidad. Ingresá con tu cuenta para consultar el motivo y volver a presentar tus fotos:\n'+link+'\n\nSi preferís hacerlo por WhatsApp, pedile un código nuevo al responsable.'};
+ return {type:'text',body:'Tu presentación está completa y pendiente de revisión independiente. Consultá el estado de tu obra:\n'+link+'\n\nTodavía no habilita actividad por WhatsApp.'};
 }
 const reactiveStatusFences=new WeakMap();
 const currentMemberProjection=m=>m?{actorId:m.actorId,membershipId:m.membershipId,clerkUserId:m.clerkUserId,role:m.role,clerkRole:m.clerkRole,revision:m.revision,userRevision:m.userRevision}:null;
@@ -181,7 +187,7 @@ export async function reactiveParticipantStatusAuthority(client,r,pref,{environm
 }
 export async function assertReactiveParticipantStatusResult(client,r,pref,result,{environment=process.env}={}){
  const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment,proof:result?.reactiveKycStatus});
- if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply)))fail();
+ if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply,a.project.id)))fail();
  reactiveStatusFences.set(r,{client,pref,worker:currentWorkerProjection(a.worker),organization:currentOrganizationProjection(a.organization),project:currentProjectProjection(a.project),member:currentMemberProjection(a.member),own:currentMemberProjection(a.own),proofDigest:digest(result.reactiveKycStatus),replyDigest:digest(result.reply)});
  return a;
 }
@@ -198,7 +204,8 @@ function currentReactiveParticipantStatusFence(client,r,pref,result){
 export function reactiveParticipantStatusFenceRead(client,r,pref,result){
  const f=currentReactiveParticipantStatusFence(client,r,pref,result);
  return {sql:`SELECT w.id,w."projectId",w.name,w.phone,w.active,w.metadata,to_char(w."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,
- to_jsonb(o) AS "statusOrganization",jsonb_build_object('id',p.id,'name',p.name,'organizationId',p."organizationId",'metadata',p.metadata) AS "statusProject",
+ jsonb_build_object('id',o.id,'name',o.name,'metadata',o.metadata,'subscriptionPlan',o."subscriptionPlan"::text,'subscriptionStatus',o."subscriptionStatus"::text,'trialEndsAt',o."trialEndsAt" AT TIME ZONE 'UTC') AS "statusOrganization",
+ jsonb_build_object('id',p.id,'name',p.name,'organizationId',p."organizationId",'metadata',p.metadata) AS "statusProject",
  jsonb_build_object('actorId',u.id,'membershipId',tm.id,'clerkUserId',u."clerkUserId",'role',tm."tenantRole"::text,'clerkRole',tm."clerkRole",'revision',to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'userRevision',to_char(u."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) AS "statusMember",
  CASE WHEN own.id IS NULL THEN NULL ELSE jsonb_build_object('actorId',ou.id,'membershipId',own.id,'clerkUserId',ou."clerkUserId",'role',own."tenantRole"::text,'clerkRole',own."clerkRole",'revision',to_char(own."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'userRevision',to_char(ou."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) END AS "statusOwn",clock_timestamp() AS "reactiveStatusNow"
  FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" AND p."organizationId"=$3 AND p.status='ACTIVE'
@@ -226,7 +233,7 @@ async function planReactiveParticipantStatus(client,r,pref,{environment}){
  if(!reactiveStatusPrelocks.has(pref))return null;
  const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment});
  const proof={version:1,kind:'KYC_NEXT_STEP',eventId:r.event.id,applicationId:r.anchor.id,status:a.status,authorityDigest:a.authorityDigest,expiresAt:new Date(a.reactiveExpiresAt).toISOString()};
- return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status)};
+ return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status,null,a.project.id)};
 }
 
 function accountAcceptancePlan(r){return {state:r.state,reply:{type:'text',body:'Antes de presentar tu identidad, aceptá la invitación recibida por correo e ingresá con esa misma cuenta en https://obrasaas.com/cuenta. Después volvé a escribir HOLA. No envíes fotos ni documentos desde este paso.'}};}

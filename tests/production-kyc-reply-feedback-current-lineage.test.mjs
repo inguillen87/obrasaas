@@ -1,4 +1,4 @@
-import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePilotCompletionPreviousSourceSet,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract,restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -33,9 +33,10 @@ function receiptFixture(){
 // This projection authenticates the current outer set before retaining the
 // exact historical count/hash assertions belonging to the earlier CI revision.
 function assertCompactOwnSourceStages(actualFiles,files){
+ const pilotPreviousFiles=restorePilotCompletionPreviousSourceSet(contract,'COMPACT',actualFiles);
  const historical67=[...files,'src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'].sort();
  assert.equal(historical67.length,144);assert.equal(sha(JSON.stringify(historical67)),'28a9b504febaed95532993938780263453766590362baaaf8e867b26dadb59d4');
- assert.deepEqual(actualFiles,[...historical67,...["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"]].sort());
+ assert.deepEqual(pilotPreviousFiles,[...historical67,...["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs","src/lib/private-capture-quality.mjs"]].sort());
 }
 function historicalCompactFiles(actualFiles,contract){
  assert.equal(verifyPlanBudgetCurrentSources(contract,readSource).nativeOrBrowserAcceptance,false);
@@ -99,10 +100,10 @@ test('old missing duplicate samecount foreign and stale native manifests cannot 
 test('official index exposes source and contract negatives without certification of dirty local evidence',()=>{
  const checks=kycExpiredCurrentCompositionSelftest(contract,root);assert.ok(checks.length>=35);assert.ok(checks.every(check=>check.result==='PASS'));assert.ok(checks.every(check=>typeof check.boundary==='string'));assert.equal(checks.some(check=>check.sourceState==='EXACT_CI_SOURCE'),false);
  const before=JSON.stringify(contract),budget=contract.planBudgetCurrentRevision,family=budget.sourceFamilies.find(row=>row.family==='COMPACT'),delta=budget.sourceSetDeltas.find(row=>row.family==='COMPACT'),materials=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'];
- assert.equal(delta.currentCount,141);assert.equal(delta.currentPathsSha256,'78ace2186e2a52f6a789ee8b51319080b5171420e465b4a63c03d52c5d0d294f');assertCompactOwnSourceStages(family.currentFiles,restorePlanBudgetSourceSet(contract,'COMPACT',currentFiles));assert.equal(family.currentFiles.length,151);assert.deepEqual(family.currentFiles,currentFiles);
+ assert.equal(delta.currentCount,141);assert.equal(delta.currentPathsSha256,'78ace2186e2a52f6a789ee8b51319080b5171420e465b4a63c03d52c5d0d294f');assertCompactOwnSourceStages(family.currentFiles,restorePlanBudgetSourceSet(contract,'COMPACT',currentFiles));assert.equal(restorePilotCompletionPreviousSourceSet(contract,'COMPACT',family.currentFiles).length,151);assert.deepEqual(family.currentFiles,currentFiles);
  for(const change of [...materials.map(file=>files=>files.filter(value=>value!==file)),files=>files.filter(file=>!materials.includes(file)),files=>files.map(file=>file===materials[0]?'src/lib/foreign-same-count-material.mjs':file).sort()]){
   const changed=structuredClone(contract),current=changed.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT');current.currentFiles=change(current.currentFiles);
-  assert.throws(()=>kycExpiredCurrentCompositionSelftest(changed,root),error=>error.code==='PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Worksite live/hours source revision rejected: Budget current CI lineage rejected: IMMUTABLE_COMPANION');
+  assert.throws(()=>kycExpiredCurrentCompositionSelftest(changed,root),error=>error.code==='PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Worksite live/hours source revision rejected: Pilot completion source lineage rejected: IMMUTABLE_COMPANION');
  }
  assert.equal(JSON.stringify(contract),before);
 });

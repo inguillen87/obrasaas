@@ -1,0 +1,81 @@
+{
+  "oracle": {
+    "commit": "7400a7d3b01445c10b977ec8357defbfe1b739f7",
+    "module": "src/lib/plan-budget-csv-source.mjs",
+    "moduleSha256": "6d6a826ff427a4fc5346614dda9b24b52e385c41c0e13008e642091a519cc9e0",
+    "syntheticOnly": true
+  },
+  "inputBase64": "77u/cGFnaW5hLGNvZGlnbyxkZXNjcmlwY2lvbix1bmlkYWRfb3JpZ2luYWwsY2FudGlkYWRfb3JpZ2luYWwscHJlY2lvX3VuaXRhcmlvX29yaWdpbmFsLHRvdGFsX2l2YV9pbmNsdWlkb19vcmlnaW5hbA0KMSwwMDEuMSwiU2ludMOpdGljbyAiImFudGlndW8iIiwgw6HDqQ0Kc2VndW5kYSBsw61uZWEiLG3CsiwiMCwwMDAwIiwiOTk5OTk5OTk5OTk5OTk5OTk5OTk5LDAwMDAwMCIsIjAsMDAiDQoyLDAwMS4xMCxPdHJhIHBhcnRpZGEgc2ludMOpdGljYSwsLCIrMiwwMDAwIiw9Tk9UX0FfQ0FMQ1VMQVRJT04NCg==",
+  "source": {
+    "version": 1,
+    "profile": "SOURCE_BUDGET_CSV_V1",
+    "purpose": "READ_ONLY_BUDGET_SOURCE",
+    "sourceSha256": "bd3a1e57cae647addfcb26a78b49f8b61fc484aab8200a91c1c252263afd0abb",
+    "contentType": "text/csv",
+    "headers": [
+      "pagina",
+      "codigo",
+      "descripcion",
+      "unidad_original",
+      "cantidad_original",
+      "precio_unitario_original",
+      "total_iva_incluido_original"
+    ],
+    "rows": [
+      {
+        "sourceRowId": "csv:2",
+        "code": "001.1",
+        "sourceTitle": "Sintético \"antiguo\", áé\r\nsegunda línea",
+        "rawUnit": "m²",
+        "rawQuantity": "0,0000",
+        "rawUnitPrice": "999999999999999999999,000000",
+        "rawLineAmount": "0,00",
+        "provenance": {
+          "record": 2,
+          "lineStart": 2,
+          "lineEnd": 3,
+          "pageLiteral": "1"
+        },
+        "issues": [],
+        "reviewRequired": true,
+        "automaticUseAllowed": false
+      },
+      {
+        "sourceRowId": "csv:3",
+        "code": "001.10",
+        "sourceTitle": "Otra partida sintética",
+        "rawUnit": "",
+        "rawQuantity": "",
+        "rawUnitPrice": "+2,0000",
+        "rawLineAmount": "=NOT_A_CALCULATION",
+        "provenance": {
+          "record": 3,
+          "lineStart": 4,
+          "lineEnd": 4,
+          "pageLiteral": "2"
+        },
+        "issues": [
+          "FORMULA_LIKE_TEXT"
+        ],
+        "reviewRequired": true,
+        "automaticUseAllowed": false
+      }
+    ],
+    "currency": {
+      "code": null,
+      "status": "UNKNOWN"
+    },
+    "warnings": [
+      "CURRENCY_UNCONFIRMED",
+      "ALL_VALUES_REQUIRE_SOURCE_REVIEW",
+      "FORMULA_LIKE_TEXT_PRESENT"
+    ],
+    "formulasEvaluated": false,
+    "calendarDatesInferred": false,
+    "taskWrites": false,
+    "stockWrites": false,
+    "paymentWrites": false,
+    "amountsCalculated": false,
+    "sourceDigest": "767e62e1faa2de560c0469810c87e9cab1388a919150785becc6994c8743e34f"
+  }
+}

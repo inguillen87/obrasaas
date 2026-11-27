@@ -149,9 +149,10 @@ test('one exact paired plan/project hint survives sign-in, sign-up and account r
  assert.equal(new URL(identityAccountReturnPath(signup.searchParams),account.origin).href,account.href);
 });
 test('plan hints require one project and one exact draft ID, including duplicates and trailing newline rejection',()=>{
- for(const query of [undefined,null,{},'https://foreign.example',{plan:planId},{obra:projectId},{obra:[projectId,projectId],plan:planId},{obra:projectId,plan:[planId,planId]},Object.create({obra:projectId,plan:planId}),new URLSearchParams('obra='+projectId+'&plan='+planId+'&plan='+planId),new URLSearchParams('obra='+projectId+'&obra='+projectId+'&plan='+planId),...[null,123,'plan_draft_'+'a'.repeat(63),'plan_draft_'+'a'.repeat(65),'plan_draft_'+'A'.repeat(64),planId+'\n',planId+'\r',planId+' ',planId+'&role=ADMIN',planId+'#x','https://foreign.example','//foreign.example','../private'].map(plan=>({obra:projectId,plan}))]){
+ for(const query of [undefined,null,{},'https://foreign.example',{plan:planId},{obra:[projectId,projectId],plan:planId},{obra:projectId,plan:[planId,planId]},Object.create({obra:projectId,plan:planId}),new URLSearchParams('obra='+projectId+'&plan='+planId+'&plan='+planId),new URLSearchParams('obra='+projectId+'&obra='+projectId+'&plan='+planId),...[null,123,'plan_draft_'+'a'.repeat(63),'plan_draft_'+'a'.repeat(65),'plan_draft_'+'A'.repeat(64),planId+'\n',planId+'\r',planId+' ',planId+'&role=ADMIN',planId+'#x','https://foreign.example','//foreign.example','../private'].map(plan=>({obra:projectId,plan}))]){
   assert.equal(identityWorkspacePlanHint(query),'');routes.forEach((route,index)=>assert.equal(route(query),paths[index]));
  }
+ for(const query of [{obra:projectId},new URLSearchParams({obra:projectId})]){assert.equal(identityWorkspacePlanHint(query),'');routes.forEach((route,index)=>assert.equal(route(query),paths[index]+'?obra='+projectId));}
  assert.equal(identityWorkspacePlanHint(new URLSearchParams('obra='+projectId+'&plan=plan%5Fdraft%5F'+'a'.repeat(64))),planId);
  assert.equal(identityWorkspacePlanHint(new URLSearchParams('obra='+projectId+'&plan=plan%255Fdraft%255F'+'a'.repeat(64))),'');
 });

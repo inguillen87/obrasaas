@@ -1,0 +1,59 @@
+name: Office chat native PostgreSQL
+on:
+  push:
+    branches: [master, 'feat/integral-worksite-*', 'feat/company-office-onboarding-integration-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  office-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+          TZ: UTC
+          PGTZ: UTC
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      TZ: UTC
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+        env:
+          DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+      - name: Safe preflight diagnostics, fixed labels and argument rejection
+        run: |
+          node --test tests/production-office-native-ci-preflight-diagnostic.test.mjs
+          npx --no-install eslint scripts/lib/office-chat-native-ci-preflight-error.mjs scripts/verify-office-chat-native-ci.mjs tests/production-office-native-ci-preflight-diagnostic.test.mjs --max-warnings 0
+      - name: Native dedicated15 and own5, original cases plus canonical transfer
+        env:
+          OBRASAAS_OFFICE_CI_SERVICE_ID: ${{ job.services.postgres.id }}
+          OBRASAAS_OFFICE_CI_NETWORK: ${{ job.services.postgres.network }}
+          OBRASAAS_OFFICE_CI_PUBLISHED_PORT: ${{ job.services.postgres.ports[5432] }}
+        run: node scripts/verify-office-chat-native-ci.mjs --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: office-chat-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .vercel/office-chat-native-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

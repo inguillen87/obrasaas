@@ -1,3 +1,4 @@
+import {isMetaGreeting} from './meta-greeting.mjs';
 import {createHmac} from 'node:crypto';
 import {WorkspaceError,digest,workspaceId,operationId as validOperationId} from './workspace-policy.mjs';
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
@@ -63,7 +64,7 @@ export async function assertEmployeeIntakeReplyContinuity(client,officeConnectio
  const {policy}=await currentPolicy(client,connection,now,{lock:false,expected:dispatch.policyDigest,environment});
  const signedGreeting=row=>{
   const payload=decodeSignedCustomerEvent(row,connection,environment),proof=unseal(connection,'webhook-proof',row.id,row.payload.encryptedProof,environment),routing=proof.companyRouting;
-  if(row.projectId!==connection.projectId||row.provider!=='meta-customer-v1'||payload.type!=='message'||payload.value?.type!=='text'||typeof payload.value.text?.body!=='string'||payload.value.text.body.trim().toUpperCase()!=='HOLA'||!Number.isSafeInteger(Number(payload.value.timestamp))||Number(payload.value.timestamp)<=0||routing?.mode!=='COMPANY'||routing.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT||!Number.isSafeInteger(routing.revision)||routing.revision<policy.ownerRevision||routing.revision>connection.company.revision||!row.payload.companyRouting||durableDigest(routing)!==durableDigest(row.payload.companyRouting))fail('EMPLOYEE_INTAKE_INTEGRITY');
+  if(row.projectId!==connection.projectId||row.provider!=='meta-customer-v1'||payload.type!=='message'||payload.value?.type!=='text'||typeof payload.value.text?.body!=='string'||!isMetaGreeting(payload.value.text.body)||!Number.isSafeInteger(Number(payload.value.timestamp))||Number(payload.value.timestamp)<=0||routing?.mode!=='COMPANY'||routing.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT||!Number.isSafeInteger(routing.revision)||routing.revision<policy.ownerRevision||routing.revision>connection.company.revision||!row.payload.companyRouting||durableDigest(routing)!==durableDigest(row.payload.companyRouting))fail('EMPLOYEE_INTAKE_INTEGRITY');
   return payload;
  };
  const payload=signedGreeting(source);
@@ -117,7 +118,7 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  if(!signed.companyRouting){if(raw.metadata?.companyRoutingVersion===1)fail('EMPLOYEE_INTAKE_REVOKED');return null;}
  const message=payload.value,sender='+'+message.from,key=senderKey(raw,sender,environment);
  const anchors=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->'employeeIntake'->>'connectionId'=$2 AND payload->'employeeIntake'->>'senderKey'=$3 AND payload->'employeeIntake'->>'status' NOT IN ('CANCELLED','REJECTED') ORDER BY "createdAt",id LIMIT 2`,[raw.projectId,raw.id,key])).rows;
- const hello=message.type==='text'&&message.text?.body?.trim().toUpperCase()==='HOLA';
+ const hello=message.type==='text'&&isMetaGreeting(message.text?.body);
  // A challenge or binding command is its own discriminated authority. A prior
  // limited request never captures those commands or private image messages.
  const command=message.type==='text'?message.text?.body?.trim().toUpperCase():'';

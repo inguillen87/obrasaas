@@ -78,7 +78,7 @@ async function closeAndRecover({decision=false,pendingUsage=false}={}){
  assert.equal(closed.file,file);assert.equal(closed.draft,work.draft);assert.deepEqual(closed.rows,work.rows);assert.equal(closed.reason,work.reason);assert.equal(closed.attempt,reference);assert.equal(panel.ref('attemptReference').current,reference);assert.deepEqual(await panel.durable(scope),durable);
  // A retained callback from the closed view must also be unable to resend.
  await staleRetry?.();assert.equal(panel.requests().filter(x=>x.method==='POST').length,1);
- tree=panel.render(props);assert.equal(button(tree,'Importar PDF, imagen o Excel').props.id,'plan-import-title');await button(tree,'Importar PDF, imagen o Excel').props.onClick();tree=panel.render(props);assert.equal(nodes(tree,node=>node.type==='button'&&text(node)==='Reintentar los mismos datos').length,0);await button(tree,'Comprobar resultado').props.onClick();tree=panel.render(props);
+ tree=panel.render(props);assert.equal(button(tree,'Importar cronograma o presupuesto').props.id,'plan-import-title');await button(tree,'Importar cronograma o presupuesto').props.onClick();tree=panel.render(props);assert.equal(nodes(tree,node=>node.type==='button'&&text(node)==='Reintentar los mismos datos').length,0);await button(tree,'Comprobar resultado').props.onClick();tree=panel.render(props);
  assert.equal(panel.snapshot().retryAllowed,!pendingUsage);assert.equal(nodes(tree,node=>node.type==='button'&&text(node)==='Reintentar los mismos datos').length,pendingUsage?0:1);assert.equal(panel.ref('attemptPayload').current,payload);assert.equal(panel.snapshot().file,file);assert.deepEqual(panel.snapshot().draft,work.draft);assert.deepEqual(panel.snapshot().rows,work.rows);assert.equal(panel.snapshot().reason,work.reason);assert.equal(panel.snapshot().attempt,reference);assert.deepEqual(await panel.durable(scope),durable);
  // A fresh GET permits only the current render's explicit retry, never an older callback.
  await staleRetry?.();assert.equal(panel.requests().filter(x=>x.method==='POST').length,1);
@@ -87,6 +87,36 @@ async function closeAndRecover({decision=false,pendingUsage=false}={}){
 test('closing an uncertain upload preserves the exact RAM transport and requires a fresh GET before explicit retry',async()=>{await closeAndRecover();});
 test('closing an uncertain correction preserves source rows reason and snapshot while invalidating the old resend callback',async()=>{await closeAndRecover({decision:true});});
 test('closing a pending usage observation preserves its exact transport and reference without authorizing any retry',async()=>{await closeAndRecover({pendingUsage:true});});
+
+test('the real file picker rejects an unusable image before retaining it and preserves an earlier valid selection',()=>{
+ const png=new File(['synthetic PNG'],'cronograma.png',{type:'image/png'});
+ const oversized=new File([new Uint8Array(2*1024*1024+1)],'cronograma-grande.jpg',{type:'image/jpeg'});
+ const unsupported=new File(['synthetic HEIC'],'cronograma.heic',{type:'image/heic'});
+ const picker=()=>nodes(panel.render(props),node=>node.type==='input'&&node.props.type==='file')[0];
+ const choose=file=>{const target={files:[file],value:file.name};picker().props.onChange({target});return target;};
+
+ panel.reset({open:true,recoveryReady:true},[]);
+ assert.equal(choose(oversized).value,'');
+ assert.match(panel.snapshot().message,/imagen hasta 2 MB/);
+ assert.ok(!panel.snapshot().file);
+ assert.equal(picker().props.required,true);
+ assert.equal(choose(png).value,png.name);
+ assert.equal(panel.snapshot().file,png);
+ assert.equal(panel.snapshot().message,'');
+ assert.equal(picker().props.required,false);
+
+ const recorded={...draft('OBSERVED'),status:'APPLIED'};
+ panel.reset({open:true,recoveryReady:true,canApprove:true,file:png,consent:true,draft:recorded,documentPurpose:'FINANCIAL_MONTHLY_CURVE'},[]);
+ assert.equal(choose(unsupported).value,'');
+ const state=panel.snapshot();
+ assert.match(state.message,/imagen PNG\/JPEG\/WebP/);
+ assert.equal(state.file,png);
+ assert.equal(state.consent,true);
+ assert.equal(state.draft,recorded);
+ assert.equal(state.documentPurpose,'FINANCIAL_MONTHLY_CURVE');
+ assert.equal(picker().props.required,false);
+ assert.deepEqual(panel.requests(),[]);
+});
 
 test('removing a selected local file requires a current confirmation and preserves canonical draft rows and receipt',()=>{
  const file=new File(['synthetic'],'local-selected.pdf',{type:'application/pdf'}),recorded={...draft('OBSERVED'),status:'APPLIED'},receipt='recorded-synthetic-receipt';

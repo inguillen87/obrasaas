@@ -8,6 +8,7 @@ import {META_CUSTOMER_PROTOCOL,META_DEMO_PILOT_PROTOCOL,resolveMetaCloudProtocol
 import {reportMetaCallbackRejection} from './meta-callback-diagnostics.mjs';
 import {splitCustomerAppChange} from './meta-customer-app-projection.mjs';
 import {companyChannelSchemaReady,COMPANY_CHANNEL_SCHEMA_CONTRACT} from './company-channel-schema.mjs';
+import {historicalAssetRoute,historicalChannel,recordTransferQuarantine} from './company-number-transfer-history.mjs';
 const MAX_BYTES=1048576;
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
 // JSON object ordering is transport formatting, while array ordering and
@@ -90,10 +91,13 @@ export function createMetaCustomerInbox({connect,environment=process.env,protoco
  return {async record(events,{signatureVerified=false}={}){
   let client,broken=false;
   try{client=await connect();await client.query('BEGIN');await client.query("SET LOCAL statement_timeout='6000ms'");let received=0,replayed=0;const eventIds=[];
-   for(const event of [...events].sort((left,right)=>left.externalId.localeCompare(right.externalId))){
-    const lane=routeEvent?routeEvent(event):{protocol,lockChannel},p=resolveMetaCloudProtocol(lane.protocol),channel=await lane.lockChannel(client,event),id=metaCloudEventId(p,event.externalId);eventIds.push(id);
+   for(const event of [...events].sort((left,right)=>left.wabaId.localeCompare(right.wabaId)||left.externalId.localeCompare(right.externalId))){
+    const lane=routeEvent?routeEvent(event):{protocol,lockChannel},p=resolveMetaCloudProtocol(lane.protocol),id=metaCloudEventId(p,event.externalId);
+     const historical=p===META_CUSTOMER_PROTOCOL&&signatureVerified===true?await historicalAssetRoute(client,event):null;
+     if(historical?.quarantine){const observation=await recordTransferQuarantine(client,event,{id,environment,reason:historical.reason});if(observation.recorded)received++;else replayed++;continue;}
+     const channel=historical?.history?historicalChannel(historical.history):await lane.lockChannel(client,event);eventIds.push(id);
     const encryptedPayload=encryptCustomerSecret(JSON.stringify(event.payload),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:p.payloadPurpose,resourceId:id},environment);
-    const grantProof=p===META_DEMO_PILOT_PROTOCOL?{grantId:channel.metadata?.demoPilot?.grantId}:channel.companyRouting?{companyRouting:channel.companyRouting}:{};
+    const grantProof=p===META_DEMO_PILOT_PROTOCOL?{grantId:channel.metadata?.demoPilot?.grantId}:({...((channel.metadata?.assetOwnership)?{assetOwnership:channel.metadata.assetOwnership}:{}),...(channel.retiredObservation?{retiredObservation:channel.retiredObservation}:channel.companyRouting?{companyRouting:channel.companyRouting}:{})});
     if(p===META_DEMO_PILOT_PROTOCOL&&!/^demo_grant_[a-f0-9]{64}$/.test(grantProof.grantId||''))throw new WorkspaceError('META_DEMO_PILOT_PROOF_REQUIRED',409);
     const encryptedProof=signatureVerified===true?encryptCustomerSecret(JSON.stringify({scheme:p.scheme,purpose:p.purpose,appId:OBRASAAS_META_CHANNEL.appId,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId,...grantProof}),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:p.proofPurpose,resourceId:id},environment):null;
     const payload={version:1,encryptedPayload,encryptedProof,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId,channelPurpose:p.purpose,...grantProof,signatureVerified:signatureVerified===true,signatureScheme:signatureVerified===true?p.scheme:null};

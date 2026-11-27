@@ -23,7 +23,7 @@ test('tenant permission denial exposes the public code without credential or pro
  const response=await handler(new Request(url));assert.equal(response.status,403);assert.deepEqual(await response.json(),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
 });
 
-function statusFixture({role='DIRECTOR',counts={consumptions:132,adjustments:4},progressRows=[{pending:0}],denial=null}={}){
+function statusFixture({role='DIRECTOR',counts={consumptions:132,adjustments:4},progressRows=[{pending:0,evidencePending:0}],denial=null}={}){
  const queries=[],calls=[];
  const member={role,organizationId:'company-a',actorId:'director-a'};
  const client={query:async(sql,params)=>{
@@ -103,12 +103,14 @@ test('decisions rejects arbitrary duplicate mixed or writable selectors before r
 
 test('decisions returns only complete progress and material totals in one canonical read-only project transaction',async()=>{
  for(const role of ['ADMIN','DIRECTOR']){
-  const {store,queries,calls}=statusFixture({role,progressRows:[{pending:237,private:'must not project'}]}),context={projectId:'p-a',scope,view:'decisions'};
+  const {store,queries,calls}=statusFixture({role,progressRows:[{pending:237,evidencePending:149,private:'must not project'}]}),context={projectId:'p-a',scope,view:'decisions'};
   const data=await store.read(identity,context),{observedAt,...body}=data;
   assert.equal(new Date(observedAt).toISOString(),observedAt);
-  assert.deepEqual(body,{scope,projectId:'p-a',view:'decisions',proposals:{pending:237},inventory:{canManage:true,pendingCounts:{consumptions:132,adjustments:4}}});
+  assert.deepEqual(body,{scope,projectId:'p-a',view:'decisions',evidence:{pending:149},proposals:{pending:237},inventory:{canManage:true,pendingCounts:{consumptions:132,adjustments:4}}});
   assert.deepEqual(calls,[{session:identity,context,writable:false}]);assert.equal(queries.length,2);
   assert.match(queries[0].sql,/type='TASK_PROGRESS'.*"sourceProvider"='account-field'.*status='PENDING'.*"expiresAt">transaction_timestamp\(\).*fieldOperationsVersion/s);assert.deepEqual(queries[0].params,['p-a']);
+  assert.match(queries[0].sql,/SELECT count\(\*\)::int FROM public\."Incident" WHERE "projectId"=\$1.*version'='1'.*kind'='EVIDENCE'.*review' IS NULL.*review'='null'::jsonb/s);
+  assert.match(queries[0].sql,/AS "evidencePending"/);
   assert.deepEqual(queries[1].params,['p-a','company-a']);assert.match(queries[1].sql,/p\."organizationId"=\$2/);
   assert.ok(queries.every(({sql})=>!/^\s*(INSERT|UPDATE|DELETE|ALTER|CREATE)\b/i.test(sql)&&!(/Worker|PlatformUser|AttendanceEntry|WebhookEvent|AuditLog|\bLIMIT\b/.test(sql))));
  }
@@ -140,6 +142,10 @@ test('decisions never turns absent malformed progress or material totals into ze
   const {store}=statusFixture({counts}),handler=createOperationsStatusHandler({verify:async()=>identity,store});
   const response=await handler(new Request(url+'&view=decisions'));assert.equal(response.status,503);assert.deepEqual(await response.json(),{code:'INVENTORY_READ_UNCONFIRMED'});
  }
- const {store}=statusFixture({counts:{consumptions:0,adjustments:0},progressRows:[{pending:0}]});
- const data=await store.read(identity,{projectId:'p-a',scope,view:'decisions'});assert.equal(data.proposals.pending,0);assert.deepEqual(data.inventory.pendingCounts,{consumptions:0,adjustments:0});
+ for(const evidencePending of [undefined,null,-1,'149',0.5,Number.MAX_SAFE_INTEGER+1]){
+  const {store,queries}=statusFixture({progressRows:[{pending:0,evidencePending}]}),handler=createOperationsStatusHandler({verify:async()=>identity,store});
+  const response=await handler(new Request(url+'&view=decisions'));assert.equal(response.status,503);assert.deepEqual(await response.json(),{code:'OPERATIONS_STATUS_UNAVAILABLE'});assert.equal(queries.length,1);
+ }
+ const {store}=statusFixture({counts:{consumptions:0,adjustments:0},progressRows:[{pending:0,evidencePending:0}]});
+ const data=await store.read(identity,{projectId:'p-a',scope,view:'decisions'});assert.equal(data.proposals.pending,0);assert.deepEqual(data.evidence,{pending:0});assert.deepEqual(data.inventory.pendingCounts,{consumptions:0,adjustments:0});
 });

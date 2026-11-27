@@ -9,6 +9,25 @@ import {createPrivateImageUploader} from '../../src/lib/private-image-upload.mjs
 import {PARTICIPANT_NOTICE_VERSION} from '../../src/lib/participant-policy.mjs';
 import {assertApprovedParticipantKyc} from '../../src/lib/participant-approved-identity.mjs';
 
+// Only these two reviewed JavaScript sources have checkout EOL portability.
+// Images, model data and all fixture payload hashes remain byte-exact.
+const canonicalKycReviewedTextSources=Object.freeze({
+  'scripts/lib/synthetic-capture-quality.mjs':Object.freeze({bytes:658,sha256:'ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420'}),
+  'src/lib/capture-quality-policy.mjs':Object.freeze({bytes:3054,sha256:'94cfd5f24158983a93430158a33716119cb17783f6067053610a788638dd5057'})
+});
+export function canonicalParticipantKycReviewedSourceHash(sourcePath,sourceBytes) {
+  assert.ok(typeof sourcePath==='string'&&Object.hasOwn(canonicalKycReviewedTextSources,sourcePath),'Only the two reviewed KYC text sources admit checkout EOL portability');
+  assert.ok(Buffer.isBuffer(sourceBytes),'Reviewed KYC source bytes must be a Buffer');
+  const sourceText=sourceBytes.toString('utf8');
+  assert.ok(Buffer.from(sourceText,'utf8').equals(sourceBytes),'Reviewed KYC source must round-trip strict UTF-8');
+  // Replace CRLF pairs only: a lone CR is retained and fails the fixed pin.
+  const canonicalBytes=Buffer.from(sourceText.replace(/\r\n/g,'\n'),'utf8'),pin=canonicalKycReviewedTextSources[sourcePath];
+  assert.equal(canonicalBytes.length,pin.bytes,'Exact reviewed KYC text source byte count');
+  const sourceHash=createHash('sha256').update(canonicalBytes).digest('hex');
+  assert.equal(sourceHash,pin.sha256,'Exact reviewed KYC text source content');
+  return sourceHash;
+}
+
 // Closed test adapters: generated pixels only, no identity, OCR, biometrics or
 // network provider. This seeds the existing store; it never fabricates approval.
 export function createCanonicalParticipantKycFixture({workspace,connect,query}) {
@@ -29,8 +48,8 @@ export function createCanonicalParticipantKycFixture({workspace,connect,query}) 
     return {url:'https://fixture.private.blob.vercel-storage.com/'+pathname,pathname};
   };
   const uploader=createPrivateImageUploader({put,get,environment:()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-canonical-kyc-fixture'})});
-  const qualityHelperBytes=readFileSync(new URL('../lib/synthetic-capture-quality.mjs',import.meta.url));assert.equal(hash(qualityHelperBytes),'ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420','Exact reviewed synthetic capture-quality fixture helper');
-  const assessCaptureQuality=async input=>{assert.ok(['DOCUMENT_FRONT','SELFIE'].includes(input.kind));assert.equal(input.image.mimeType,'image/png');assert.equal(input.consentVersion,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_NOTICE_VERSION,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_MODEL_MANIFEST_SHA256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(hash(readFileSync(new URL('../../src/lib/capture-quality-policy.mjs',import.meta.url))),'94cfd5f24158983a93430158a33716119cb17783f6067053610a788638dd5057','Exact reviewed capture notice/policy source');assert.deepEqual(Buffer.from(input.image.buffer),input.kind==='DOCUMENT_FRONT'?images.front:images.selfie,'Only the fixture-owned generated pixel is admitted by this adapter');const result=await syntheticCaptureQuality(input);assert.equal(result.imageSha256,hash(Buffer.from(input.image.buffer)));assert.equal(result.modelManifestSha256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(result.identityCertified,false);assert.equal(result.livenessVerified,false);assert.equal(result.documentAuthenticityVerified,false);return result;};
+  const qualityHelperBytes=readFileSync(new URL('../lib/synthetic-capture-quality.mjs',import.meta.url));assert.equal(canonicalParticipantKycReviewedSourceHash('scripts/lib/synthetic-capture-quality.mjs',qualityHelperBytes),'ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420','Exact reviewed synthetic capture-quality fixture helper');
+  const assessCaptureQuality=async input=>{assert.ok(['DOCUMENT_FRONT','SELFIE'].includes(input.kind));assert.equal(input.image.mimeType,'image/png');assert.equal(input.consentVersion,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_NOTICE_VERSION,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_MODEL_MANIFEST_SHA256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(canonicalParticipantKycReviewedSourceHash('src/lib/capture-quality-policy.mjs',readFileSync(new URL('../../src/lib/capture-quality-policy.mjs',import.meta.url))),'94cfd5f24158983a93430158a33716119cb17783f6067053610a788638dd5057','Exact reviewed capture notice/policy source');assert.deepEqual(Buffer.from(input.image.buffer),input.kind==='DOCUMENT_FRONT'?images.front:images.selfie,'Only the fixture-owned generated pixel is admitted by this adapter');const result=await syntheticCaptureQuality(input);assert.equal(result.imageSha256,hash(Buffer.from(input.image.buffer)));assert.equal(result.modelManifestSha256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(result.identityCertified,false);assert.equal(result.livenessVerified,false);assert.equal(result.documentAuthenticityVerified,false);return result;};
   const store=createParticipantStore({workspace,connect,upload:uploader.uploadImageToBlob,get,assessCaptureQuality});
   const row=async(projectId,workerId)=>(await query(`SELECT id,"projectId",active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[workerId,projectId])).rows[0];
   async function approve({projectId,workerId,actor,reviewer}) {

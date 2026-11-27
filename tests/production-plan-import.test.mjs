@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {storeHarness,context,session,oldTask} from './fixtures/plan-import-store-synthetic.mjs';
+import {digest} from '../src/lib/workspace-policy.mjs';
 import {decodePlanSource,normalizePlanRows,normalizePlanDecision,boundedPlanMultipart,PLAN_IMPORT_CONSENT,PLAN_IMPORT_LIMIT} from '../src/lib/plan-import-policy.mjs';
 import {createPlanImportAnalyzer} from '../src/lib/plan-import-analyzer.mjs';
 import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
@@ -55,4 +58,71 @@ test('HTTP authorization/origin/query boundaries run before upload and processin
  const cross=new Request('https://obrasaas.com/api/identity/plan-import',{method:'POST',headers:{Origin:'https://foreign.invalid','Content-Type':'application/json'},body:'{}'});assert.equal((await handlers.POST(cross)).status,403);assert.equal(writes,0);
  const bad=new Request('https://obrasaas.com/api/identity/plan-import?projectId=p&scope='+('a'.repeat(64))+'&scope='+('a'.repeat(64)));assert.equal((await handlers.GET(bad)).status,400);
  const unauth=createPlanImportHandlers({verify:async()=>({authenticated:false}),imports:{}});assert.equal((await unauth.GET(bad)).status,401);
+});
+
+
+function scheduleHarness(){
+ return storeHarness({analyzerOverride:{async analyze(){return {success:true,rows:[row],warnings:[],provider:'synthetic-openai-adapter',model:'synthetic'};}}});
+}
+function attachSchedule(h,source=decodePlanSource(pdf,'application/pdf')){
+ return h.imports.attach(session,{...context,operationId:randomUUID(),consent:PLAN_IMPORT_CONSENT,source});
+}
+function applySchedule(draft){
+ return {...context,operationId:randomUUID(),draftId:draft.id,expectedRevision:draft.revision,action:'APPLY',rows:draft.rows,reason:'Cronograma sintético revisado'};
+}
+function approveExistingTask(h){
+ h.changeTask(oldTask.id,task=>Object.assign(task,{progress:100,status:'DONE',revision:'2026-01-02T00:00:00.000Z'}));
+}
+for(const contentType of ['application/pdf','image/png']){
+ test('a new '+contentType+' schedule remains applicable after an existing task reports progress',async()=>{
+  const h=scheduleHarness();
+  const source=contentType==='application/pdf'?decodePlanSource(pdf,contentType):decodePlanSource(readFileSync(new URL('../scripts/fixtures/plan-import-synthetic-v1.png',import.meta.url)),contentType);
+  const {draft}=await attachSchedule(h,source);
+  assert.equal(draft.status,'READY');
+  assert.equal(h.calls.analyze,1);
+  const metadata=h.logs().find(entry=>entry.id===draft.id).metadata;
+  assert.equal(metadata.baselineVersion,2);
+  assert.equal(metadata.baseline,digest(h.tasks()));
+  assert.notEqual(metadata.plannedBaseline,metadata.baseline);
+  approveExistingTask(h);
+  const approved=h.tasks()[0],command=applySchedule(draft),result=await h.imports.decide(session,command);
+  assert.equal(result.saved,true,result.code);
+  assert.equal(result.draft.status,'APPLIED');
+  assert.equal(result.tasks.length,draft.rows.length);
+  assert.equal(h.tasks().length,1+draft.rows.length);
+  assert.deepEqual(h.tasks().find(task=>task.id===approved.id),approved);
+  assert.equal((await h.imports.decide(session,command)).receiptId,result.receiptId);
+  assert.equal(h.calls.analyze,1);
+  assert.equal(h.calls.put,1);
+ });
+}
+test('a change in planned dates still rejects a document import without writing tasks',async()=>{
+ const h=scheduleHarness(),{draft}=await attachSchedule(h);
+ h.changeTask(oldTask.id,task=>{task.startsOn='2026-01-02';});
+ const command=applySchedule(draft),result=await h.imports.decide(session,command);
+ assert.equal(result.code,'PLAN_IMPORT_SCHEDULE_CHANGED');
+ assert.equal(result.taskEffects,false);
+ assert.equal(h.calls.taskBatches,0);
+ assert.equal(h.calls.analyze,1);
+ assert.equal((await h.imports.decide(session,command)).receiptId,result.receiptId);
+});
+test('legacy document baselines keep their original contract and unknown versions fail closed',async()=>{
+ for(const [version,progressChanged,expected] of [[undefined,false,'RECORDED'],[undefined,true,'REJECTED'],[99,false,'REJECTED']]){
+  const h=scheduleHarness(),{draft}=await attachSchedule(h);
+  const legacyHash=digest(h.tasks());
+  h.changeDraft(draft.id,metadata=>{
+   metadata.baseline=legacyHash;
+   if(version===undefined){
+    delete metadata.baselineVersion;
+    delete metadata.plannedBaseline;
+   }else metadata.baselineVersion=version;
+  });
+  if(progressChanged)approveExistingTask(h);
+  const result=await h.imports.decide(session,applySchedule(draft));
+  assert.equal(result.saved,expected==='RECORDED',result.code);
+  if(expected==='REJECTED'){
+   assert.equal(result.code,'PLAN_IMPORT_SCHEDULE_CHANGED');
+   assert.equal(h.calls.taskBatches,0);
+  }
+ }
 });

@@ -21,6 +21,13 @@ const id=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.tes
 const scope=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value);
 const scoped=(value,context)=>value?.scope===context.scope&&value?.projectId===context.projectId;
+const canReviewIdentity=(row,canManage)=>canManage===true&&row?.self===false&&row.active===true&&
+ row.status==='ACTIVE'&&row.accountLinked===true&&row.kyc?.status==='PENDING_REVIEW'&&participantKycReviewImages(row.kyc);
+export function participantPendingIdentityReviews(context,snapshot){
+ if(context?.verified!==true||!scope(context.scope)||!id(context.projectId)||!scoped(snapshot,context)||
+    snapshot.canManage!==true||snapshot.participantFocus||!Array.isArray(snapshot.records))return [];
+ return snapshot.records.filter(row=>id(row?.id)&&canReviewIdentity(row,snapshot.canManage));
+}
 export function participantOnboardingNavigationTarget(value,context){
  if(!context||!scope(context.scope)||!id(context.projectId)||!scoped(value,context))return null;
  if(value.target==='worker-channel')return 'worker-channel-title';
@@ -161,10 +168,10 @@ export function participantOnboardingNextStep({context,snapshot,workerId=null,ap
  }
  if(row.status!=='ACTIVE'||row.accountLinked!==true)return next('PARTICIPATION_UNOBSERVED','CONSULT_PARTICIPANTS','Consultar participación');
  if(['NOT_SUBMITTED','REJECTED'].includes(row.kyc?.status))return row.self
-  ?next('OWN_IDENTITY','SUBMIT_KYC','Presentar mi identidad')
+  ?next('OWN_IDENTITY','SUBMIT_KYC',row.kyc.status==='REJECTED'?'Volver a presentar mi identidad':'Presentar mi identidad')
   :chatNext();
  if(row.kyc?.status==='PENDING_ACCOUNT_CLAIM')return next('WAIT_ACCOUNT','CONSULT_PARTICIPANTS','Consultar aceptación');
- if(row.kyc?.status==='PENDING_REVIEW')return !row.self&&snapshot.canManage&&participantKycReviewImages(row.kyc)
+ if(row.kyc?.status==='PENDING_REVIEW')return canReviewIdentity(row,snapshot.canManage)
   ?next('IDENTITY_REVIEW','REVIEW_KYC','Revisar identidad')
   :next('WAIT_REVIEW','CONSULT_PARTICIPANTS','Consultar revisión');
  if(row.kyc?.status!=='APPROVED')return next('IDENTITY_UNOBSERVED','CONSULT_PARTICIPANTS','Consultar identidad');

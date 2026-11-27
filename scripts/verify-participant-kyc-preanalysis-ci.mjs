@@ -4,7 +4,7 @@ import {readFileSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parse} from '@babel/parser';
-import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,verifyParticipantKycPreanalysisPostgres,participantPreanalysisDisposableTarget} from './verify-participant-kyc-preanalysis-postgres.mjs';
+import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,verifyParticipantKycPreanalysisPostgres,participantPreanalysisDisposableTarget,participantPreanalysisOwnedCiContext,participantPreanalysisOwnedCiEndpoint,inspectParticipantPreanalysisOwnedCiService} from './verify-participant-kyc-preanalysis-postgres.mjs';
 import {PARTICIPANT_PREANALYSIS_CONTRACT_PATH,PARTICIPANT_PREANALYSIS_EVIDENCE,PARTICIPANT_PREANALYSIS_PROOF_ID,PARTICIPANT_PREANALYSIS_KIND,verifyParticipantPreanalysisCurrentSources} from './lib/participant-preanalysis-current-ci-lineage.mjs';
 
 export const PARTICIPANT_PREANALYSIS_CI_VERSION='participant-kyc-preanalysis-ci-v1';
@@ -99,10 +99,36 @@ export function parseParticipantPreanalysisTap(input){
  return values;
 }
 
-export function validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles}){
+// PROPOSAL ONLY. The archived collector remains pure: it authenticates recorded
+// independent observations under the original source/run/artifact guards. It
+// does not claim that an old container is still owned, running or reachable.
+export function validateParticipantPreanalysisOwnedCiReceipt(native, consumer, {expectedHead, expectedTree, ciRun}) {
+ requireProof(native?.ownedCiService && consumer, 'Independent native and consumer service observations required');
+ const recorded = consumer.context;
+ const expectedContext = {repository: ciRun.repository, sourceRevision: expectedHead, sourceTree: expectedTree, runId: ciRun.runId,
+  runAttempt: ciRun.runAttempt, event: ciRun.event, workflow: ciRun.workflow, job: 'people',
+  serviceId: recorded?.serviceId, networkName: recorded?.networkName, publishedPort: 5432};
+ let nativeEndpoint, consumerEndpoint;
+ try {
+  nativeEndpoint = participantPreanalysisOwnedCiEndpoint(native.ownedCiService, expectedContext);
+  consumerEndpoint = participantPreanalysisOwnedCiEndpoint(consumer, expectedContext);
+ } catch {requireProof(false, 'Owned service observations do not bind the exact execution');}
+ requireProof(same(native.ownedCiService.inspection, consumer.inspection) && same(nativeEndpoint, consumerEndpoint), 'Independent container/image/network/port observations differ');
+ const instant = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+ requireProof(instant(native.startedAt) && instant(native.finishedAt) && native.startedAt <= native.ownedCiService.checkedAt && native.ownedCiService.checkedAt <= native.finishedAt && native.finishedAt <= consumer.checkedAt, 'Ordered native and consumer observation times required');
+ requireProof(native.engine?.host === consumerEndpoint.host && native.engine?.port === consumerEndpoint.port, 'SQL endpoint must equal the independently inspected service');
+ return consumerEndpoint;
+}
+
+export function validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles,ownedCiServiceVerification}){
  requireProof(native?.version===1&&native.status==='PASS'&&native.postgresExecuted===true&&native.failure===null,'Actual successful native PostgreSQL execution required');
  requireProof(native.completedCheckCount===PARTICIPANT_KYC_PREANALYSIS_CHECKS.length&&same(native.checks,PARTICIPANT_KYC_PREANALYSIS_CHECKS),'Every current native check must execute in order');
- requireProof(native.engine?.host==='127.0.0.1'&&[5432,6549].includes(native.engine?.port)&&native.engine.version>=170000&&native.engine.version<180000&&native.engine.database==='obrasaas_cutover_ci'&&native.engine.actor==='cutover_test'&&native.engine.role==='cutover_test','Owned local PostgreSQL17 engine required');
+ let engineEndpoint={host:'127.0.0.1',ports:[5432,6549]};
+ if(native.ownedCiService||ownedCiServiceVerification){
+  requireProof(native.ownedCiService&&ownedCiServiceVerification,'Both owned CI observations required');
+  try{const endpoint=participantPreanalysisOwnedCiEndpoint(ownedCiServiceVerification,ownedCiServiceVerification.context);participantPreanalysisOwnedCiEndpoint(native.ownedCiService,ownedCiServiceVerification.context);requireProof(same(native.ownedCiService.inspection,ownedCiServiceVerification.inspection),'Independent service inspections differ');engineEndpoint={host:endpoint.host,ports:[endpoint.port]};}catch{requireProof(false,'Owned CI service endpoint rejected');}
+ }
+ requireProof(native.engine?.host===engineEndpoint.host&&engineEndpoint.ports.includes(native.engine?.port)&&native.engine.version>=170000&&native.engine.version<180000&&native.engine.database==='obrasaas_cutover_ci'&&native.engine.actor==='cutover_test'&&native.engine.role==='cutover_test','Owned local PostgreSQL17 engine required');
  requireProof(/^obrasaas_kyc_preanalysis_[a-f0-9]{32}$/.test(native.ownership?.datname)&&Number.isInteger(native.ownership?.oid)&&native.ownership.owner==='cutover_test','Owned random child database required');
  requireProof(Array.isArray(native.ownedConnectionPids)&&native.ownedConnectionPids.length>0&&native.ownedConnectionPids.every(pid=>Number.isSafeInteger(pid)&&pid>0),'Observed native connection ownership required');
  requireProof(native.providerRequests===0&&native.productionDataWritten===false&&native.realConsentOrIdentityVerified===false&&native.humanApprovalPerformed===false&&native.counts?.unexpectedNetwork===0,'Closed synthetic provider and identity boundary required');
@@ -135,7 +161,8 @@ export function validateParticipantKycPreanalysisCi(proof,{expectedHead,expected
  const nativeBytes=bytes(readEvidence,raw.path);requireProof(nativeBytes.length===raw.bytes&&sha(nativeBytes)===raw.sha256,'Raw native evidence changed');
  const native=JSON.parse(nativeBytes),nativeFiles=participantPreanalysisNativeSourceClosure(readSource);
  requireProof(revision.nativeSourceFiles.every(file=>nativeFiles.includes(file))&&nativeFiles.every(file=>spec.sourceFiles.includes(file)),'Historical native roots and complete current native closure must remain covered');
- const result=validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles:nativeFiles});
+ validateParticipantPreanalysisOwnedCiReceipt(native,proof.ownedCiServiceVerification,{expectedHead,expectedTree,ciRun:proof.ciRun});
+ const result=validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles:nativeFiles,ownedCiServiceVerification:proof.ownedCiServiceVerification});
  requireProof(Array.isArray(proof.unitSuites)&&same(proof.unitSuites.map(row=>row.file),revision.unitSuites.map(row=>row.file)),'Every frozen backend and UI unit suite must execute');
  for(const [index,suite]of proof.unitSuites.entries()){
   keys(suite,['file','sourceSha256','exitCode','tap','result'],'unit suite');keys(suite.tap,['path','bytes','sha256'],'unit TAP');
@@ -159,7 +186,7 @@ async function main(){
  requireProof(process.env.CI==='true'&&identity.repository==='inguillen87/obrasaas'&&/^\d+$/.test(identity.runId)&&/^[1-9]\d*$/.test(identity.runAttempt)&&['push','workflow_dispatch'].includes(identity.event)&&identity.workflow==='Authorized workspace acceptance'&&process.env.GITHUB_SHA===head,'Actual current GitHub workflow metadata required');
  const output=path.join(root,PARTICIPANT_PREANALYSIS_CI_PATH);
  if(mode==='native'){
-  participantPreanalysisDisposableTarget(process.env);requireProof(!existsSync(output),'Fresh CI output required');mkdirSync(path.dirname(output),{recursive:true});
+  participantPreanalysisDisposableTarget(process.env);participantPreanalysisOwnedCiContext(process.env,{head,tree,remote:git('config','--get','remote.origin.url'),workspace:root,platform:process.platform});requireProof(!existsSync(output),'Fresh CI output required');mkdirSync(path.dirname(output),{recursive:true});
   const unitSuites=[];
   for(const [index,row]of revision.unitSuites.entries()){
    const run=spawnSync(process.execPath,['--test','--test-reporter=tap',row.file],{cwd:root,encoding:'utf8',maxBuffer:32*1024*1024,env:process.env});
@@ -171,10 +198,20 @@ async function main(){
   // source/run provenance belongs to this new envelope, never to a retagged raw.
   const native=await verifyParticipantKycPreanalysisPostgres(process.env),rawBytes=Buffer.from(JSON.stringify(native,null,2)+'\n'),rawPath=PARTICIPANT_PREANALYSIS_EVIDENCE+'native-original.json';
   writeFileSync(path.join(root,rawPath),rawBytes,{flag:'wx'});
-  const proof={version:PARTICIPANT_PREANALYSIS_CI_VERSION,status:native.status,sourceRevision:head,sourceTree:tree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],ciRun:identity,harnessSha256:sha(readSource(producer)),sourceManifest:refs(spec.sourceFiles,readSource),checks:native.checks,rawNative:{path:rawPath,bytes:rawBytes.length,sha256:sha(rawBytes)},unitSuites,providerRequests:0,productionDataWritten:false,realConsentOrIdentityVerified:false,humanApprovalPerformed:false};
+  // A second daemon inspection belongs to this consumer, not to the native JSON.
+  const ownedCiServiceVerification=native.status==='PASS'?inspectParticipantPreanalysisOwnedCiService(process.env):null;
+  if(native.status==='PASS')validateParticipantPreanalysisOwnedCiReceipt(native,ownedCiServiceVerification,{expectedHead:head,expectedTree:tree,ciRun:identity});
+  const proof={ownedCiServiceVerification,version:PARTICIPANT_PREANALYSIS_CI_VERSION,status:native.status,sourceRevision:head,sourceTree:tree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],ciRun:identity,harnessSha256:sha(readSource(producer)),sourceManifest:refs(spec.sourceFiles,readSource),checks:native.checks,rawNative:{path:rawPath,bytes:rawBytes.length,sha256:sha(rawBytes)},unitSuites,providerRequests:0,productionDataWritten:false,realConsentOrIdentityVerified:false,humanApprovalPerformed:false};
   writeFileSync(output,JSON.stringify(proof,null,2)+'\n',{flag:'wx'});requireProof(native.status==='PASS','Native run failed; original failure evidence retained');
  }
- const result=validateParticipantKycPreanalysisCi(JSON.parse(readFileSync(output)),{expectedHead:head,expectedTree:tree,readSource,readEvidence,spec,runId:identity.runId,runAttempt:identity.runAttempt});
+ const recordedProof=JSON.parse(readFileSync(output));
+ if(mode==='verify'){
+  // Live verification reinspects again; the archived collector never executes this path.
+  const currentObservation=inspectParticipantPreanalysisOwnedCiService(process.env);
+  requireProof(currentObservation&&same(currentObservation.context,recordedProof.ownedCiServiceVerification?.context)&&same(currentObservation.inspection,recordedProof.ownedCiServiceVerification?.inspection),'Current owned service differs from the recorded independent consumer observation');
+  requireProof(currentObservation.checkedAt>=recordedProof.ownedCiServiceVerification.checkedAt,'Live verification must follow the recorded observation');
+ }
+ const result=validateParticipantKycPreanalysisCi(recordedProof,{expectedHead:head,expectedTree:tree,readSource,readEvidence,spec,runId:identity.runId,runAttempt:identity.runAttempt});
  requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===tree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during CI validation');
  // All source rows also remain byte-identical in the checkout after execution.
  for(const row of refs(spec.sourceFiles,readSource))requireProof(sha(readFileSync(path.join(root,row.path)))===row.sha256,'Checkout source changed: '+row.path);

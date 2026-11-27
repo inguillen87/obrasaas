@@ -1,12 +1,22 @@
 // Recovery proves a fresh session through the existing server verifier. It never
 // authorizes business data or writes/replaces a Clerk cookie itself.
+import {identitySignInPath} from './identity-return-path.mjs';
+
 export class SessionRecoveryError extends Error {
   constructor(code) { super(code); this.name = 'SessionRecoveryError'; this.code = code; }
 }
 const failure = code => { throw new SessionRecoveryError(code); };
 const jwt = value => typeof value === 'string' && value.length <= 8192 && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value);
 export function safeRecoverySignInPath(value) {
-  return typeof value === 'string' && /^\/sign-in(?:\?participar=invite_[a-f0-9]{32})?$/.test(value) ? value : '/sign-in';
+  if(typeof value!=='string'||value.length>512)return '/sign-in';
+  try{
+    const parsed=new URL(value,'https://obrasaas.com');
+    if(parsed.origin!=='https://obrasaas.com'||parsed.pathname!=='/sign-in'||parsed.hash||parsed.username||parsed.password)return '/sign-in';
+    // Admit only the exact local string emitted by the shared closed builder.
+    // Extra keys, alternate encodings/order, fragments and absolute URLs fail.
+    const canonical=identitySignInPath(parsed.searchParams);
+    return value===canonical?canonical:'/sign-in';
+  }catch{return '/sign-in';}
 }
 export function sessionCookieMatches(cookie, token) {
   if (typeof cookie !== 'string' || cookie.length > 65536 || !jwt(token)) return false;
