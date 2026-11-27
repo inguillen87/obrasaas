@@ -44899,7 +44899,7 @@
           },
           {
             "path": "src/lib/meta-field-conversation.mjs",
-            "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+            "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -46046,7 +46046,7 @@
           },
           {
             "path": "src/lib/meta-field-conversation.mjs",
-            "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+            "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -47214,7 +47214,7 @@
           },
           {
             "path": "src/lib/meta-field-conversation.mjs",
-            "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+            "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -48144,7 +48144,7 @@
           },
           {
             "path": "src/lib/meta-field-conversation.mjs",
-            "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+            "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -49001,7 +49001,7 @@
           },
           {
             "path": "src/lib/meta-field-conversation.mjs",
-            "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+            "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
           },
           {
             "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -79918,9 +79918,9 @@
           "path": "src/lib/meta-field-conversation.mjs",
           "status": "MODIFIED",
           "previousSha256": "5a57c9f97d0dba9529f0a4ae8f93c8712d399410da7b00d8b6e7af18e86d8aad",
-          "currentSha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97",
+          "currentSha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af",
           "previousBytes": 68133,
-          "currentBytes": 69405,
+          "currentBytes": 69776,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -79963,17 +79963,22 @@
               "previousText": " return boundedReadBody(body+(facts.permissions.report===true?'\\nEscribí EVIDENCIAS, AVANCES o CONSUMOS para consultar tus informes.':'\\nConsultá los recibos de jornada en Mi cuenta.'),Number.isSafeInteger(facts.replyBodyLimit)?facts.replyBodyLimit:1024);\n"
             },
             {
-              "currentOffsetCharacters": 29798,
+              "currentOffsetCharacters": 29580,
+              "currentText": " if(action==='EXECUTION'&&!facts.attendanceOnly&&permits('REPORT',facts)&&Array.isArray(facts.execution?.mandates)&&!hasMetaFieldExecutionMandate(facts,now)){\n  return chooseTask({purpose:'CONSUMPTION'},eventId,facts,'Vas a informar un consumo para que lo revise un responsable. El stock se descuenta cuando lo apruebe. Elegí la tarea o continuá sin asociar una.');\n }\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 30167,
               "currentText": " if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,withAttendanceWebGuidance('ObraSaaS · '+facts.projectName+'\\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',facts),availableMenu(facts));\n",
               "previousText": " if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,'ObraSaaS · '+facts.projectName+'\\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',availableMenu(facts));\n"
             },
             {
-              "currentOffsetCharacters": 34654,
+              "currentOffsetCharacters": 35023,
               "currentText": " else if(isMetaGreeting(body)&&active?.purpose!=='MENU'&&plan.preserveConversation&&active?.purpose!=='PLAN_IMPORT')disclosure='GENERIC';\n",
               "previousText": " else if(body==='HOLA'&&active?.purpose!=='MENU'&&plan.preserveConversation&&active?.purpose!=='PLAN_IMPORT')disclosure='GENERIC';\n"
             },
             {
-              "currentOffsetCharacters": 38665,
+              "currentOffsetCharacters": 39034,
               "currentText": " if(isMetaGreeting(body)&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};\n",
               "previousText": " if(body?.toUpperCase()==='HOLA'&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};\n"
             }
@@ -82138,9 +82143,9 @@
           "path": "tests/production-meta-field.test.mjs",
           "status": "MODIFIED",
           "previousSha256": "fdc0ddf2cf5fab717654860bdd89543a70c161cb9fac7ab3fdd0cbc96d1c1e18",
-          "currentSha256": "f9db83839bb73c0a9c82d7b634e066d6bc395ba7bdf3e355be6133eeff876958",
+          "currentSha256": "1ae20cd64af9b56b70625ade7d05b9d192c7d01e60fa41e2827eec0af06e0cc6",
           "previousBytes": 44133,
-          "currentBytes": 49258,
+          "currentBytes": 50239,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 71,
@@ -82148,12 +82153,17 @@
               "previousText": "import {planMetaFieldConversation} from '../src/lib/meta-field-conversation.mjs';\n"
             },
             {
-              "currentOffsetCharacters": 11160,
+              "currentOffsetCharacters": 1703,
+              "currentText": "test('Registrar material without a mandate starts a reviewable consumption from the menu',()=>{\n const catalog={...facts,inventory:{materials:[{id:'cement',name:'Cemento',active:true}]},execution:{mandates:[],mandatesTruncated:false}};\n const extra={facts:catalog};\n const initial=pickValue(say('MENU',null,extra),'EXECUTION',extra);\n assert.equal(initial.state.purpose,'CONSUMPTION');\n assert.equal(initial.state.step,'TASK');\n assert.match(initial.reply.body,/stock se descuenta cuando lo apruebe/);\n assert.equal(initial.command,undefined);\n const next=pickValue(initial,'NONE',extra);\n assert.equal(next.state.purpose,'CONSUMPTION');\n assert.equal(next.state.step,'SECTOR');\n assert.equal(next.command,undefined);\n for(const restricted of [{...catalog,permissions:{report:false}},{...catalog,attendanceOnly:true}]){\n  const denied=say('REPORTAR',null,{facts:restricted});\n  assert.notEqual(denied.state?.purpose,'CONSUMPTION');\n  assert.equal(denied.command,undefined);\n }\n});\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 12141,
               "currentText": "  const read=say(body,null,{facts:current});assert.equal(read.state.purpose,'TASKS');assert.match(read.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.reply.body,/37%/);assert.match(read.reply.body,/https:\\/\\/obrasaas.com\\/cuenta\\?seccion=cronograma&obra=project-a#schedule-gantt-title/);assert.doesNotMatch(read.reply.body,/PRIVATE_FINANCIAL_AMOUNT/);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.planImport,undefined);\n",
               "previousText": "  const read=say(body,null,{facts:current});assert.equal(read.state.purpose,'TASKS');assert.match(read.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.reply.body,/37%/);assert.match(read.reply.body,/https:\\/\\/obrasaas.com\\/cuenta\\?obra=project-a#schedule-gantt-title/);assert.doesNotMatch(read.reply.body,/PRIVATE_FINANCIAL_AMOUNT/);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.planImport,undefined);\n"
             },
             {
-              "currentOffsetCharacters": 44219,
+              "currentOffsetCharacters": 45200,
               "currentText": "\n\n// UX414 regression proposal: language classification is not a command/name parser.\ntest('greeting variants are a bounded whole-message vocabulary, not prefix or command normalization',()=>{\n for(const body of ['HOLA','Hola!','¡¡hola!!','hola buenas','Hola, buenas!','BUENAS','¡Buen día!','Buen dia','Buenos días.','Buenos dias','Buenas tardes','Buenas noches','  hola   buenas  ']){assert.equal(isMetaGreeting(body),true,body);assert.equal(metaFieldConversationAction(body),'MENU',body);}\n for(const body of ['hola Juan','Hola, soy Juan','Holanda','Buen Díaz','holaaa','Hola 👋','hola buenas 2','IDENTIDAD synthetic-code','ESTADO IDENTIDAD','Frente 2, avance 10%','Nota: hola buenas','CANCELAR!','ENTRADA!',null,23,{},['HOLA']])assert.equal(isMetaGreeting(body),false,String(body));\n assert.equal(metaFieldConversationAction('CANCELAR!'),null);assert.equal(metaFieldConversationAction('ENTRADA!'),null);assert.equal(metaFieldConversationAction('ESTADO IDENTIDAD'),null);assert.equal(metaFieldConversationAction('IDENTIDAD synthetic-code'),null);assert.equal(metaFieldConversationAction('CANCELAR'),'MENU');assert.equal(metaFieldConversationAction('ENTRADA'),'ATTEND_IN');\n});\n\ntest('bounded greeting menus still derive their choices only from current capabilities',()=>{\n for(const body of ['Hola!','hola buenas','¡Buen día!']){\n  const report=say(body,null,{facts:{...facts,permissions:{attendance:false,report:true}}});assert.equal(report.state.purpose,'MENU');assert.ok(report.state.choices.every(c=>!c.value.startsWith('ATTEND_')));assert.ok(report.state.choices.some(c=>c.value==='MEDIA'));assert.equal(report.command,undefined);assert.equal(report.media,undefined);\n  const attendance=say(body,null,{facts:{...facts,permissions:{attendance:true,report:false}}});assert.ok(attendance.state.choices.every(c=>!['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(c.value)));assert.equal(attendance.command,undefined);assert.equal(attendance.media,undefined);\n }\n});\n\ntest('bounded greetings preserve the exact live draft, source, nonce, expiry and revoked-permission refusal',()=>{\n for(const command of ['ENTRADA','EVIDENCIA','MATERIALES'])for(const body of ['Hola!','hola buenas','¡Buen día!']){\n  const initial=say(command),state=Object.freeze({...initial.state,lastEventId:'durable-original-event',lastReceivedAt:'2026-10-01T11:59:59.900Z',lastMessageTimestamp:1790855999,expiresAt:'2026-10-01T12:01:00.000Z'}),before=JSON.stringify(state);\n  const greeting=planMetaFieldConversation({message:{type:'text',text:{body}},state,eventId:'synthetic-variant-greeting',facts,now});assert.equal(greeting.state,state);assert.equal(JSON.stringify(state),before);assert.equal(greeting.preserveConversation,true);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);assert.equal(metaFieldPlanDisclosure(greeting),'GENERIC');\n  const foreign=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:'obra:'+'f'.repeat(20)+':0',title:body}}},state,eventId:'synthetic-foreign-choice',facts,now});assert.equal(foreign.state,state);assert.equal(foreign.command,undefined);assert.equal(foreign.media,undefined);assert.match(foreign.reply.body,/paso anterior/);\n  const changed={...facts,permissions:command==='ENTRADA'?{attendance:false,report:true}:{attendance:true,report:false}},denied=planMetaFieldConversation({message:{type:'text',text:{body}},state,eventId:'synthetic-variant-revoked',facts:changed,now});assert.equal(denied.state,state);assert.equal(denied.preserveConversation,true);assert.equal(denied.command,undefined);assert.equal(denied.media,undefined);assert.match(denied.reply.body,/permisos/);\n  const cancelled=say('CANCELAR',state);assert.equal(cancelled.state.purpose,'MENU');assert.equal(cancelled.command,undefined);assert.equal(cancelled.media,undefined);\n }\n});\n\ntest('a bounded greeting cannot renew an expired field draft or authorize its old interactive choice',()=>{\n const initial=say('ENTRADA'),expired=Object.freeze({...initial.state,expiresAt:now.toISOString(),lastEventId:'expired-original-event'}),before=JSON.stringify(expired);\n for(const body of ['Hola!','hola buenas']){\n  const greeting=planMetaFieldConversation({message:{type:'text',text:{body}},state:expired,eventId:'synthetic-variant-expired',facts,now});assert.equal(JSON.stringify(expired),before);assert.notEqual(greeting.state,expired);assert.equal(greeting.state.step,'MENU');assert.equal(greeting.preserveConversation,undefined);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);\n  const stale=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:initial.reply.sections[0].rows[0].id}}},state:{...greeting.state,version:1,expiresAt:'2026-10-01T12:15:00.000Z'},eventId:'synthetic-old-expired-choice',facts,now});assert.equal(stale.command,undefined);assert.equal(stale.media,undefined);assert.match(stale.reply.body,/paso anterior/);\n }\n});\n",
               "previousText": ""
             }
@@ -93609,7 +93619,7 @@
             },
             {
               "path": "src/lib/meta-field-conversation.mjs",
-              "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+              "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
             },
             {
               "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -95091,7 +95101,7 @@
             },
             {
               "path": "src/lib/meta-field-conversation.mjs",
-              "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+              "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
             },
             {
               "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -96437,7 +96447,7 @@
             },
             {
               "path": "src/lib/meta-field-conversation.mjs",
-              "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+              "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
             },
             {
               "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -103103,7 +103113,7 @@
             },
             {
               "path": "src/lib/meta-field-conversation.mjs",
-              "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+              "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
             },
             {
               "path": "src/lib/meta-field-execution-conversation.mjs",
@@ -104865,7 +104875,7 @@
             },
             {
               "path": "src/lib/meta-field-conversation.mjs",
-              "sha256": "6b2bd851ac4b2c3cdd58a861a9a603b02604c32ed1e662ceb27f8134234c0a97"
+              "sha256": "03ef9e33c6563a6f604339df924d717f3e5b18cda92bb07d0ff84fec170bc7af"
             },
             {
               "path": "src/lib/meta-field-execution-conversation.mjs",

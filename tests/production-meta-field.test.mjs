@@ -14,6 +14,24 @@ const run=(message,state=null,extra={})=>{const result=planMetaFieldConversation
 const say=(body,state,extra)=>run({type:'text',text:{body}},state,extra);
 const pick=(plan,index=0,extra)=>run({type:'interactive',interactive:{type:'list_reply',list_reply:{id:plan.reply.sections[0].rows[index].id}}},plan.state,extra);
 const pickValue=(plan,value,extra)=>pick(plan,plan.state.choices.findIndex(choice=>choice.value===value),extra);
+test('Registrar material without a mandate starts a reviewable consumption from the menu',()=>{
+ const catalog={...facts,inventory:{materials:[{id:'cement',name:'Cemento',active:true}]},execution:{mandates:[],mandatesTruncated:false}};
+ const extra={facts:catalog};
+ const initial=pickValue(say('MENU',null,extra),'EXECUTION',extra);
+ assert.equal(initial.state.purpose,'CONSUMPTION');
+ assert.equal(initial.state.step,'TASK');
+ assert.match(initial.reply.body,/stock se descuenta cuando lo apruebe/);
+ assert.equal(initial.command,undefined);
+ const next=pickValue(initial,'NONE',extra);
+ assert.equal(next.state.purpose,'CONSUMPTION');
+ assert.equal(next.state.step,'SECTOR');
+ assert.equal(next.command,undefined);
+ for(const restricted of [{...catalog,permissions:{report:false}},{...catalog,attendanceOnly:true}]){
+  const denied=say('REPORTAR',null,{facts:restricted});
+  assert.notEqual(denied.state?.purpose,'CONSUMPTION');
+  assert.equal(denied.command,undefined);
+ }
+});
 // A persisted, markerless v1 selection keeps its original notice-before-file
 // journey. New EVIDENCIA entries are exercised separately with real file type.
 function legacyMediaNotice(){return run({type:'interactive',interactive:{type:'list_reply',list_reply:{id:'obra:'+'a'.repeat(20)+':0'}}},{version:1,purpose:'MEDIA',step:'SECTOR',taskId:facts.tasks[0].id,taskRevision:facts.tasks[0].revision,nonce:'a'.repeat(20),choices:[{value:'sector-a',title:'Planta baja'}],expiresAt:new Date(now.getTime()+900000).toISOString()});}

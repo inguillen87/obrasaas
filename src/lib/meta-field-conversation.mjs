@@ -177,6 +177,9 @@ export function metaFieldMediaAuthorizationValid(message,media,state){
 }
 function authorizeMedia(state,eventId,consent){const ref=state.pendingFile;return {state:{...state,step:'MEDIA_AUTHORIZED',mediaAuthorizationStep:state.step,analysisConsent:consent,analysisConsentEventId:eventId},media:{taskId:ref.taskId,sectorId:ref.sectorId,mediaId:ref.mediaId,caption:ref.caption,contentType:ref.contentType,kind:ref.kind,analysisConsent:consent,analysisConsentEventId:eventId,sourceOrigin:ref}};}
 function start(action,eventId,facts,now){
+ if(action==='EXECUTION'&&!facts.attendanceOnly&&permits('REPORT',facts)&&Array.isArray(facts.execution?.mandates)&&!hasMetaFieldExecutionMandate(facts,now)){
+  return chooseTask({purpose:'CONSUMPTION'},eventId,facts,'Vas a informar un consumo para que lo revise un responsable. El stock se descuenta cuando lo apruebe. Elegí la tarea o continuá sin asociar una.');
+ }
  if(['EXECUTION','OWN_EXECUTIONS'].includes(action)||action==='CONSUMPTION'&&hasMetaFieldExecutionMandate(facts,now))return planMetaFieldExecution({eventId,facts,now,action:action==='CONSUMPTION'?'EXECUTION':action});
  if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,withAttendanceWebGuidance('ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',facts),availableMenu(facts));
  if(action==='PLAN_IMPORT')return startMetaPlanImportConversation({eventId,facts,now});
